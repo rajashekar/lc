@@ -28,6 +28,42 @@ pub struct Choice {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct LlamaChatResponse {
+    pub completion_message: LlamaMessage,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LlamaMessage {
+    pub role: String,
+    pub content: LlamaContent,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LlamaContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CohereChatResponse {
+    pub message: CohereMessage,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CohereMessage {
+    pub role: String,
+    pub content: Vec<CohereContentItem>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CohereContentItem {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ModelsResponse {
     #[serde(alias = "models")]
     pub data: Vec<Model>,
@@ -126,13 +162,34 @@ impl OpenAIClient {
             anyhow::bail!("API request failed with status {}: {}", status, text);
         }
         
-        let chat_response: ChatResponse = response.json().await?;
+        // Get the response text first to handle different formats
+        let response_text = response.text().await?;
         
-        if let Some(choice) = chat_response.choices.first() {
-            Ok(choice.message.content.clone())
-        } else {
-            anyhow::bail!("No response from API");
+        // Try to parse as standard OpenAI format first (with "choices" array)
+        if let Ok(chat_response) = serde_json::from_str::<ChatResponse>(&response_text) {
+            if let Some(choice) = chat_response.choices.first() {
+                return Ok(choice.message.content.clone());
+            } else {
+                anyhow::bail!("No response from API");
+            }
         }
+        
+        // Try to parse as Llama format (with "completion_message")
+        if let Ok(llama_response) = serde_json::from_str::<LlamaChatResponse>(&response_text) {
+            return Ok(llama_response.completion_message.content.text);
+        }
+        
+        // Try to parse as Cohere format (with "message" and content array)
+        if let Ok(cohere_response) = serde_json::from_str::<CohereChatResponse>(&response_text) {
+            if let Some(content_item) = cohere_response.message.content.first() {
+                return Ok(content_item.text.clone());
+            } else {
+                anyhow::bail!("No content in Cohere response");
+            }
+        }
+        
+        // If all fail, return an error with the response text for debugging
+        anyhow::bail!("Failed to parse chat response. Response: {}", response_text);
     }
     
     pub async fn list_models(&self) -> Result<Vec<Model>> {

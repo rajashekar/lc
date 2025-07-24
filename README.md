@@ -12,7 +12,7 @@ LLM Client (lc) - A fast, Rust-based command-line tool for interacting with Larg
 - 🎯 **Simple CLI** - Intuitive command structure with aliases
 - 🔐 **Secure key storage** - API keys stored in user config directory
 - 📥 **Piped input** - Support for piped input from other commands
-- 🔄 **Multiple API formats** - Handles both wrapped (`{"data": [...]}`) and direct array responses
+- 🔄 **Multiple API formats** - Handles various response formats (OpenAI, Cohere, Llama, etc.)
 - 🏷️ **Custom headers** - Per-provider custom header support for specialized APIs (e.g., Anthropic)
 
 ## Installation
@@ -432,9 +432,32 @@ Any OpenAI-compatible API endpoint, including:
 - **Hugging Face Router** - Proxy to multiple providers (Groq, Hyperbolic, Fireworks, etc.)
 - **GitHub Models** - Microsoft, OpenAI, Meta, and other models via GitHub
 - **Anthropic Claude** - Direct support with custom headers (x-api-key, anthropic-version)
+- **Meta Llama** - Direct support for Llama API response format
+- **Cohere** - Direct support for Cohere API response format
 - **Vercel v0.dev** - v0-1.0-md model
 - **Local models** - Ollama, LocalAI, etc.
 - **Custom endpoints** - Any service implementing OpenAI chat completions API
+
+### Supported Response Formats
+
+The tool automatically detects and handles multiple API response formats:
+
+1. **OpenAI Standard Format** (most providers):
+   ```json
+   {"choices": [{"message": {"role": "assistant", "content": "response"}}]}
+   ```
+
+2. **Llama API Format**:
+   ```json
+   {"completion_message": {"role": "assistant", "content": {"type": "text", "text": "response"}}}
+   ```
+
+3. **Cohere Format**:
+   ```json
+   {"message": {"role": "assistant", "content": [{"type": "text", "text": "response"}]}}
+   ```
+
+The client tries each format in sequence and uses the first one that successfully parses, ensuring compatibility with various API providers without requiring manual configuration.
 
 ### Provider Examples
 
