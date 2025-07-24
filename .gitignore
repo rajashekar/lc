@@ -1,0 +1,78 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo lock file (uncomment if this is a library)
+# Cargo.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and databases
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuration and secrets
+.env
+.env.local
+.env.*.local
+config.toml
+*.key
+*.pem
+.webui_secret_key
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Documentation build
+/docs/_build/
+
+# Python (if any Python scripts are added)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Node.js (if any JS tooling is added)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage reports
+tarpaulin-report.html
+lcov.info
+coverage/
+
+# Benchmark results
+criterion/
+
+# Local development files
+.local/
+scratch/
+test_data/
