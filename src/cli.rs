@@ -62,6 +62,25 @@ pub enum Commands {
         #[arg(long)]
         cid: Option<String>,
     },
+    /// Global models management (alias: m)
+    #[command(alias = "m")]
+    Models {
+        #[command(subcommand)]
+        command: Option<ModelsCommands>,
+        /// Search query for models (case-insensitive)
+        #[arg(short = 'q', long = "query")]
+        query: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ModelsCommands {
+    /// Refresh the models cache (alias: r)
+    #[command(alias = "r")]
+    Refresh,
+    /// Show cache information (alias: i)
+    #[command(alias = "i")]
+    Info,
 }
 
 #[derive(Subcommand)]
@@ -781,8 +800,24 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
+    // Parse provider and model from model_override if it contains ":"
+    let (final_provider_override, final_model_override) = if let Some(model) = &model_override {
+        if model.contains(':') {
+            let parts: Vec<&str> = model.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                (Some(parts[0].to_string()), Some(parts[1].to_string()))
+            } else {
+                (provider_override, model_override)
+            }
+        } else {
+            (provider_override, model_override)
+        }
+    } else {
+        (provider_override, model_override)
+    };
+    
     // Determine provider and model to use
-    let provider_name = if let Some(provider) = provider_override {
+    let provider_name = if let Some(provider) = final_provider_override {
         // Validate that the provider exists
         if !config.has_provider(&provider) {
             anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", provider);
@@ -794,7 +829,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
             .clone()
     };
     
-    let model_name = if let Some(model) = model_override {
+    let model_name = if let Some(model) = final_model_override {
         model
     } else {
         config.default_model.as_ref()
@@ -954,6 +989,67 @@ pub async fn handle_chat_command(model: String, cid: Option<String>) -> Result<(
         }
         
         println!(); // Add spacing
+    }
+    
+    Ok(())
+}
+
+// Models command handlers
+pub async fn handle_models_command(command: Option<ModelsCommands>, query: Option<String>) -> Result<()> {
+    use crate::models_cache::ModelsCache;
+    use colored::Colorize;
+    
+    match command {
+        Some(ModelsCommands::Refresh) => {
+            let mut cache = ModelsCache::load()?;
+            cache.refresh().await?;
+        }
+        Some(ModelsCommands::Info) => {
+            let cache = ModelsCache::load()?;
+            let info = cache.get_cache_info()?;
+            println!("\n{}", "Models Cache Information:".bold().blue());
+            println!("{}", info);
+        }
+        None => {
+            // List models (with optional search)
+            let mut cache = ModelsCache::load()?;
+            
+            // Check if cache needs refresh
+            if cache.needs_refresh() {
+                println!("{} Models cache is empty or expired. Refreshing...", "⚠".yellow());
+                cache.refresh().await?;
+            }
+            
+            let models = if let Some(ref search_query) = query {
+                cache.search_models(search_query)
+            } else {
+                cache.get_all_models()
+            };
+            
+            if models.is_empty() {
+                if let Some(ref search_query) = query {
+                    println!("No models found matching query '{}'", search_query);
+                } else {
+                    println!("No models found in cache.");
+                }
+                return Ok(());
+            }
+            
+            if let Some(ref search_query) = query {
+                println!("\n{} Models matching '{}' ({} found):", "Search Results:".bold().blue(), search_query, models.len());
+            } else {
+                println!("\n{} All available models ({} total):", "Models:".bold().blue(), models.len());
+            }
+            
+            let mut current_provider = String::new();
+            for model in models {
+                if model.provider != current_provider {
+                    current_provider = model.provider.clone();
+                    println!("\n{}", format!("{}:", current_provider).bold().green());
+                }
+                println!("  {}:{}", model.provider, model.model);
+            }
+        }
     }
     
     Ok(())

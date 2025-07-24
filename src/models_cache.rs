@@ -1,0 +1,194 @@
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use crate::{config::Config, provider::OpenAIClient};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ModelsCache {
+    pub last_updated: u64, // Unix timestamp
+    pub models: HashMap<String, Vec<String>>, // provider -> models
+}
+
+#[derive(Debug)]
+pub struct CachedModel {
+    pub provider: String,
+    pub model: String,
+}
+
+impl ModelsCache {
+    pub fn new() -> Self {
+        Self {
+            last_updated: 0,
+            models: HashMap::new(),
+        }
+    }
+
+    pub fn load() -> Result<Self> {
+        let cache_path = Self::cache_file_path()?;
+        
+        if cache_path.exists() {
+            let content = fs::read_to_string(&cache_path)?;
+            let cache: ModelsCache = serde_json::from_str(&content)?;
+            Ok(cache)
+        } else {
+            Ok(Self::new())
+        }
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let cache_path = Self::cache_file_path()?;
+        
+        // Ensure cache directory exists
+        if let Some(parent) = cache_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        
+        let content = serde_json::to_string_pretty(self)?;
+        fs::write(&cache_path, content)?;
+        Ok(())
+    }
+
+    pub fn is_expired(&self) -> bool {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_secs();
+        
+        // Cache expires after 24 hours (86400 seconds)
+        now - self.last_updated > 86400
+    }
+
+    pub fn needs_refresh(&self) -> bool {
+        self.models.is_empty() || self.is_expired()
+    }
+
+    pub async fn refresh(&mut self) -> Result<()> {
+        println!("Refreshing models cache...");
+        
+        let config = Config::load()?;
+        let mut new_models = HashMap::new();
+        let mut successful_providers = 0;
+        let mut total_models = 0;
+
+        for (provider_name, provider_config) in &config.providers {
+            // Skip providers without API keys
+            if provider_config.api_key.is_none() {
+                continue;
+            }
+
+            print!("Fetching models from {}... ", provider_name);
+            
+            let client = OpenAIClient::new_with_headers(
+                provider_config.endpoint.clone(),
+                provider_config.api_key.clone().unwrap(),
+                provider_config.models_path.clone(),
+                provider_config.chat_path.clone(),
+                provider_config.headers.clone(),
+            );
+
+            match client.list_models().await {
+                Ok(models) => {
+                    let model_names: Vec<String> = models.into_iter().map(|m| m.id).collect();
+                    let count = model_names.len();
+                    new_models.insert(provider_name.clone(), model_names);
+                    successful_providers += 1;
+                    total_models += count;
+                    println!("✓ ({} models)", count);
+                }
+                Err(e) => {
+                    println!("✗ ({})", e);
+                }
+            }
+        }
+
+        self.models = new_models;
+        self.last_updated = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_secs();
+
+        self.save()?;
+        
+        println!("\nCache updated: {} providers, {} total models", successful_providers, total_models);
+        Ok(())
+    }
+
+    pub fn get_all_models(&self) -> Vec<CachedModel> {
+        let mut all_models = Vec::new();
+        
+        for (provider, models) in &self.models {
+            for model in models {
+                all_models.push(CachedModel {
+                    provider: provider.clone(),
+                    model: model.clone(),
+                });
+            }
+        }
+        
+        // Sort by provider, then by model
+        all_models.sort_by(|a, b| {
+            a.provider.cmp(&b.provider).then(a.model.cmp(&b.model))
+        });
+        
+        all_models
+    }
+
+    pub fn search_models(&self, query: &str) -> Vec<CachedModel> {
+        let query_lower = query.to_lowercase();
+        let mut matching_models = Vec::new();
+        
+        for (provider, models) in &self.models {
+            for model in models {
+                if model.to_lowercase().contains(&query_lower) {
+                    matching_models.push(CachedModel {
+                        provider: provider.clone(),
+                        model: model.clone(),
+                    });
+                }
+            }
+        }
+        
+        // Sort by provider, then by model
+        matching_models.sort_by(|a, b| {
+            a.provider.cmp(&b.provider).then(a.model.cmp(&b.model))
+        });
+        
+        matching_models
+    }
+
+    pub fn get_cache_info(&self) -> Result<String> {
+        let cache_path = Self::cache_file_path()?;
+        let total_models: usize = self.models.values().map(|v| v.len()).sum();
+        let provider_count = self.models.len();
+        
+        let last_updated = if self.last_updated > 0 {
+            let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(self.last_updated);
+            format!("{:?}", datetime)
+        } else {
+            "Never".to_string()
+        };
+        
+        let status = if self.is_expired() {
+            "Expired (>24h old)"
+        } else if self.models.is_empty() {
+            "Empty"
+        } else {
+            "Fresh"
+        };
+        
+        Ok(format!(
+            "Cache Status: {}\nProviders: {}\nTotal Models: {}\nLast Updated: {}\nCache File: {}",
+            status, provider_count, total_models, last_updated, cache_path.display()
+        ))
+    }
+
+    fn cache_file_path() -> Result<PathBuf> {
+        let config_dir = dirs::config_dir()
+            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+        
+        Ok(config_dir.join("lc").join("models_cache.json"))
+    }
+}

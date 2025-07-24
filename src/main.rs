@@ -4,6 +4,7 @@ mod database;
 mod provider;
 mod chat;
 mod error;
+mod models_cache;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
@@ -33,6 +34,9 @@ async fn main() -> Result<()> {
         }
         (None, Some(Commands::Chat { model, cid })) => {
             cli::handle_chat_command(model, cid).await?;
+        }
+        (None, Some(Commands::Models { command, query })) => {
+            cli::handle_models_command(command, query).await?;
         }
         (None, None) => {
             // No subcommand or prompt provided, check if input is piped
