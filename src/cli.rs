@@ -58,6 +58,9 @@ pub enum Commands {
         /// Model to use for the chat
         #[arg(short, long)]
         model: String,
+        /// Provider to use for the chat
+        #[arg(short, long)]
+        provider: Option<String>,
         /// Chat ID to use or continue
         #[arg(long)]
         cid: Option<String>,
@@ -822,15 +825,20 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
     Ok(())
 }
 
-// Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>) -> Result<()> {
-    let config = config::Config::load()?;
-    let db = database::Database::new()?;
-    
+// Helper function to resolve model and provider from various inputs
+fn resolve_model_and_provider(
+    config: &config::Config,
+    provider_override: Option<String>,
+    model_override: Option<String>
+) -> Result<(String, String)> {
     // Parse provider and model from model_override if it contains ":" or resolve alias
+    // BUT if provider_override is already provided, treat model_override as literal
     let (final_provider_override, final_model_override) = if let Some(model) = &model_override {
-        if model.contains(':') {
-            // Direct provider:model format
+        if provider_override.is_some() {
+            // Provider is explicitly provided, treat model as literal (don't parse colons)
+            (provider_override, model_override)
+        } else if model.contains(':') {
+            // No explicit provider, try to parse provider:model format
             let parts: Vec<&str> = model.splitn(2, ':').collect();
             if parts.len() == 2 {
                 (Some(parts[0].to_string()), Some(parts[1].to_string()))
@@ -881,6 +889,17 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
             .clone()
     };
     
+    Ok((provider_name, model_name))
+}
+
+// Direct prompt handler
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>) -> Result<()> {
+    let config = config::Config::load()?;
+    let db = database::Database::new()?;
+    
+    // Resolve provider and model
+    let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
+    
     // Get provider config
     let provider_config = config.get_provider(&provider_name)?;
     
@@ -924,7 +943,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
 }
 
 // Interactive chat mode
-pub async fn handle_chat_command(model: String, cid: Option<String>) -> Result<()> {
+pub async fn handle_chat_command(model: String, provider: Option<String>, cid: Option<String>) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -935,8 +954,8 @@ pub async fn handle_chat_command(model: String, cid: Option<String>) -> Result<(
         new_id
     });
     
-    // Find provider for the model
-    let provider_name = config.find_provider_for_model(&model)?;
+    // Resolve provider and model using the same logic as direct prompts
+    let (provider_name, resolved_model) = resolve_model_and_provider(&config, provider, Some(model))?;
     let provider_config = config.get_provider(&provider_name)?;
     
     let client = provider::OpenAIClient::new_with_headers(
@@ -947,7 +966,7 @@ pub async fn handle_chat_command(model: String, cid: Option<String>) -> Result<(
         provider_config.headers.clone(),
     );
     
-    let mut current_model = model;
+    let mut current_model = resolved_model.clone();
     
     println!("\n{} Interactive Chat Mode", "🚀".blue());
     println!("{} Session ID: {}", "📝".blue(), session_id);

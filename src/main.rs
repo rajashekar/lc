@@ -32,8 +32,8 @@ async fn main() -> Result<()> {
         (None, Some(Commands::Config { command })) => {
             cli::handle_config_command(command).await?;
         }
-        (None, Some(Commands::Chat { model, cid })) => {
-            cli::handle_chat_command(model, cid).await?;
+        (None, Some(Commands::Chat { model, provider, cid })) => {
+            cli::handle_chat_command(model, provider, cid).await?;
         }
         (None, Some(Commands::Models { command, query })) => {
             cli::handle_models_command(command, query).await?;
