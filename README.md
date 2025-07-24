@@ -6,10 +6,13 @@ LLM Client (lc) - A fast, Rust-based command-line tool for interacting with Larg
 
 - 🚀 **Fast startup** - Near-zero cold start time compared to Python alternatives
 - 🔧 **Provider management** - Support for any OpenAI-compatible API endpoint
+- 💬 **Direct prompts** - Send one-off prompts with `-p` provider and `-m` model flags
 - 💾 **Session management** - Continue conversations with chat history
 - 📊 **SQLite logging** - All conversations stored locally with full history
-- 🎯 **Simple CLI** - Intuitive command structure
+- 🎯 **Simple CLI** - Intuitive command structure with aliases
 - 🔐 **Secure key storage** - API keys stored in user config directory
+- 📥 **Piped input** - Support for piped input from other commands
+- 🔄 **Multiple API formats** - Handles both wrapped (`{"data": [...]}`) and direct array responses
 
 ## Installation
 
@@ -71,9 +74,27 @@ lc keys add vercel
 # Enter your API key when prompted
 ```
 
-### 3. Start Interactive Chat
+### 3. Set Default Configuration (Optional)
 
 ```bash
+# Set default provider
+lc config set provider openai
+lc co s p openai
+
+# Set default model
+lc config set model gpt-4
+lc co s m gpt-4
+```
+
+### 4. Start Using
+
+```bash
+# Direct prompt (uses defaults)
+lc "What is the capital of France?"
+
+# Direct prompt with specific provider and model
+lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Explain quantum computing"
+
 # Start interactive chat with a model
 lc chat -m gpt-4
 # or using alias
@@ -84,6 +105,27 @@ lc chat -m gpt-4 --cid abc123
 ```
 
 ## Usage Examples
+
+### Direct Prompts
+
+You can send direct prompts to any model without entering interactive mode:
+
+```bash
+# Using default provider and model
+lc "What is the capital of France?"
+
+# Specify provider and model
+lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Explain quantum computing"
+
+# Using only provider flag (uses default model)
+lc -p together "Write a Python function to sort a list"
+
+# Using only model flag (uses default provider)
+lc -m "gpt-4" "What's the weather like?"
+
+# Piped input
+echo "Translate this to Spanish" | lc -p openai -m "gpt-4"
+```
 
 ### Provider Management
 
@@ -258,6 +300,15 @@ The SQLite database (`logs.db`) contains:
 
 ## Command Reference
 
+### Direct Prompt Commands
+```bash
+lc "prompt"                              # Use default provider and model
+lc -p <provider> "prompt"                # Specify provider
+lc -m <model> "prompt"                   # Specify model
+lc -p <provider> -m <model> "prompt"     # Specify both provider and model
+echo "prompt" | lc -p <provider>         # Piped input
+```
+
 ### Provider Commands
 ```bash
 lc providers add <name> <url>            # Add provider (alias: lc p a)
@@ -339,11 +390,56 @@ The chat maintains context throughout the session and automatically saves to the
 
 Any OpenAI-compatible API endpoint, including:
 
-- **OpenAI** - GPT-3.5, GPT-4, etc.
+- **OpenAI** - GPT-3.5, GPT-4, GPT-4o, etc.
+- **OpenRouter** - Access to Claude, GPT, Gemini, and many other models
+- **Together AI** - Open source models like Llama, Mistral, etc.
+- **Chutes AI** - Various LLM models with competitive pricing
+- **Hugging Face Router** - Proxy to multiple providers (Groq, Hyperbolic, Fireworks, etc.)
 - **Anthropic** - Claude models (via compatible proxy)
 - **Vercel v0.dev** - v0-1.0-md model
 - **Local models** - Ollama, LocalAI, etc.
 - **Custom endpoints** - Any service implementing OpenAI chat completions API
+
+### Provider Examples
+
+```bash
+# OpenRouter (supports many models)
+lc providers add openrouter https://openrouter.ai/api/v1
+lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Hello"
+
+# Together AI (open source models)
+lc providers add together https://api.together.xyz/v1
+lc -p together -m "meta-llama/Llama-3-8b-chat-hf" "Hello"
+
+# Chutes AI
+lc providers add chutes https://llm.chutes.ai/v1
+lc -p chutes -m "deepseek-ai/DeepSeek-R1" "Hello"
+
+# Hugging Face Router (proxy to multiple providers)
+lc providers add hf https://router.huggingface.co/v1
+lc -p hf -m "Qwen/Qwen3-32B:groq" "Hello"
+```
+
+### Hugging Face Router Support
+
+The Hugging Face router is a special provider that acts as a proxy to multiple underlying providers. When you list models from the HF router, the tool automatically expands models with their available providers in the format `model:provider`:
+
+```bash
+# Add HF router
+lc providers add hf https://router.huggingface.co/v1
+lc keys add hf  # Enter your HF token
+
+# List models (shows expanded format)
+lc providers models hf
+# Output includes:
+#   • Qwen/Qwen3-32B:groq
+#   • Qwen/Qwen3-32B:hyperbolic
+#   • meta-llama/Llama-3.3-70B-Instruct:together
+#   • deepseek-ai/DeepSeek-R1:fireworks-ai
+
+# Use specific model:provider combination
+lc -p hf -m "Qwen/Qwen3-32B:groq" "What is the capital of France?"
+```
 
 ## Architecture
 
@@ -377,7 +473,14 @@ cargo test
 
 ### Running in Development
 ```bash
-cargo run -- -m gpt-4 "Hello world"
+# Direct prompt with flags
+cargo run -- -p openai -m gpt-4 "Hello world"
+
+# Interactive chat
+cargo run -- chat -m gpt-4
+
+# List providers
+cargo run -- providers list
 ```
 
 ### Dependencies
@@ -409,17 +512,17 @@ MIT License - see LICENSE file for details.
 
 **"No providers configured"**
 ```bash
-lc set provider -n openai -e https://api.openai.com/v1
-lc set keys openai
+lc providers add openai https://api.openai.com/v1
+lc keys add openai
 ```
 
 **"API request failed"**
-- Check your API key: `lc set keys <provider>`
+- Check your API key: `lc keys add <provider>`
 - Verify endpoint URL is correct
 - Ensure you have sufficient API credits
 
 **"Model not found"**
-- List available models: `lc get provider models -n <provider>`
+- List available models: `lc providers models <provider>`
 - Use exact model name from the list
 
 ### Debug Mode
@@ -432,20 +535,20 @@ RUST_LOG=debug lc -m gpt-4 "test"
 
 ```bash
 # Add Vercel provider
-lc set provider -n vercel -e https://api.v0.dev/v1
+lc providers add vercel https://api.v0.dev/v1
 
 # Set API key (from your Vercel account)
-lc set keys vercel
+lc keys add vercel
 # Enter: v1:pAZXgzGJaXccjXeSDSeByXjn:K0UA5jEUPL1350Jbj7xtK3g3
 
 # List available models
-lc get provider models -n vercel
+lc providers models vercel
 
-# Chat with v0 model
-lc -m v0-1.0-md "Create a React component for a todo list"
+# Direct prompt with v0 model
+lc -p vercel -m v0-1.0-md "Create a React component for a todo list"
 
-# Continue the conversation
-lc -c -m v0-1.0-md "Add TypeScript types to that component"
+# Interactive chat with v0 model
+lc chat -m v0-1.0-md
 ```
 
 This implementation provides a fast, efficient alternative to Python-based LLM CLI tools with significant performance improvements and a clean, intuitive interface.

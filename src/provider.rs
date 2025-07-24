@@ -33,10 +33,22 @@ pub struct ModelsResponse {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct Provider {
+    pub provider: String,
+    pub status: String,
+    #[serde(default)]
+    pub supports_tools: bool,
+    #[serde(default)]
+    pub supports_structured_output: bool,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Model {
     pub id: String,
     #[serde(default = "default_object_type")]
     pub object: String,
+    #[serde(default)]
+    pub providers: Vec<Provider>,
 }
 
 fn default_object_type() -> String {
@@ -108,17 +120,39 @@ impl OpenAIClient {
         // Get the response text first to handle different formats
         let response_text = response.text().await?;
         
+        let mut models = Vec::new();
+        
         // Try to parse as ModelsResponse first (with "data" field)
         if let Ok(models_response) = serde_json::from_str::<ModelsResponse>(&response_text) {
-            return Ok(models_response.data);
+            models = models_response.data;
+        } else if let Ok(parsed_models) = serde_json::from_str::<Vec<Model>>(&response_text) {
+            // If that fails, try to parse as direct array of models
+            models = parsed_models;
+        } else {
+            // If both fail, return an error with the response text for debugging
+            anyhow::bail!("Failed to parse models response. Response: {}", response_text);
         }
         
-        // If that fails, try to parse as direct array of models
-        if let Ok(models) = serde_json::from_str::<Vec<Model>>(&response_text) {
-            return Ok(models);
+        // Expand models with providers into separate entries
+        let mut expanded_models = Vec::new();
+        
+        for model in models {
+            if model.providers.is_empty() {
+                // No providers, add the model as-is
+                expanded_models.push(model);
+            } else {
+                // Has providers, create a model entry for each provider
+                for provider in &model.providers {
+                    let expanded_model = Model {
+                        id: format!("{}:{}", model.id, provider.provider),
+                        object: model.object.clone(),
+                        providers: vec![], // Clear providers for the expanded model
+                    };
+                    expanded_models.push(expanded_model);
+                }
+            }
         }
         
-        // If both fail, return an error with the response text for debugging
-        anyhow::bail!("Failed to parse models response. Response: {}", response_text);
+        Ok(expanded_models)
     }
 }
