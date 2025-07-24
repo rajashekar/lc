@@ -9,6 +9,8 @@ pub struct Config {
     pub providers: HashMap<String, ProviderConfig>,
     pub default_provider: Option<String>,
     pub default_model: Option<String>,
+    #[serde(default)]
+    pub aliases: HashMap<String, String>, // alias_name -> provider:model
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -46,6 +48,7 @@ impl Config {
                 providers: HashMap::new(),
                 default_provider: None,
                 default_model: None,
+                aliases: HashMap::new(),
             };
             
             // Ensure config directory exists
@@ -153,6 +156,40 @@ impl Config {
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
         }
+    }
+    
+    pub fn add_alias(&mut self, alias_name: String, provider_model: String) -> Result<()> {
+        // Validate that the provider_model contains a colon
+        if !provider_model.contains(':') {
+            anyhow::bail!("Alias target must be in format 'provider:model', got '{}'", provider_model);
+        }
+        
+        // Extract provider and validate it exists
+        let parts: Vec<&str> = provider_model.splitn(2, ':').collect();
+        let provider_name = parts[0];
+        
+        if !self.has_provider(provider_name) {
+            anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", provider_name);
+        }
+        
+        self.aliases.insert(alias_name, provider_model);
+        Ok(())
+    }
+    
+    pub fn remove_alias(&mut self, alias_name: String) -> Result<()> {
+        if self.aliases.remove(&alias_name).is_some() {
+            Ok(())
+        } else {
+            anyhow::bail!("Alias '{}' not found", alias_name);
+        }
+    }
+    
+    pub fn get_alias(&self, alias_name: &str) -> Option<&String> {
+        self.aliases.get(alias_name)
+    }
+    
+    pub fn list_aliases(&self) -> &HashMap<String, String> {
+        &self.aliases
     }
     
     fn config_file_path() -> Result<PathBuf> {

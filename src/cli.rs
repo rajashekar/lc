@@ -71,6 +71,12 @@ pub enum Commands {
         #[arg(short = 'q', long = "query")]
         query: Option<String>,
     },
+    /// Model alias management (alias: a)
+    #[command(alias = "a")]
+    Alias {
+        #[command(subcommand)]
+        command: AliasCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -81,6 +87,27 @@ pub enum ModelsCommands {
     /// Show cache information (alias: i)
     #[command(alias = "i")]
     Info,
+}
+
+#[derive(Subcommand)]
+pub enum AliasCommands {
+    /// Add a new alias (alias: a)
+    #[command(alias = "a")]
+    Add {
+        /// Alias name
+        name: String,
+        /// Provider and model in format provider:model
+        target: String,
+    },
+    /// Remove an alias (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Alias name to remove
+        name: String,
+    },
+    /// List all aliases (alias: l)
+    #[command(alias = "l")]
+    List,
 }
 
 #[derive(Subcommand)]
@@ -800,9 +827,10 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
-    // Parse provider and model from model_override if it contains ":"
+    // Parse provider and model from model_override if it contains ":" or resolve alias
     let (final_provider_override, final_model_override) = if let Some(model) = &model_override {
         if model.contains(':') {
+            // Direct provider:model format
             let parts: Vec<&str> = model.splitn(2, ':').collect();
             if parts.len() == 2 {
                 (Some(parts[0].to_string()), Some(parts[1].to_string()))
@@ -810,7 +838,23 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
                 (provider_override, model_override)
             }
         } else {
-            (provider_override, model_override)
+            // Check if it's an alias
+            if let Some(alias_target) = config.get_alias(model) {
+                // Alias found, parse the target
+                if alias_target.contains(':') {
+                    let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        (Some(parts[0].to_string()), Some(parts[1].to_string()))
+                    } else {
+                        anyhow::bail!("Invalid alias target format: '{}'. Expected 'provider:model'", alias_target);
+                    }
+                } else {
+                    anyhow::bail!("Invalid alias target format: '{}'. Expected 'provider:model'", alias_target);
+                }
+            } else {
+                // Not an alias, treat as regular model name
+                (provider_override, model_override)
+            }
         }
     } else {
         (provider_override, model_override)
@@ -1048,6 +1092,41 @@ pub async fn handle_models_command(command: Option<ModelsCommands>, query: Optio
                     println!("\n{}", format!("{}:", current_provider).bold().green());
                 }
                 println!("  {}:{}", model.provider, model.model);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+// Alias command handlers
+pub async fn handle_alias_command(command: AliasCommands) -> Result<()> {
+    use colored::Colorize;
+    
+    match command {
+        AliasCommands::Add { name, target } => {
+            let mut config = config::Config::load()?;
+            config.add_alias(name.clone(), target.clone())?;
+            config.save()?;
+            println!("{} Alias '{}' added for '{}'", "✓".green(), name, target);
+        }
+        AliasCommands::Delete { name } => {
+            let mut config = config::Config::load()?;
+            config.remove_alias(name.clone())?;
+            config.save()?;
+            println!("{} Alias '{}' removed", "✓".green(), name);
+        }
+        AliasCommands::List => {
+            let config = config::Config::load()?;
+            let aliases = config.list_aliases();
+            
+            if aliases.is_empty() {
+                println!("No aliases configured.");
+            } else {
+                println!("\n{}", "Model Aliases:".bold().blue());
+                for (alias, target) in aliases {
+                    println!("  {} {} -> {}", "•".blue(), alias.bold(), target);
+                }
             }
         }
     }

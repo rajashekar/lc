@@ -38,6 +38,9 @@ async fn main() -> Result<()> {
         (None, Some(Commands::Models { command, query })) => {
             cli::handle_models_command(command, query).await?;
         }
+        (None, Some(Commands::Alias { command })) => {
+            cli::handle_alias_command(command).await?;
+        }
         (None, None) => {
             // No subcommand or prompt provided, check if input is piped
             use std::io::{self, Read};
