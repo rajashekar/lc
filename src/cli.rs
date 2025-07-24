@@ -73,6 +73,12 @@ pub enum ProviderCommands {
         name: String,
         /// Provider endpoint URL
         url: String,
+        /// Custom models endpoint path (default: /models)
+        #[arg(short = 'm', long = "models-path")]
+        models_path: Option<String>,
+        /// Custom chat completions endpoint path (default: /chat/completions)
+        #[arg(short = 'c', long = "chat-path")]
+        chat_path: Option<String>,
     },
     /// Update an existing provider (alias: u)
     #[command(alias = "u")]
@@ -264,9 +270,9 @@ fn extract_code_blocks(text: &str) -> Vec<String> {
 // Provider command handlers
 pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
     match command {
-        ProviderCommands::Add { name, url } => {
+        ProviderCommands::Add { name, url, models_path, chat_path } => {
             let mut config = config::Config::load()?;
-            config.add_provider(name.clone(), url)?;
+            config.add_provider_with_paths(name.clone(), url, models_path, chat_path)?;
             config.save()?;
             println!("{} Provider '{}' added successfully", "✓".green(), name);
         }
@@ -311,9 +317,11 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
             let config = config::Config::load()?;
             let provider_config = config.get_provider(&name)?;
             
-            let client = provider::OpenAIClient::new(
+            let client = provider::OpenAIClient::new_with_paths(
                 provider_config.endpoint.clone(),
                 provider_config.api_key.clone().unwrap_or_default(),
+                provider_config.models_path.clone(),
+                provider_config.chat_path.clone(),
             );
             
             println!("Fetching models from provider '{}'...", name);
@@ -740,9 +748,11 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
     }
     
-    let client = provider::OpenAIClient::new(
+    let client = provider::OpenAIClient::new_with_paths(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap(),
+        provider_config.models_path.clone(),
+        provider_config.chat_path.clone(),
     );
     
     // Generate a session ID for this direct prompt
@@ -788,9 +798,11 @@ pub async fn handle_chat_command(model: String, cid: Option<String>) -> Result<(
     let provider_name = config.find_provider_for_model(&model)?;
     let provider_config = config.get_provider(&provider_name)?;
     
-    let client = provider::OpenAIClient::new(
+    let client = provider::OpenAIClient::new_with_paths(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap_or_default(),
+        provider_config.models_path.clone(),
+        provider_config.chat_path.clone(),
     );
     
     let mut current_model = model;

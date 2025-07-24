@@ -48,10 +48,15 @@ cp target/release/lc ~/.local/bin/
 ### 1. Add a Provider
 
 ```bash
-# Add OpenAI
+# Add OpenAI (standard endpoints)
 lc providers add openai https://api.openai.com/v1
 # or using alias
 lc p a openai https://api.openai.com/v1
+
+# Add GitHub with custom endpoints
+lc providers add github https://models.github.ai -m /catalog/models -c /inference/chat/completions
+# or using alias
+lc p a github https://models.github.ai -m /catalog/models -c /inference/chat/completions
 
 # Add Vercel's v0.dev
 lc providers add vercel https://api.v0.dev/v1
@@ -311,12 +316,17 @@ echo "prompt" | lc -p <provider>         # Piped input
 
 ### Provider Commands
 ```bash
-lc providers add <name> <url>            # Add provider (alias: lc p a)
-lc providers update <name> <url>         # Update provider (alias: lc p u)
-lc providers remove <name>               # Remove provider (alias: lc p r)
-lc providers list                        # List providers (alias: lc p l)
-lc providers models <name>               # List models (alias: lc p m)
+lc providers add <name> <url>                              # Add provider (alias: lc p a)
+lc providers add <name> <url> -m <path> -c <path>          # Add provider with custom endpoints
+lc providers update <name> <url>                           # Update provider (alias: lc p u)
+lc providers remove <name>                                 # Remove provider (alias: lc p r)
+lc providers list                                          # List providers (alias: lc p l)
+lc providers models <name>                                 # List models (alias: lc p m)
 ```
+
+**Custom Endpoint Options:**
+- `-m, --models-path <PATH>`: Custom models endpoint (default: `/models`)
+- `-c, --chat-path <PATH>`: Custom chat completions endpoint (default: `/chat/completions`)
 
 ### Key Management Commands
 ```bash
@@ -395,6 +405,7 @@ Any OpenAI-compatible API endpoint, including:
 - **Together AI** - Open source models like Llama, Mistral, etc.
 - **Chutes AI** - Various LLM models with competitive pricing
 - **Hugging Face Router** - Proxy to multiple providers (Groq, Hyperbolic, Fireworks, etc.)
+- **GitHub Models** - Microsoft, OpenAI, Meta, and other models via GitHub
 - **Anthropic** - Claude models (via compatible proxy)
 - **Vercel v0.dev** - v0-1.0-md model
 - **Local models** - Ollama, LocalAI, etc.
@@ -418,6 +429,10 @@ lc -p chutes -m "deepseek-ai/DeepSeek-R1" "Hello"
 # Hugging Face Router (proxy to multiple providers)
 lc providers add hf https://router.huggingface.co/v1
 lc -p hf -m "Qwen/Qwen3-32B:groq" "Hello"
+
+# GitHub Models (custom endpoints)
+lc providers add github https://models.github.ai -m /catalog/models -c /inference/chat/completions
+lc -p github -m "microsoft/phi-4-mini-instruct" "Hello"
 ```
 
 ### Hugging Face Router Support
@@ -440,6 +455,33 @@ lc providers models hf
 # Use specific model:provider combination
 lc -p hf -m "Qwen/Qwen3-32B:groq" "What is the capital of France?"
 ```
+
+### Custom Endpoints Support
+
+Some providers use different endpoint paths for models and chat completions. The tool supports custom endpoint paths for such providers:
+
+```bash
+# Standard provider (uses /models and /chat/completions)
+lc providers add openai https://api.openai.com/v1
+
+# Provider with custom endpoints
+lc providers add github https://models.github.ai \
+  --models-path /catalog/models \
+  --chat-path /inference/chat/completions
+
+# Short form with aliases
+lc p a github https://models.github.ai -m /catalog/models -c /inference/chat/completions
+```
+
+**Default Endpoints:**
+- Models: `/models` (can be overridden with `-m` or `--models-path`)
+- Chat: `/chat/completions` (can be overridden with `-c` or `--chat-path`)
+
+**Examples of providers with custom endpoints:**
+- **GitHub Models**: Uses `/catalog/models` for models and `/inference/chat/completions` for chat
+- **Custom APIs**: May use different paths based on their implementation
+
+This feature ensures compatibility with any OpenAI-compatible API regardless of their endpoint structure.
 
 ## Architecture
 

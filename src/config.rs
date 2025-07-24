@@ -16,6 +16,18 @@ pub struct ProviderConfig {
     pub endpoint: String,
     pub api_key: Option<String>,
     pub models: Vec<String>,
+    #[serde(default = "default_models_path")]
+    pub models_path: String,
+    #[serde(default = "default_chat_path")]
+    pub chat_path: String,
+}
+
+fn default_models_path() -> String {
+    "/models".to_string()
+}
+
+fn default_chat_path() -> String {
+    "/chat/completions".to_string()
 }
 
 impl Config {
@@ -52,10 +64,16 @@ impl Config {
     }
     
     pub fn add_provider(&mut self, name: String, endpoint: String) -> Result<()> {
+        self.add_provider_with_paths(name, endpoint, None, None)
+    }
+    
+    pub fn add_provider_with_paths(&mut self, name: String, endpoint: String, models_path: Option<String>, chat_path: Option<String>) -> Result<()> {
         let provider_config = ProviderConfig {
             endpoint,
             api_key: None,
             models: Vec::new(),
+            models_path: models_path.unwrap_or_else(default_models_path),
+            chat_path: chat_path.unwrap_or_else(default_chat_path),
         };
         
         self.providers.insert(name.clone(), provider_config);

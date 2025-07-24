@@ -59,10 +59,16 @@ pub struct OpenAIClient {
     client: Client,
     base_url: String,
     api_key: String,
+    models_path: String,
+    chat_path: String,
 }
 
 impl OpenAIClient {
     pub fn new(base_url: String, api_key: String) -> Self {
+        Self::new_with_paths(base_url, api_key, "/models".to_string(), "/chat/completions".to_string())
+    }
+    
+    pub fn new_with_paths(base_url: String, api_key: String, models_path: String, chat_path: String) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(60))
             .build()
@@ -72,11 +78,13 @@ impl OpenAIClient {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
             api_key,
+            models_path,
+            chat_path,
         }
     }
     
     pub async fn chat(&self, request: &ChatRequest) -> Result<String> {
-        let url = format!("{}/chat/completions", self.base_url);
+        let url = format!("{}{}", self.base_url, self.chat_path);
         
         let response = self.client
             .post(&url)
@@ -102,7 +110,7 @@ impl OpenAIClient {
     }
     
     pub async fn list_models(&self) -> Result<Vec<Model>> {
-        let url = format!("{}/models", self.base_url);
+        let url = format!("{}{}", self.base_url, self.models_path);
         
         let response = self.client
             .get(&url)
