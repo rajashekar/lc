@@ -29,7 +29,20 @@ pub struct Choice {
 
 #[derive(Debug, Deserialize)]
 pub struct ModelsResponse {
+    #[serde(alias = "models")]
     pub data: Vec<Model>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CohereModelsResponse {
+    pub models: Vec<CohereModel>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CohereModel {
+    pub name: String,
+    #[serde(default = "default_object_type")]
+    pub object: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,6 +74,7 @@ pub struct OpenAIClient {
     api_key: String,
     models_path: String,
     chat_path: String,
+    custom_headers: std::collections::HashMap<String, String>,
 }
 
 impl OpenAIClient {
@@ -69,6 +83,10 @@ impl OpenAIClient {
     }
     
     pub fn new_with_paths(base_url: String, api_key: String, models_path: String, chat_path: String) -> Self {
+        Self::new_with_headers(base_url, api_key, models_path, chat_path, std::collections::HashMap::new())
+    }
+    
+    pub fn new_with_headers(base_url: String, api_key: String, models_path: String, chat_path: String, custom_headers: std::collections::HashMap<String, String>) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(60))
             .build()
@@ -80,16 +98,24 @@ impl OpenAIClient {
             api_key,
             models_path,
             chat_path,
+            custom_headers,
         }
     }
     
     pub async fn chat(&self, request: &ChatRequest) -> Result<String> {
         let url = format!("{}{}", self.base_url, self.chat_path);
         
-        let response = self.client
+        let mut req = self.client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
+            .header("Content-Type", "application/json");
+        
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
             .json(request)
             .send()
             .await?;
@@ -112,10 +138,17 @@ impl OpenAIClient {
     pub async fn list_models(&self) -> Result<Vec<Model>> {
         let url = format!("{}{}", self.base_url, self.models_path);
         
-        let response = self.client
+        let mut req = self.client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
+            .header("Content-Type", "application/json");
+        
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
             .send()
             .await?;
         
@@ -128,18 +161,23 @@ impl OpenAIClient {
         // Get the response text first to handle different formats
         let response_text = response.text().await?;
         
-        let mut models = Vec::new();
-        
         // Try to parse as ModelsResponse first (with "data" field)
-        if let Ok(models_response) = serde_json::from_str::<ModelsResponse>(&response_text) {
-            models = models_response.data;
+        let models = if let Ok(models_response) = serde_json::from_str::<ModelsResponse>(&response_text) {
+            models_response.data
+        } else if let Ok(cohere_response) = serde_json::from_str::<CohereModelsResponse>(&response_text) {
+            // Try to parse as CohereModelsResponse (with "models" field and "name" instead of "id")
+            cohere_response.models.into_iter().map(|cohere_model| Model {
+                id: cohere_model.name,
+                object: cohere_model.object,
+                providers: vec![],
+            }).collect()
         } else if let Ok(parsed_models) = serde_json::from_str::<Vec<Model>>(&response_text) {
             // If that fails, try to parse as direct array of models
-            models = parsed_models;
+            parsed_models
         } else {
-            // If both fail, return an error with the response text for debugging
+            // If all fail, return an error with the response text for debugging
             anyhow::bail!("Failed to parse models response. Response: {}", response_text);
-        }
+        };
         
         // Expand models with providers into separate entries
         let mut expanded_models = Vec::new();

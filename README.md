@@ -13,6 +13,7 @@ LLM Client (lc) - A fast, Rust-based command-line tool for interacting with Larg
 - 🔐 **Secure key storage** - API keys stored in user config directory
 - 📥 **Piped input** - Support for piped input from other commands
 - 🔄 **Multiple API formats** - Handles both wrapped (`{"data": [...]}`) and direct array responses
+- 🏷️ **Custom headers** - Per-provider custom header support for specialized APIs (e.g., Anthropic)
 
 ## Installation
 
@@ -290,11 +291,26 @@ default_provider = "openai"
 endpoint = "https://api.openai.com/v1"
 api_key = "sk-..."
 models = []
+models_path = "/models"
+chat_path = "/chat/completions"
+
+[providers.claude]
+endpoint = "https://api.anthropic.com/v1"
+api_key = "sk-ant-api03-..."
+models = []
+models_path = "/models"
+chat_path = "/messages"
+
+[providers.claude.headers]
+x-api-key = "sk-ant-api03-..."
+anthropic-version = "2023-06-01"
 
 [providers.vercel]
 endpoint = "https://api.v0.dev/v1"
 api_key = "v1:..."
 models = []
+models_path = "/models"
+chat_path = "/chat/completions"
 ```
 
 ### Database Schema
@@ -322,11 +338,20 @@ lc providers update <name> <url>                           # Update provider (al
 lc providers remove <name>                                 # Remove provider (alias: lc p r)
 lc providers list                                          # List providers (alias: lc p l)
 lc providers models <name>                                 # List models (alias: lc p m)
+lc providers headers <name> add <header> <value>           # Add custom header (alias: lc p h <name> a)
+lc providers headers <name> delete <header>                # Remove custom header (alias: lc p h <name> d)
+lc providers headers <name> list                           # List custom headers (alias: lc p h <name> l)
 ```
 
 **Custom Endpoint Options:**
 - `-m, --models-path <PATH>`: Custom models endpoint (default: `/models`)
 - `-c, --chat-path <PATH>`: Custom chat completions endpoint (default: `/chat/completions`)
+
+**Custom Headers:**
+Some providers require additional headers beyond the standard Authorization header. You can add custom headers per provider:
+- `x-api-key`: Alternative API key header (used by Anthropic/Claude)
+- `anthropic-version`: API version header (required by Anthropic)
+- Any other custom headers required by your provider
 
 ### Key Management Commands
 ```bash
@@ -406,7 +431,7 @@ Any OpenAI-compatible API endpoint, including:
 - **Chutes AI** - Various LLM models with competitive pricing
 - **Hugging Face Router** - Proxy to multiple providers (Groq, Hyperbolic, Fireworks, etc.)
 - **GitHub Models** - Microsoft, OpenAI, Meta, and other models via GitHub
-- **Anthropic** - Claude models (via compatible proxy)
+- **Anthropic Claude** - Direct support with custom headers (x-api-key, anthropic-version)
 - **Vercel v0.dev** - v0-1.0-md model
 - **Local models** - Ollama, LocalAI, etc.
 - **Custom endpoints** - Any service implementing OpenAI chat completions API
@@ -433,6 +458,61 @@ lc -p hf -m "Qwen/Qwen3-32B:groq" "Hello"
 # GitHub Models (custom endpoints)
 lc providers add github https://models.github.ai -m /catalog/models -c /inference/chat/completions
 lc -p github -m "microsoft/phi-4-mini-instruct" "Hello"
+
+# Anthropic Claude (requires custom headers)
+lc providers add claude https://api.anthropic.com/v1 -c /messages
+lc providers headers claude add x-api-key sk-ant-api03-your-key-here
+lc providers headers claude add anthropic-version 2023-06-01
+lc -p claude -m "claude-3-5-sonnet-20241022" "Hello"
+```
+
+### Providers Requiring Custom Headers
+
+Some providers require additional headers beyond the standard `Authorization: Bearer <token>` header. Here are examples:
+
+#### Anthropic Claude
+```bash
+# Add Claude provider with custom chat endpoint
+lc providers add claude https://api.anthropic.com/v1 -c /messages
+
+# Add required headers
+lc providers headers claude add x-api-key sk-ant-api03-your-key-here
+lc providers headers claude add anthropic-version 2023-06-01
+
+# List available models
+lc providers models claude
+
+# Use Claude
+lc -p claude -m "claude-3-5-sonnet-20241022" "Explain quantum computing"
+```
+
+#### Custom Provider with Special Headers
+```bash
+# Add provider
+lc providers add custom https://api.example.com/v1
+
+# Add custom headers as needed
+lc providers headers custom add x-custom-auth your-auth-token
+lc providers headers custom add x-api-version v2.1
+lc providers headers custom add user-agent MyApp/1.0
+
+# Use the provider
+lc -p custom -m "some-model" "Hello world"
+```
+
+#### Managing Headers
+```bash
+# List all headers for a provider
+lc providers headers claude list
+lc p h claude l
+
+# Add a header
+lc providers headers claude add header-name header-value
+lc p h claude a header-name header-value
+
+# Remove a header
+lc providers headers claude delete header-name
+lc p h claude d header-name
 ```
 
 ### Hugging Face Router Support

@@ -20,6 +20,8 @@ pub struct ProviderConfig {
     pub models_path: String,
     #[serde(default = "default_chat_path")]
     pub chat_path: String,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
 }
 
 fn default_models_path() -> String {
@@ -74,6 +76,7 @@ impl Config {
             models: Vec::new(),
             models_path: models_path.unwrap_or_else(default_models_path),
             chat_path: chat_path.unwrap_or_else(default_chat_path),
+            headers: HashMap::new(),
         };
         
         self.providers.insert(name.clone(), provider_config);
@@ -120,6 +123,35 @@ impl Config {
             Ok(name.clone())
         } else {
             anyhow::bail!("No providers configured. Add one with 'lc providers add'");
+        }
+    }
+    
+    pub fn add_header(&mut self, provider: String, header_name: String, header_value: String) -> Result<()> {
+        if let Some(provider_config) = self.providers.get_mut(&provider) {
+            provider_config.headers.insert(header_name, header_value);
+            Ok(())
+        } else {
+            anyhow::bail!("Provider '{}' not found", provider);
+        }
+    }
+    
+    pub fn remove_header(&mut self, provider: String, header_name: String) -> Result<()> {
+        if let Some(provider_config) = self.providers.get_mut(&provider) {
+            if provider_config.headers.remove(&header_name).is_some() {
+                Ok(())
+            } else {
+                anyhow::bail!("Header '{}' not found for provider '{}'", header_name, provider);
+            }
+        } else {
+            anyhow::bail!("Provider '{}' not found", provider);
+        }
+    }
+    
+    pub fn list_headers(&self, provider: &str) -> Result<&HashMap<String, String>> {
+        if let Some(provider_config) = self.providers.get(provider) {
+            Ok(&provider_config.headers)
+        } else {
+            anyhow::bail!("Provider '{}' not found", provider);
         }
     }
     

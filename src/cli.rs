@@ -103,6 +103,35 @@ pub enum ProviderCommands {
         /// Provider name
         name: String,
     },
+    /// Manage custom headers for a provider (alias: h)
+    #[command(alias = "h")]
+    Headers {
+        /// Provider name
+        provider: String,
+        #[command(subcommand)]
+        command: HeaderCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum HeaderCommands {
+    /// Add a custom header (alias: a)
+    #[command(alias = "a")]
+    Add {
+        /// Header name
+        name: String,
+        /// Header value
+        value: String,
+    },
+    /// Remove a custom header (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Header name
+        name: String,
+    },
+    /// List all custom headers (alias: l)
+    #[command(alias = "l")]
+    List,
 }
 
 #[derive(Subcommand)]
@@ -317,11 +346,12 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
             let config = config::Config::load()?;
             let provider_config = config.get_provider(&name)?;
             
-            let client = provider::OpenAIClient::new_with_paths(
+            let client = provider::OpenAIClient::new_with_headers(
                 provider_config.endpoint.clone(),
                 provider_config.api_key.clone().unwrap_or_default(),
                 provider_config.models_path.clone(),
                 provider_config.chat_path.clone(),
+                provider_config.headers.clone(),
             );
             
             println!("Fetching models from provider '{}'...", name);
@@ -330,6 +360,37 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
             println!("\n{} Available models:", "Models:".bold());
             for model in models {
                 println!("  • {}", model.id);
+            }
+        }
+        ProviderCommands::Headers { provider, command } => {
+            let mut config = config::Config::load()?;
+            
+            if !config.has_provider(&provider) {
+                anyhow::bail!("Provider '{}' not found", provider);
+            }
+            
+            match command {
+                HeaderCommands::Add { name, value } => {
+                    config.add_header(provider.clone(), name.clone(), value.clone())?;
+                    config.save()?;
+                    println!("{} Header '{}' added to provider '{}'", "✓".green(), name, provider);
+                }
+                HeaderCommands::Delete { name } => {
+                    config.remove_header(provider.clone(), name.clone())?;
+                    config.save()?;
+                    println!("{} Header '{}' removed from provider '{}'", "✓".green(), name, provider);
+                }
+                HeaderCommands::List => {
+                    let headers = config.list_headers(&provider)?;
+                    if headers.is_empty() {
+                        println!("No custom headers configured for provider '{}'", provider);
+                    } else {
+                        println!("\n{} Custom headers for provider '{}':", "Headers:".bold().blue(), provider);
+                        for (name, value) in headers {
+                            println!("  {} {}: {}", "•".blue(), name.bold(), value);
+                        }
+                    }
+                }
             }
         }
     }
@@ -748,11 +809,12 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
     }
     
-    let client = provider::OpenAIClient::new_with_paths(
+    let client = provider::OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap(),
         provider_config.models_path.clone(),
         provider_config.chat_path.clone(),
+        provider_config.headers.clone(),
     );
     
     // Generate a session ID for this direct prompt
@@ -798,11 +860,12 @@ pub async fn handle_chat_command(model: String, cid: Option<String>) -> Result<(
     let provider_name = config.find_provider_for_model(&model)?;
     let provider_config = config.get_provider(&provider_name)?;
     
-    let client = provider::OpenAIClient::new_with_paths(
+    let client = provider::OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap_or_default(),
         provider_config.models_path.clone(),
         provider_config.chat_path.clone(),
+        provider_config.headers.clone(),
     );
     
     let mut current_model = model;
