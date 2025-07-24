@@ -22,6 +22,10 @@ pub struct Cli {
     #[arg(short = 'm', long = "model")]
     pub model: Option<String>,
     
+    /// Attach file(s) to the prompt
+    #[arg(short = 'a', long = "attach")]
+    pub attachments: Vec<String>,
+    
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -892,10 +896,71 @@ fn resolve_model_and_provider(
     Ok((provider_name, model_name))
 }
 
+// Helper function to read and format file contents
+fn read_and_format_attachments(attachments: &[String]) -> Result<String> {
+    if attachments.is_empty() {
+        return Ok(String::new());
+    }
+    
+    let mut formatted_content = String::new();
+    
+    for (i, file_path) in attachments.iter().enumerate() {
+        match std::fs::read_to_string(file_path) {
+            Ok(content) => {
+                if i > 0 {
+                    formatted_content.push_str("\n\n");
+                }
+                
+                // Determine file extension for better formatting
+                let extension = std::path::Path::new(file_path)
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .unwrap_or("");
+                
+                formatted_content.push_str(&format!("=== File: {} ===\n", file_path));
+                
+                // Add language hint for code files
+                if !extension.is_empty() && is_code_file(extension) {
+                    formatted_content.push_str(&format!("```{}\n{}\n```", extension, content));
+                } else {
+                    formatted_content.push_str(&content);
+                }
+            }
+            Err(e) => {
+                anyhow::bail!("Failed to read file '{}': {}", file_path, e);
+            }
+        }
+    }
+    
+    Ok(formatted_content)
+}
+
+// Helper function to determine if a file extension represents code
+fn is_code_file(extension: &str) -> bool {
+    matches!(extension.to_lowercase().as_str(),
+        "rs" | "py" | "js" | "ts" | "java" | "cpp" | "c" | "h" | "hpp" |
+        "go" | "rb" | "php" | "swift" | "kt" | "scala" | "sh" | "bash" |
+        "zsh" | "fish" | "ps1" | "bat" | "cmd" | "html" | "css" | "scss" |
+        "sass" | "less" | "xml" | "json" | "yaml" | "yml" | "toml" | "ini" |
+        "cfg" | "conf" | "sql" | "r" | "m" | "mm" | "pl" | "pm" | "lua" |
+        "vim" | "dockerfile" | "makefile" | "cmake" | "gradle" | "maven"
+    )
+}
+
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>) -> Result<()> {
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, attachments: Vec<String>) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
+    
+    // Read and format attachments
+    let attachment_content = read_and_format_attachments(&attachments)?;
+    
+    // Combine prompt with attachments
+    let final_prompt = if attachment_content.is_empty() {
+        prompt.clone()
+    } else {
+        format!("{}\n\n{}", prompt, attachment_content)
+    };
     
     // Resolve provider and model
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
@@ -923,13 +988,92 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request(&client, &model_name, &prompt, &[]).await {
+    match chat::send_chat_request(&client, &model_name, &final_prompt, &[]).await {
         Ok(response) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
             
-            // Save to database
+            // Save to database (save original prompt for cleaner logs)
             if let Err(e) = db.save_chat_entry(&session_id, &model_name, &prompt, &response) {
+                eprintln!("Warning: Failed to save chat entry: {}", e);
+            }
+        }
+        Err(e) => {
+            print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+            anyhow::bail!("Error: {}", e);
+        }
+    }
+    
+    Ok(())
+}
+
+// Direct prompt handler for piped input (treats piped content as attachment)
+pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, attachments: Vec<String>) -> Result<()> {
+    // For piped input, we need to determine if there's a prompt in the arguments
+    // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
+    // But we should provide a way to specify a prompt when piping content
+    
+    // For now, let's treat piped content as an attachment and ask for clarification
+    let prompt = "Please analyze the following content:".to_string();
+    
+    // Create a temporary "attachment" from piped content
+    let all_attachments = attachments;
+    
+    // Format piped content as an attachment
+    let piped_attachment = format!("=== Piped Input ===\n{}", piped_content);
+    
+    let config = config::Config::load()?;
+    let db = database::Database::new()?;
+    
+    // Read and format file attachments
+    let file_attachment_content = read_and_format_attachments(&all_attachments)?;
+    
+    // Combine prompt with piped content and file attachments
+    let final_prompt = if file_attachment_content.is_empty() {
+        format!("{}\n\n{}", prompt, piped_attachment)
+    } else {
+        format!("{}\n\n{}\n\n{}", prompt, piped_attachment, file_attachment_content)
+    };
+    
+    // Resolve provider and model
+    let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
+    
+    // Get provider config
+    let provider_config = config.get_provider(&provider_name)?;
+    
+    if provider_config.api_key.is_none() {
+        anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
+    }
+    
+    let client = provider::OpenAIClient::new_with_headers(
+        provider_config.endpoint.clone(),
+        provider_config.api_key.clone().unwrap(),
+        provider_config.models_path.clone(),
+        provider_config.chat_path.clone(),
+        provider_config.headers.clone(),
+    );
+    
+    // Generate a session ID for this direct prompt
+    let session_id = uuid::Uuid::new_v4().to_string();
+    db.set_current_session_id(&session_id)?;
+    
+    // Send the prompt
+    print!("{} ", "Thinking...".dimmed());
+    io::stdout().flush()?;
+    
+    match chat::send_chat_request(&client, &model_name, &final_prompt, &[]).await {
+        Ok(response) => {
+            print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+            println!("{}", response);
+            
+            // Save to database (save a shortened version for cleaner logs)
+            let log_prompt = if piped_content.len() > 100 {
+                format!("{}... (piped content)", &piped_content[..100])
+            } else {
+                format!("{} (piped content)", piped_content)
+            };
+            
+            if let Err(e) = db.save_chat_entry(&session_id, &model_name, &log_prompt, &response) {
                 eprintln!("Warning: Failed to save chat entry: {}", e);
             }
         }

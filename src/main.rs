@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     match (cli.prompt, cli.command) {
         (Some(prompt), None) => {
             // Direct prompt provided as argument
-            cli::handle_direct_prompt(prompt, cli.provider, cli.model).await?;
+            cli::handle_direct_prompt(prompt, cli.provider, cli.model, cli.attachments).await?;
         }
         (None, Some(Commands::Providers { command })) => {
             cli::handle_provider_command(command).await?;
@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
                     // Input was piped, use it as a direct prompt
                     let prompt = buffer.trim().to_string();
                     if !prompt.is_empty() {
-                        cli::handle_direct_prompt(prompt, cli.provider, cli.model).await?;
+                        cli::handle_direct_prompt_with_piped_input(prompt, cli.provider, cli.model, cli.attachments).await?;
                     } else {
                         use clap::CommandFactory;
                         let mut cmd = Cli::command();
