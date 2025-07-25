@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
-use crate::{config, provider, chat, database};
+use crate::{config, chat, database};
 use colored::Colorize;
 use rpassword::read_password;
 use std::io::{self, Write};
@@ -202,6 +202,14 @@ pub enum ProviderCommands {
         provider: String,
         #[command(subcommand)]
         command: HeaderCommands,
+    },
+    /// Set token URL for a provider (alias: t)
+    #[command(alias = "t")]
+    TokenUrl {
+        /// Provider name
+        provider: String,
+        /// Token URL for dynamic token retrieval
+        url: String,
     },
 }
 
@@ -490,13 +498,13 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
             let config = config::Config::load()?;
             let provider_config = config.get_provider(&name)?;
             
-            let client = provider::OpenAIClient::new_with_headers(
-                provider_config.endpoint.clone(),
-                provider_config.api_key.clone().unwrap_or_default(),
-                provider_config.models_path.clone(),
-                provider_config.chat_path.clone(),
-                provider_config.headers.clone(),
-            );
+            let mut config_mut = config.clone();
+            let client = chat::create_authenticated_client(&mut config_mut, &name).await?;
+            
+            // Save config if tokens were updated
+            if config_mut.get_cached_token(&name) != config.get_cached_token(&name) {
+                config_mut.save()?;
+            }
             
             println!("Fetching models from provider '{}'...", name);
             let models = client.list_models().await?;
@@ -536,6 +544,17 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
                     }
                 }
             }
+        }
+        ProviderCommands::TokenUrl { provider, url } => {
+            let mut config = config::Config::load()?;
+            
+            if !config.has_provider(&provider) {
+                anyhow::bail!("Provider '{}' not found", provider);
+            }
+            
+            config.set_token_url(provider.clone(), url.clone())?;
+            config.save()?;
+            println!("{} Token URL set for provider '{}'", "✓".green(), provider);
         }
     }
     Ok(())
@@ -1197,13 +1216,13 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
     }
     
-    let client = provider::OpenAIClient::new_with_headers(
-        provider_config.endpoint.clone(),
-        provider_config.api_key.clone().unwrap(),
-        provider_config.models_path.clone(),
-        provider_config.chat_path.clone(),
-        provider_config.headers.clone(),
-    );
+    let mut config_mut = config.clone();
+    let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+    
+    // Save config if tokens were updated
+    if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
+        config_mut.save()?;
+    }
     
     // Generate a session ID for this direct prompt
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -1294,13 +1313,13 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
     }
     
-    let client = provider::OpenAIClient::new_with_headers(
-        provider_config.endpoint.clone(),
-        provider_config.api_key.clone().unwrap(),
-        provider_config.models_path.clone(),
-        provider_config.chat_path.clone(),
-        provider_config.headers.clone(),
-    );
+    let mut config_mut = config.clone();
+    let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+    
+    // Save config if tokens were updated
+    if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
+        config_mut.save()?;
+    }
     
     // Generate a session ID for this direct prompt
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -1351,13 +1370,13 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
     let (provider_name, resolved_model) = resolve_model_and_provider(&config, provider, Some(model))?;
     let provider_config = config.get_provider(&provider_name)?;
     
-    let client = provider::OpenAIClient::new_with_headers(
-        provider_config.endpoint.clone(),
-        provider_config.api_key.clone().unwrap_or_default(),
-        provider_config.models_path.clone(),
-        provider_config.chat_path.clone(),
-        provider_config.headers.clone(),
-    );
+    let mut config_mut = config.clone();
+    let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+    
+    // Save config if tokens were updated
+    if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
+        config_mut.save()?;
+    }
     
     let mut current_model = resolved_model.clone();
     

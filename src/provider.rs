@@ -104,6 +104,12 @@ fn default_object_type() -> String {
     "model".to_string()
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TokenResponse {
+    pub token: String,
+    pub expires_at: i64, // Unix timestamp
+}
+
 pub struct OpenAIClient {
     client: Client,
     base_url: String,
@@ -257,5 +263,28 @@ impl OpenAIClient {
         }
         
         Ok(expanded_models)
+    }
+    
+    pub async fn get_token_from_url(&self, token_url: &str) -> Result<TokenResponse> {
+        let mut req = self.client
+            .get(token_url)
+            .header("Authorization", format!("token {}", self.api_key))
+            .header("Content-Type", "application/json");
+        
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req.send().await?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Token request failed with status {}: {}", status, text);
+        }
+        
+        let token_response: TokenResponse = response.json().await?;
+        Ok(token_response)
     }
 }

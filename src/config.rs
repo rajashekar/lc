@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -32,6 +33,16 @@ pub struct ProviderConfig {
     pub chat_path: String,
     #[serde(default)]
     pub headers: HashMap<String, String>,
+    #[serde(default)]
+    pub token_url: Option<String>,
+    #[serde(default)]
+    pub cached_token: Option<CachedToken>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct CachedToken {
+    pub token: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
 fn default_models_path() -> String {
@@ -92,6 +103,8 @@ impl Config {
             models_path: models_path.unwrap_or_else(default_models_path),
             chat_path: chat_path.unwrap_or_else(default_chat_path),
             headers: HashMap::new(),
+            token_url: None,
+            cached_token: None,
         };
         
         self.providers.insert(name.clone(), provider_config);
@@ -269,5 +282,53 @@ impl Config {
         let lc_dir = config_dir.join("lc");
         fs::create_dir_all(&lc_dir)?;
         Ok(lc_dir)
+    }
+    
+    pub fn set_token_url(&mut self, provider: String, token_url: String) -> Result<()> {
+        if let Some(provider_config) = self.providers.get_mut(&provider) {
+            provider_config.token_url = Some(token_url);
+            // Clear cached token when token_url changes
+            provider_config.cached_token = None;
+            Ok(())
+        } else {
+            anyhow::bail!("Provider '{}' not found", provider);
+        }
+    }
+    
+    pub fn get_token_url(&self, provider: &str) -> Option<&String> {
+        self.providers.get(provider)?.token_url.as_ref()
+    }
+    
+    pub fn set_cached_token(&mut self, provider: String, token: String, expires_at: DateTime<Utc>) -> Result<()> {
+        if let Some(provider_config) = self.providers.get_mut(&provider) {
+            provider_config.cached_token = Some(CachedToken {
+                token,
+                expires_at,
+            });
+            Ok(())
+        } else {
+            anyhow::bail!("Provider '{}' not found", provider);
+        }
+    }
+    
+    pub fn get_cached_token(&self, provider: &str) -> Option<&CachedToken> {
+        self.providers.get(provider)?.cached_token.as_ref()
+    }
+    
+    pub fn is_token_expired(&self, provider: &str) -> bool {
+        if let Some(cached_token) = self.get_cached_token(provider) {
+            Utc::now() >= cached_token.expires_at
+        } else {
+            true // No token means expired
+        }
+    }
+    
+    pub fn clear_cached_token(&mut self, provider: String) -> Result<()> {
+        if let Some(provider_config) = self.providers.get_mut(&provider) {
+            provider_config.cached_token = None;
+            Ok(())
+        } else {
+            anyhow::bail!("Provider '{}' not found", provider);
+        }
     }
 }
