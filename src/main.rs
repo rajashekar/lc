@@ -8,6 +8,7 @@ mod models_cache;
 mod model_metadata;
 mod proxy;
 mod token_utils;
+mod unified_cache;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
@@ -16,6 +17,9 @@ use clap::Parser;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    
+    // Set debug mode if flag is provided
+    cli::set_debug_mode(cli.debug);
     
     // Check for piped input first
     let piped_input = check_for_piped_input()?;

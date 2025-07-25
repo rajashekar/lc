@@ -4,6 +4,31 @@ use crate::{config, chat, database};
 use colored::Colorize;
 use rpassword::read_password;
 use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+// Global debug flag
+pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
+
+// Debug logging macro
+#[macro_export]
+macro_rules! debug_log {
+    ($($arg:tt)*) => {
+        if $crate::cli::DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed) {
+            use colored::Colorize;
+            eprintln!("{} {}", "[DEBUG]".dimmed(), format!($($arg)*));
+        }
+    };
+}
+
+// Set debug mode
+pub fn set_debug_mode(enabled: bool) {
+    DEBUG_MODE.store(enabled, Ordering::Relaxed);
+}
+
+// Check if debug mode is enabled
+pub fn is_debug_mode() -> bool {
+    DEBUG_MODE.load(Ordering::Relaxed)
+}
 
 #[derive(Parser)]
 #[command(name = "lc")]
@@ -37,6 +62,10 @@ pub struct Cli {
     /// Attach file(s) to the prompt
     #[arg(short = 'a', long = "attach")]
     pub attachments: Vec<String>,
+    
+    /// Enable debug/verbose logging
+    #[arg(short = 'd', long = "debug")]
+    pub debug: bool,
     
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -249,6 +278,9 @@ pub enum ProviderCommands {
     Models {
         /// Provider name
         name: String,
+        /// Refresh the models cache for this provider (alias: r)
+        #[arg(short = 'r', long = "refresh")]
+        refresh: bool,
     },
     /// Manage custom headers for a provider (alias: h)
     #[command(alias = "h")]
@@ -554,33 +586,56 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
                 );
             }
         }
-        ProviderCommands::Models { name } => {
+        ProviderCommands::Models { name, refresh } => {
+            debug_log!("Handling provider models command for '{}', refresh: {}", name, refresh);
+            
             let config = config::Config::load()?;
             let _provider_config = config.get_provider(&name)?;
             
-            let mut config_mut = config.clone();
-            let client = chat::create_authenticated_client(&mut config_mut, &name).await?;
+            debug_log!("Provider '{}' found in config", name);
             
-            // Save config if tokens were updated
-            if config_mut.get_cached_token(&name) != config.get_cached_token(&name) {
-                config_mut.save()?;
-            }
-            
-            println!("Fetching models from provider '{}'...", name);
-            
-            // Try to load enhanced metadata for this provider
-            let enhanced_models = load_provider_enhanced_models(&name).await?;
-            
-            if !enhanced_models.is_empty() {
-                // Display with rich metadata
-                println!("\n{} Available models:", "Models:".bold());
-                display_provider_models(&enhanced_models)?;
-            } else {
-                // Fallback to basic listing
-                let models = client.list_models().await?;
-                println!("\n{} Available models:", "Models:".bold());
-                for model in models {
-                    println!("  • {}", model.id);
+            // Use unified cache system
+            match crate::unified_cache::UnifiedCache::fetch_and_cache_provider_models(&name, refresh).await {
+                Ok(models) => {
+                    debug_log!("Successfully fetched {} models for provider '{}'", models.len(), name);
+                    println!("\n{} Available models:", "Models:".bold());
+                    display_provider_models(&models)?;
+                }
+                Err(e) => {
+                    debug_log!("Unified cache failed for provider '{}': {}", name, e);
+                    eprintln!("Error fetching models from provider '{}': {}", name, e);
+                    
+                    // Fallback to basic listing if unified cache fails
+                    debug_log!("Attempting fallback to basic client listing for provider '{}'", name);
+                    let mut config_mut = config.clone();
+                    match chat::create_authenticated_client(&mut config_mut, &name).await {
+                        Ok(client) => {
+                            debug_log!("Created fallback client for provider '{}'", name);
+                            // Save config if tokens were updated
+                            if config_mut.get_cached_token(&name) != config.get_cached_token(&name) {
+                                debug_log!("Tokens updated for provider '{}', saving config", name);
+                                config_mut.save()?;
+                            }
+                            
+                            match client.list_models().await {
+                                Ok(models) => {
+                                    debug_log!("Fallback client returned {} models for provider '{}'", models.len(), name);
+                                    println!("\n{} Available models (basic listing):", "Models:".bold());
+                                    for model in models {
+                                        println!("  • {}", model.id);
+                                    }
+                                }
+                                Err(e2) => {
+                                    debug_log!("Fallback client failed for provider '{}': {}", name, e2);
+                                    anyhow::bail!("Failed to fetch models: {}", e2);
+                                }
+                            }
+                        }
+                        Err(e2) => {
+                            debug_log!("Failed to create fallback client for provider '{}': {}", name, e2);
+                            anyhow::bail!("Failed to create client: {}", e2);
+                        }
+                    }
                 }
             }
         }
@@ -1661,21 +1716,119 @@ pub async fn handle_models_command(
     
     match command {
         Some(ModelsCommands::Refresh) => {
-            let mut cache = ModelsCache::load()?;
-            cache.refresh().await?;
+            crate::unified_cache::UnifiedCache::refresh_all_providers().await?;
         }
         Some(ModelsCommands::Info) => {
-            let cache = ModelsCache::load()?;
-            let info = cache.get_cache_info()?;
+            debug_log!("Handling models info command");
+            
+            let models_dir = crate::unified_cache::UnifiedCache::models_dir()?;
+            debug_log!("Models cache directory: {}", models_dir.display());
+            
             println!("\n{}", "Models Cache Information:".bold().blue());
-            println!("{}", info);
+            println!("Cache Directory: {}", models_dir.display());
+            
+            if !models_dir.exists() {
+                debug_log!("Cache directory does not exist");
+                println!("Status: No cache directory found");
+                return Ok(());
+            }
+            
+            let entries = std::fs::read_dir(&models_dir)?;
+            let mut provider_count = 0;
+            let mut total_models = 0;
+            
+            debug_log!("Reading cache directory entries");
+            
+            // Collect provider information first
+            let mut provider_info = Vec::new();
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                
+                if let Some(extension) = path.extension() {
+                    if extension == "json" {
+                        if let Some(provider_name) = path.file_stem().and_then(|s| s.to_str()) {
+                            debug_log!("Processing cache file for provider: {}", provider_name);
+                            provider_count += 1;
+                            match crate::unified_cache::UnifiedCache::load_provider_models(provider_name) {
+                                Ok(models) => {
+                                    let count = models.len();
+                                    total_models += count;
+                                    debug_log!("Provider '{}' has {} cached models", provider_name, count);
+                                    
+                                    let age_display = crate::unified_cache::UnifiedCache::get_cache_age_display(provider_name)
+                                        .unwrap_or_else(|_| "Unknown".to_string());
+                                    let is_fresh = crate::unified_cache::UnifiedCache::is_cache_fresh(provider_name).unwrap_or(false);
+                                    debug_log!("Provider '{}' cache age: {}, fresh: {}", provider_name, age_display, is_fresh);
+                                    
+                                    let status = if is_fresh {
+                                        age_display.green()
+                                    } else {
+                                        format!("{} (expired)", age_display).red()
+                                    };
+                                    provider_info.push((provider_name.to_string(), count, status));
+                                }
+                                Err(e) => {
+                                    debug_log!("Error loading cache for provider '{}': {}", provider_name, e);
+                                    provider_info.push((provider_name.to_string(), 0, "Error loading cache".red()));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            debug_log!("Sorting {} providers alphabetically", provider_info.len());
+            
+            // Sort providers alphabetically by name
+            provider_info.sort_by(|a, b| a.0.cmp(&b.0));
+            
+            println!("\nCached Providers:");
+            for (provider_name, count, status) in provider_info {
+                if count > 0 {
+                    println!("  {} {} - {} models ({})", "•".blue(), provider_name.bold(), count, status);
+                } else {
+                    println!("  {} {} - {}", "•".blue(), provider_name.bold(), status);
+                }
+            }
+            
+            debug_log!("Cache summary: {} providers, {} total models", provider_count, total_models);
+            
+            println!("\nSummary:");
+            println!("  Providers: {}", provider_count);
+            println!("  Total Models: {}", total_models);
         }
         Some(ModelsCommands::Dump) => {
             dump_models_data().await?;
         }
         None => {
-            // List models with enhanced metadata and filtering
-            let enhanced_models = load_enhanced_models().await?;
+            debug_log!("Handling global models command");
+            
+            // Use unified cache for global models command
+            debug_log!("Loading all cached models from unified cache");
+            let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models()?;
+            
+            debug_log!("Loaded {} models from cache", enhanced_models.len());
+            
+            // If no cached models found, refresh all providers
+            if enhanced_models.is_empty() {
+                debug_log!("No cached models found, refreshing all providers");
+                println!("No cached models found. Refreshing all providers...");
+                crate::unified_cache::UnifiedCache::refresh_all_providers().await?;
+                let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models()?;
+                
+                debug_log!("After refresh, loaded {} models", enhanced_models.len());
+                
+                if enhanced_models.is_empty() {
+                    debug_log!("Still no models found after refresh");
+                    println!("No models found after refresh.");
+                    return Ok(());
+                }
+            }
+            
+            debug_log!("Applying filters to {} models", enhanced_models.len());
+            debug_log!("Filters - query: {:?}, tools: {}, reasoning: {}, vision: {}, audio: {}, code: {}",
+                      query, tools, reasoning, vision, audio, code);
             
             // Apply filters
             let filtered_models = apply_model_filters(
@@ -1693,12 +1846,16 @@ pub async fn handle_models_command(
                 output_price,
             )?;
             
+            debug_log!("After filtering, {} models remain", filtered_models.len());
+            
             if filtered_models.is_empty() {
+                debug_log!("No models match the specified criteria");
                 println!("No models found matching the specified criteria.");
                 return Ok(());
             }
             
             // Display results
+            debug_log!("Displaying {} filtered models", filtered_models.len());
             display_enhanced_models(&filtered_models, &query)?;
         }
     }
@@ -2126,7 +2283,7 @@ fn display_enhanced_models(models: &[crate::model_metadata::ModelMetadata], quer
     Ok(())
 }
 
-async fn fetch_raw_models_response(client: &crate::provider::OpenAIClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
+pub async fn fetch_raw_models_response(client: &crate::provider::OpenAIClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
     use reqwest::Client;
     use serde_json::Value;
     use std::time::Duration;
@@ -2137,32 +2294,46 @@ async fn fetch_raw_models_response(client: &crate::provider::OpenAIClient, provi
     
     let url = format!("{}{}", provider_config.endpoint.trim_end_matches('/'), provider_config.models_path);
     
+    debug_log!("Making API request to: {}", url);
+    debug_log!("Request timeout: 60 seconds");
+    
     let mut req = http_client
         .get(&url)
         .header("Authorization", format!("Bearer {}", provider_config.api_key.as_ref().unwrap()))
         .header("Content-Type", "application/json");
     
+    debug_log!("Added Authorization header with API key");
+    debug_log!("Added Content-Type: application/json header");
+    
     // Add custom headers
     for (name, value) in &provider_config.headers {
+        debug_log!("Adding custom header: {}: {}", name, value);
         req = req.header(name, value);
     }
     
+    debug_log!("Sending HTTP GET request...");
     let response = req.send().await?;
     
-    if !response.status().is_success() {
-        let status = response.status();
+    let status = response.status();
+    debug_log!("Received response with status: {}", status);
+    
+    if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
+        debug_log!("API request failed with error response: {}", text);
         anyhow::bail!("API request failed with status {}: {}", status, text);
     }
     
     let response_text = response.text().await?;
+    debug_log!("Received response body ({} bytes)", response_text.len());
     
     // Pretty print the JSON for better readability
     match serde_json::from_str::<Value>(&response_text) {
         Ok(json_value) => {
+            debug_log!("Response is valid JSON, pretty-printing");
             Ok(serde_json::to_string_pretty(&json_value)?)
         }
         Err(_) => {
+            debug_log!("Response is not valid JSON, returning as-is");
             // If it's not valid JSON, return as-is
             Ok(response_text)
         }

@@ -91,8 +91,12 @@ impl MetadataExtractor {
             "fireworks" => Self::extract_fireworks(raw_json),
             "nvidia" => Self::extract_nvidia(raw_json),
             "openrouter" => Self::extract_openrouter(raw_json),
+            "kilo" => Self::extract_kilo(raw_json),
             "venice" => Self::extract_venice(raw_json),
             "requesty" => Self::extract_requesty(raw_json),
+            "chutes" => Self::extract_chutes(raw_json),
+            "github" => Self::extract_github(raw_json),
+            "together" => Self::extract_together(raw_json),
             _ => Self::extract_generic(provider, raw_json),
         }
     }
@@ -459,6 +463,16 @@ impl MetadataExtractor {
         Ok(models)
     }
     
+    fn extract_kilo(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
+        // Kilo uses the same format as OpenRouter, so we can reuse the extraction logic
+        Self::extract_openrouter(raw_json).map(|mut models| {
+            for model in &mut models {
+                model.provider = "kilo".to_string();
+            }
+            models
+        })
+    }
+    
     fn extract_venice(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
         #[derive(Deserialize)]
         struct VeniceResponse {
@@ -575,8 +589,23 @@ impl MetadataExtractor {
         let value: serde_json::Value = serde_json::from_str(raw_json)?;
         let mut models = Vec::new();
         
+        // First, try to get models from "data" field (wrapped format)
         if let Some(data) = value.get("data").and_then(|d| d.as_array()) {
             for model_value in data {
+                if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
+                    let metadata = ModelMetadata {
+                        id: id.to_string(),
+                        provider: provider.to_string(),
+                        raw_data: model_value.clone(),
+                        ..Default::default()
+                    };
+                    models.push(metadata);
+                }
+            }
+        }
+        // If no "data" field, try to parse as direct array (providers like together, github)
+        else if let Some(array) = value.as_array() {
+            for model_value in array {
                 if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
                     let metadata = ModelMetadata {
                         id: id.to_string(),
@@ -646,6 +675,305 @@ impl MetadataExtractor {
                 is_deprecated: false,
                 is_fine_tunable: false,
                 display_name: Some(model.id.clone()),
+                raw_data,
+                ..Default::default()
+            };
+            
+            models.push(metadata);
+        }
+        
+        Ok(models)
+    }
+    
+    fn extract_chutes(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
+        #[derive(Deserialize)]
+        struct ChutesResponse {
+            data: Vec<ChutesModel>,
+        }
+        
+        #[derive(Deserialize, Serialize)]
+        struct ChutesModel {
+            id: String,
+            object: String,
+            owned_by: String,
+            created: i64,
+            max_model_len: u32,
+            price: ChutesPrice,
+            root: String,
+        }
+        
+        #[derive(Deserialize, Serialize)]
+        struct ChutesPrice {
+            tao: f64,
+            usd: f64,
+        }
+        
+        let response: ChutesResponse = serde_json::from_str(raw_json)?;
+        let mut models = Vec::new();
+        
+        for model in response.data {
+            let raw_data = serde_json::to_value(&model)?;
+            
+            // Convert single USD price to per-million-token pricing
+            // Treat the USD price as per 1M input tokens, same for output
+            let price_per_m = if model.price.usd > 0.0 {
+                Some(model.price.usd)
+            } else {
+                None
+            };
+            
+            let metadata = ModelMetadata {
+                id: model.id.clone(),
+                provider: "chutes".to_string(),
+                owned_by: Some(model.owned_by),
+                created: Some(model.created),
+                context_length: Some(model.max_model_len),
+                // Use same price for input and output as suggested
+                input_price_per_m: price_per_m,
+                output_price_per_m: price_per_m,
+                // Chutes doesn't specify tools support, so don't assume it
+                supports_tools: false,
+                supports_function_calling: false,
+                supports_vision: false,
+                supports_audio: false,
+                supports_reasoning: false,
+                supports_code: false,
+                supports_json_mode: false,
+                supports_streaming: true, // Most modern models support streaming
+                model_type: ModelType::Chat,
+                is_deprecated: false,
+                is_fine_tunable: false,
+                display_name: Some(model.id.clone()),
+                raw_data,
+                ..Default::default()
+            };
+            
+            models.push(metadata);
+        }
+        
+        Ok(models)
+    }
+    
+    fn extract_github(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
+        #[derive(Deserialize, Serialize)]
+        struct GitHubModel {
+            id: String,
+            name: String,
+            publisher: Option<String>,
+            summary: Option<String>,
+            capabilities: Option<Vec<String>>,
+            supported_input_modalities: Option<Vec<String>>,
+            supported_output_modalities: Option<Vec<String>>,
+            limits: Option<GitHubLimits>,
+            tags: Option<Vec<String>>,
+            version: Option<String>,
+            rate_limit_tier: Option<String>,
+            registry: Option<String>,
+            html_url: Option<String>,
+        }
+        
+        #[derive(Deserialize, Serialize)]
+        struct GitHubLimits {
+            max_input_tokens: Option<u32>,
+            max_output_tokens: Option<u32>,
+        }
+        
+        // GitHub returns a direct array of models
+        let github_models: Vec<GitHubModel> = serde_json::from_str(raw_json)?;
+        let mut models = Vec::new();
+        
+        for model in github_models {
+            let raw_data = serde_json::to_value(&model)?;
+            
+            // Extract capabilities
+            let capabilities = model.capabilities.unwrap_or_default();
+            let supports_tools = capabilities.contains(&"tool-calling".to_string());
+            let supports_function_calling = supports_tools; // Same as tools for GitHub
+            let supports_streaming = capabilities.contains(&"streaming".to_string());
+            let supports_reasoning = capabilities.contains(&"reasoning".to_string());
+            
+            // Extract vision support from input modalities
+            let input_modalities = model.supported_input_modalities.unwrap_or_default();
+            let supports_vision = input_modalities.contains(&"image".to_string());
+            let supports_audio = input_modalities.contains(&"audio".to_string());
+            
+            // Extract context and output limits
+            let context_length = model.limits.as_ref().and_then(|l| l.max_input_tokens);
+            let max_output_tokens = model.limits.as_ref().and_then(|l| l.max_output_tokens);
+            
+            // Infer code support from tags or model name
+            let tags = model.tags.unwrap_or_default();
+            let model_name_lower = model.name.to_lowercase();
+            let supports_code = tags.contains(&"coding".to_string()) ||
+                               model_name_lower.contains("code") ||
+                               model_name_lower.contains("coder");
+            
+            // Determine model type based on output modalities and capabilities
+            let output_modalities = model.supported_output_modalities.unwrap_or_default();
+            let model_type = if output_modalities.contains(&"embeddings".to_string()) {
+                ModelType::Embedding
+            } else if output_modalities.contains(&"text".to_string()) {
+                ModelType::Chat
+            } else {
+                ModelType::Other("unknown".to_string())
+            };
+            
+            // Check if model is deprecated (GitHub doesn't seem to have this info)
+            let is_deprecated = false;
+            
+            // Check if model supports JSON mode (infer from capabilities or tags)
+            let supports_json_mode = tags.contains(&"structured".to_string()) ||
+                                    capabilities.contains(&"structured-output".to_string());
+            
+            let metadata = ModelMetadata {
+                id: model.id.clone(),
+                provider: "github".to_string(),
+                display_name: Some(model.name),
+                description: model.summary,
+                owned_by: model.publisher,
+                created: None, // GitHub doesn't provide creation timestamp
+                context_length,
+                max_input_tokens: context_length,
+                max_output_tokens,
+                input_price_per_m: None, // GitHub doesn't provide pricing info
+                output_price_per_m: None,
+                supports_tools,
+                supports_vision,
+                supports_audio,
+                supports_reasoning,
+                supports_code,
+                supports_function_calling,
+                supports_json_mode,
+                supports_streaming,
+                model_type,
+                is_deprecated,
+                is_fine_tunable: false, // GitHub doesn't provide this info
+                raw_data,
+                ..Default::default()
+            };
+            
+            models.push(metadata);
+        }
+        
+        Ok(models)
+    }
+    
+    fn extract_together(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
+        #[derive(Deserialize, Serialize)]
+        struct TogetherModel {
+            id: String,
+            display_name: Option<String>,
+            organization: Option<String>,
+            context_length: Option<u32>,
+            created: Option<i64>,
+            license: Option<String>,
+            link: Option<String>,
+            object: Option<String>,
+            pricing: Option<TogetherPricing>,
+            running: Option<bool>,
+            #[serde(rename = "type")]
+            model_type: Option<String>,
+        }
+        
+        #[derive(Deserialize, Serialize)]
+        struct TogetherPricing {
+            base: Option<f64>,
+            finetune: Option<f64>,
+            hourly: Option<f64>,
+            input: Option<f64>,
+            output: Option<f64>,
+        }
+        
+        // Together returns a direct array of models
+        let together_models: Vec<TogetherModel> = serde_json::from_str(raw_json)?;
+        let mut models = Vec::new();
+        
+        for model in together_models {
+            let raw_data = serde_json::to_value(&model)?;
+            
+            // Extract pricing (convert from per-token to per-million-token)
+            let input_price_per_m = model.pricing
+                .as_ref()
+                .and_then(|p| p.input)
+                .map(|price| price * 1_000_000.0);
+                
+            let output_price_per_m = model.pricing
+                .as_ref()
+                .and_then(|p| p.output)
+                .map(|price| price * 1_000_000.0);
+            
+            // Determine model type based on Together's type field
+            let model_type = match model.model_type.as_deref() {
+                Some("chat") => ModelType::Chat,
+                Some("completion") => ModelType::Completion,
+                Some("embedding") => ModelType::Embedding,
+                Some("image") => ModelType::ImageGeneration,
+                Some("audio") => ModelType::AudioGeneration,
+                Some("transcribe") => ModelType::Other("transcription".to_string()),
+                Some("moderation") => ModelType::Moderation,
+                Some("rerank") => ModelType::Other("rerank".to_string()),
+                Some("language") => ModelType::Completion,
+                Some(other) => ModelType::Other(other.to_string()),
+                None => ModelType::Chat, // Default to chat if not specified
+            };
+            
+            // Infer capabilities from model name and type
+            let model_name_lower = model.display_name.as_ref()
+                .unwrap_or(&model.id)
+                .to_lowercase();
+            
+            let supports_vision = model_name_lower.contains("vision") ||
+                                 model_name_lower.contains("vl") ||
+                                 model_name_lower.contains("multimodal");
+            
+            let supports_code = model_name_lower.contains("code") ||
+                               model_name_lower.contains("coder") ||
+                               model_name_lower.contains("starcoder") ||
+                               model_name_lower.contains("codestral");
+            
+            let supports_reasoning = model_name_lower.contains("reasoning") ||
+                                    model_name_lower.contains("qwq") ||
+                                    model_name_lower.contains("r1");
+            
+            let supports_audio = matches!(model_type, ModelType::AudioGeneration) ||
+                                model_name_lower.contains("whisper") ||
+                                model_name_lower.contains("sonic");
+            
+            // Most Together chat models support tools and streaming
+            let supports_tools = matches!(model_type, ModelType::Chat) &&
+                                 !model_name_lower.contains("guard") &&
+                                 !model_name_lower.contains("embed");
+            
+            let supports_function_calling = supports_tools;
+            let supports_streaming = matches!(model_type, ModelType::Chat);
+            let supports_json_mode = supports_tools; // Most tool-capable models support JSON mode
+            
+            // Check if model is deprecated (not running)
+            let is_deprecated = model.running == Some(false);
+            
+            let metadata = ModelMetadata {
+                id: model.id.clone(),
+                provider: "together".to_string(),
+                display_name: model.display_name.or_else(|| Some(model.id.clone())),
+                description: None, // Together doesn't provide descriptions
+                owned_by: model.organization,
+                created: model.created,
+                context_length: model.context_length,
+                max_input_tokens: model.context_length,
+                max_output_tokens: None, // Together doesn't specify output limits
+                input_price_per_m,
+                output_price_per_m,
+                supports_tools,
+                supports_vision,
+                supports_audio,
+                supports_reasoning,
+                supports_code,
+                supports_function_calling,
+                supports_json_mode,
+                supports_streaming,
+                model_type,
+                is_deprecated,
+                is_fine_tunable: model.pricing.as_ref().map_or(false, |p| p.finetune.unwrap_or(0.0) > 0.0),
                 raw_data,
                 ..Default::default()
             };

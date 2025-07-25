@@ -63,13 +63,30 @@ pub async fn send_chat_request_with_validation(
     temperature: Option<f32>,
     provider_name: &str,
 ) -> Result<(String, Option<i32>, Option<i32>)> {
+    crate::debug_log!("Sending chat request - provider: '{}', model: '{}', prompt length: {}, history entries: {}",
+                      provider_name, model, prompt.len(), history.len());
+    crate::debug_log!("Request parameters - max_tokens: {:?}, temperature: {:?}", max_tokens, temperature);
+    
     // Try to get model metadata for context validation
+    crate::debug_log!("Loading model metadata for provider '{}', model '{}'", provider_name, model);
     let model_metadata = get_model_metadata(provider_name, model).await;
     
+    if let Some(ref metadata) = model_metadata {
+        crate::debug_log!("Found metadata for model '{}' - context_length: {:?}, max_output: {:?}",
+                          model, metadata.context_length, metadata.max_output_tokens);
+    } else {
+        crate::debug_log!("No metadata found for model '{}'", model);
+    }
+    
     // Create token counter
+    crate::debug_log!("Creating token counter for model '{}'", model);
     let token_counter = match TokenCounter::new(model) {
-        Ok(counter) => Some(counter),
+        Ok(counter) => {
+            crate::debug_log!("Successfully created token counter for model '{}'", model);
+            Some(counter)
+        }
         Err(e) => {
+            crate::debug_log!("Failed to create token counter for model '{}': {}", model, e);
             eprintln!("Warning: Failed to create token counter for model '{}': {}", model, e);
             None
         }
@@ -146,13 +163,19 @@ pub async fn send_chat_request_with_validation(
     
     let request = ChatRequest {
         model: model.to_string(),
-        messages,
+        messages: messages.clone(),
         max_tokens: max_tokens.or(Some(1024)),
         temperature: temperature.or(Some(0.7)),
     };
     
+    crate::debug_log!("Sending chat request with {} messages, max_tokens: {:?}, temperature: {:?}",
+                      messages.len(), request.max_tokens, request.temperature);
+    
     // Send the request
+    crate::debug_log!("Making API call to chat endpoint...");
     let response = client.chat(&request).await?;
+    
+    crate::debug_log!("Received response from chat API ({} characters)", response.len());
     
     // Calculate output tokens if we have a token counter
     let output_tokens = if let Some(ref counter) = token_counter {
@@ -238,10 +261,17 @@ pub async fn get_or_refresh_token(config: &mut Config, provider_name: &str, clie
 }
 
 pub async fn create_authenticated_client(config: &mut Config, provider_name: &str) -> Result<OpenAIClient> {
+    crate::debug_log!("Creating authenticated client for provider '{}'", provider_name);
+    
     // Clone the provider config to avoid borrowing issues
     let provider_config = config.get_provider(provider_name)?.clone();
     
+    crate::debug_log!("Provider '{}' config - endpoint: {}, models_path: {}, chat_path: {}",
+                      provider_name, provider_config.endpoint, provider_config.models_path, provider_config.chat_path);
+    crate::debug_log!("Provider '{}' has {} custom headers", provider_name, provider_config.headers.len());
+    
     // Create a temporary client with the API key for token retrieval
+    crate::debug_log!("Creating temporary client for token retrieval");
     let temp_client = OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap_or_default(),
@@ -251,9 +281,13 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
     );
     
     // Get the appropriate authentication token
+    crate::debug_log!("Getting authentication token for provider '{}'", provider_name);
     let auth_token = get_or_refresh_token(config, provider_name, &temp_client).await?;
     
+    crate::debug_log!("Successfully obtained auth token for provider '{}' (length: {})", provider_name, auth_token.len());
+    
     // Create the final client with the authentication token
+    crate::debug_log!("Creating final authenticated client for provider '{}'", provider_name);
     let client = OpenAIClient::new_with_headers(
         provider_config.endpoint,
         auth_token,
@@ -262,5 +296,6 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
         provider_config.headers,
     );
     
+    crate::debug_log!("Successfully created authenticated client for provider '{}'", provider_name);
     Ok(client)
 }
