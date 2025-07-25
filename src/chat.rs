@@ -7,8 +7,17 @@ pub async fn send_chat_request(
     model: &str,
     prompt: &str,
     history: &[ChatEntry],
+    system_prompt: Option<&str>,
 ) -> Result<String> {
     let mut messages = Vec::new();
+    
+    // Add system prompt if provided
+    if let Some(sys_prompt) = system_prompt {
+        messages.push(Message {
+            role: "system".to_string(),
+            content: sys_prompt.to_string(),
+        });
+    }
     
     // Add conversation history
     for entry in history {

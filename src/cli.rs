@@ -22,6 +22,10 @@ pub struct Cli {
     #[arg(short = 'm', long = "model")]
     pub model: Option<String>,
     
+    /// System prompt to use (when used with direct prompt)
+    #[arg(short = 's', long = "system")]
+    pub system_prompt: Option<String>,
+    
     /// Attach file(s) to the prompt
     #[arg(short = 'a', long = "attach")]
     pub attachments: Vec<String>,
@@ -304,6 +308,12 @@ pub enum SetCommands {
         /// Model name
         name: String,
     },
+    /// Set system prompt (alias: s)
+    #[command(alias = "s")]
+    SystemPrompt {
+        /// System prompt text
+        prompt: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -314,6 +324,9 @@ pub enum GetCommands {
     /// Get default model (alias: m)
     #[command(alias = "m")]
     Model,
+    /// Get system prompt (alias: s)
+    #[command(alias = "s")]
+    SystemPrompt,
 }
 
 // Helper function to extract code blocks from markdown text
@@ -779,6 +792,12 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                     config.save()?;
                     println!("{} Default model set to '{}'", "✓".green(), name);
                 }
+                SetCommands::SystemPrompt { prompt } => {
+                    let mut config = config::Config::load()?;
+                    config.system_prompt = Some(prompt.clone());
+                    config.save()?;
+                    println!("{} System prompt set", "✓".green());
+                }
             }
         }
         Some(ConfigCommands::Get { command }) => {
@@ -796,6 +815,13 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                         println!("{}", model);
                     } else {
                         anyhow::bail!("No default model configured");
+                    }
+                }
+                GetCommands::SystemPrompt => {
+                    if let Some(system_prompt) = &config.system_prompt {
+                        println!("{}", system_prompt);
+                    } else {
+                        anyhow::bail!("No system prompt configured");
                     }
                 }
             }
@@ -823,6 +849,12 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                 println!("model {}", model);
             } else {
                 println!("model {}", "not set".dimmed());
+            }
+            
+            if let Some(system_prompt) = &config.system_prompt {
+                println!("system_prompt {}", system_prompt);
+            } else {
+                println!("system_prompt {}", "not set".dimmed());
             }
         }
     }
@@ -948,7 +980,7 @@ fn is_code_file(extension: &str) -> bool {
 }
 
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, attachments: Vec<String>) -> Result<()> {
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, attachments: Vec<String>) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -961,6 +993,9 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     } else {
         format!("{}\n\n{}", prompt, attachment_content)
     };
+    
+    // Determine system prompt to use (CLI override takes precedence over config)
+    let system_prompt = system_prompt_override.as_deref().or(config.system_prompt.as_deref());
     
     // Resolve provider and model
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
@@ -988,7 +1023,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request(&client, &model_name, &final_prompt, &[]).await {
+    match chat::send_chat_request(&client, &model_name, &final_prompt, &[], system_prompt).await {
         Ok(response) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
@@ -1008,7 +1043,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
 }
 
 // Direct prompt handler for piped input (treats piped content as attachment)
-pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, attachments: Vec<String>) -> Result<()> {
+pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, attachments: Vec<String>) -> Result<()> {
     // For piped input, we need to determine if there's a prompt in the arguments
     // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
     // But we should provide a way to specify a prompt when piping content
@@ -1035,6 +1070,9 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         format!("{}\n\n{}\n\n{}", prompt, piped_attachment, file_attachment_content)
     };
     
+    // Determine system prompt to use (CLI override takes precedence over config)
+    let system_prompt = system_prompt_override.as_deref().or(config.system_prompt.as_deref());
+    
     // Resolve provider and model
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
     
@@ -1061,7 +1099,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request(&client, &model_name, &final_prompt, &[]).await {
+    match chat::send_chat_request(&client, &model_name, &final_prompt, &[], system_prompt).await {
         Ok(response) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
@@ -1179,7 +1217,7 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
         print!("{} ", "Thinking...".dimmed());
         io::stdout().flush()?;
         
-        match chat::send_chat_request(&client, &current_model, input, &history).await {
+        match chat::send_chat_request(&client, &current_model, input, &history, config.system_prompt.as_deref()).await {
             Ok(response) => {
                 print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                 println!("{} {}", "Assistant:".bold().blue(), response);

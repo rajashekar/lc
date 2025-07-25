@@ -11,6 +11,8 @@ pub struct Config {
     pub default_model: Option<String>,
     #[serde(default)]
     pub aliases: HashMap<String, String>, // alias_name -> provider:model
+    #[serde(default)]
+    pub system_prompt: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -49,6 +51,7 @@ impl Config {
                 default_provider: None,
                 default_model: None,
                 aliases: HashMap::new(),
+                system_prompt: None,
             };
             
             // Ensure config directory exists
