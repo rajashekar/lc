@@ -2,6 +2,8 @@ use anyhow::Result;
 use crate::provider::{OpenAIClient, ChatRequest, Message};
 use crate::database::ChatEntry;
 use crate::config::Config;
+use crate::token_utils::TokenCounter;
+use crate::model_metadata::MetadataExtractor;
 use chrono::{DateTime, Utc};
 
 pub async fn send_chat_request(
@@ -49,6 +51,156 @@ pub async fn send_chat_request(
     };
     
     client.chat(&request).await
+}
+
+pub async fn send_chat_request_with_validation(
+    client: &OpenAIClient,
+    model: &str,
+    prompt: &str,
+    history: &[ChatEntry],
+    system_prompt: Option<&str>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
+    provider_name: &str,
+) -> Result<(String, Option<i32>, Option<i32>)> {
+    // Try to get model metadata for context validation
+    let model_metadata = get_model_metadata(provider_name, model).await;
+    
+    // Create token counter
+    let token_counter = match TokenCounter::new(model) {
+        Ok(counter) => Some(counter),
+        Err(e) => {
+            eprintln!("Warning: Failed to create token counter for model '{}': {}", model, e);
+            None
+        }
+    };
+    
+    let mut final_prompt = prompt.to_string();
+    let mut final_history = history.to_vec();
+    let mut input_tokens = None;
+    
+    // Validate context size if we have both metadata and token counter
+    if let (Some(metadata), Some(ref counter)) = (&model_metadata, &token_counter) {
+        if let Some(context_limit) = metadata.context_length {
+            // Check if input exceeds context limit
+            if counter.exceeds_context_limit(prompt, system_prompt, history, context_limit) {
+                println!("⚠️  Input exceeds model context limit ({}k tokens). Truncating...", context_limit / 1000);
+                
+                // Truncate to fit within context limit
+                let (truncated_prompt, truncated_history) = counter.truncate_to_fit(
+                    prompt,
+                    system_prompt,
+                    history,
+                    context_limit,
+                    metadata.max_output_tokens
+                );
+                
+                final_prompt = truncated_prompt;
+                final_history = truncated_history;
+                
+                if final_history.len() < history.len() {
+                    println!("📝 Truncated conversation history from {} to {} messages", history.len(), final_history.len());
+                }
+                
+                if final_prompt.len() < prompt.len() {
+                    println!("✂️  Truncated prompt from {} to {} characters", prompt.len(), final_prompt.len());
+                }
+            }
+            
+            // Calculate input tokens after potential truncation
+            input_tokens = Some(counter.estimate_chat_tokens(&final_prompt, system_prompt, &final_history) as i32);
+        }
+    } else if let Some(ref counter) = token_counter {
+        // No metadata available, but we can still count tokens
+        input_tokens = Some(counter.estimate_chat_tokens(&final_prompt, system_prompt, &final_history) as i32);
+    }
+    
+    // Build messages for the request
+    let mut messages = Vec::new();
+    
+    // Add system prompt if provided
+    if let Some(sys_prompt) = system_prompt {
+        messages.push(Message {
+            role: "system".to_string(),
+            content: sys_prompt.to_string(),
+        });
+    }
+    
+    // Add conversation history
+    for entry in &final_history {
+        messages.push(Message {
+            role: "user".to_string(),
+            content: entry.question.clone(),
+        });
+        messages.push(Message {
+            role: "assistant".to_string(),
+            content: entry.response.clone(),
+        });
+    }
+    
+    // Add current prompt
+    messages.push(Message {
+        role: "user".to_string(),
+        content: final_prompt,
+    });
+    
+    let request = ChatRequest {
+        model: model.to_string(),
+        messages,
+        max_tokens: max_tokens.or(Some(1024)),
+        temperature: temperature.or(Some(0.7)),
+    };
+    
+    // Send the request
+    let response = client.chat(&request).await?;
+    
+    // Calculate output tokens if we have a token counter
+    let output_tokens = if let Some(ref counter) = token_counter {
+        Some(counter.count_tokens(&response) as i32)
+    } else {
+        None
+    };
+    
+    // Display token usage if available
+    if let (Some(input), Some(output)) = (input_tokens, output_tokens) {
+        println!("📊 Token usage: {} input + {} output = {} total",
+                 input, output, input + output);
+        
+        // Show cost estimate if we have pricing info
+        if let Some(metadata) = &model_metadata {
+            if let (Some(input_price), Some(output_price)) = (metadata.input_price_per_m, metadata.output_price_per_m) {
+                let input_cost = (input as f64 / 1_000_000.0) * input_price;
+                let output_cost = (output as f64 / 1_000_000.0) * output_price;
+                let total_cost = input_cost + output_cost;
+                println!("💰 Estimated cost: ${:.6} (${:.6} input + ${:.6} output)",
+                         total_cost, input_cost, output_cost);
+            }
+        }
+    }
+    
+    Ok((response, input_tokens, output_tokens))
+}
+
+async fn get_model_metadata(provider_name: &str, model_name: &str) -> Option<crate::model_metadata::ModelMetadata> {
+    use std::fs;
+    
+    let filename = format!("models/{}.json", provider_name);
+    
+    if !std::path::Path::new(&filename).exists() {
+        return None;
+    }
+    
+    match fs::read_to_string(&filename) {
+        Ok(json_content) => {
+            match MetadataExtractor::extract_from_provider(provider_name, &json_content) {
+                Ok(models) => {
+                    models.into_iter().find(|m| m.id == model_name)
+                }
+                Err(_) => None,
+            }
+        }
+        Err(_) => None,
+    }
 }
 
 pub async fn get_or_refresh_token(config: &mut Config, provider_name: &str, client: &OpenAIClient) -> Result<String> {

@@ -12,6 +12,8 @@ pub struct ChatEntry {
     pub question: String,
     pub response: String,
     pub timestamp: DateTime<Utc>,
+    pub input_tokens: Option<i32>,
+    pub output_tokens: Option<i32>,
 }
 
 #[derive(Debug)]
@@ -46,10 +48,22 @@ impl Database {
                 model TEXT NOT NULL,
                 question TEXT NOT NULL,
                 response TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                input_tokens INTEGER,
+                output_tokens INTEGER
             )",
             [],
         )?;
+        
+        // Add token columns to existing table if they don't exist (migration)
+        let _ = self.conn.execute(
+            "ALTER TABLE chat_logs ADD COLUMN input_tokens INTEGER",
+            [],
+        );
+        let _ = self.conn.execute(
+            "ALTER TABLE chat_logs ADD COLUMN output_tokens INTEGER",
+            [],
+        );
         
         // Create session_state table for tracking current session
         self.conn.execute(
@@ -81,17 +95,29 @@ impl Database {
         question: &str,
         response: &str,
     ) -> Result<()> {
+        self.save_chat_entry_with_tokens(chat_id, model, question, response, None, None)
+    }
+    
+    pub fn save_chat_entry_with_tokens(
+        &self,
+        chat_id: &str,
+        model: &str,
+        question: &str,
+        response: &str,
+        input_tokens: Option<i32>,
+        output_tokens: Option<i32>,
+    ) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO chat_logs (chat_id, model, question, response, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![chat_id, model, question, response, Utc::now()],
+            "INSERT INTO chat_logs (chat_id, model, question, response, timestamp, input_tokens, output_tokens)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![chat_id, model, question, response, Utc::now(), input_tokens, output_tokens],
         )?;
         Ok(())
     }
     
     pub fn get_chat_history(&self, chat_id: &str) -> Result<Vec<ChatEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, chat_id, model, question, response, timestamp
+            "SELECT id, chat_id, model, question, response, timestamp, input_tokens, output_tokens
              FROM chat_logs
              WHERE chat_id = ?1
              ORDER BY timestamp ASC"
@@ -105,6 +131,8 @@ impl Database {
                 question: row.get(3)?,
                 response: row.get(4)?,
                 timestamp: row.get(5)?,
+                input_tokens: row.get(6).ok(),
+                output_tokens: row.get(7).ok(),
             })
         })?;
         
@@ -118,7 +146,7 @@ impl Database {
     
     pub fn get_last_response(&self) -> Result<Option<ChatEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, chat_id, model, question, response, timestamp
+            "SELECT id, chat_id, model, question, response, timestamp, input_tokens, output_tokens
              FROM chat_logs
              ORDER BY timestamp DESC
              LIMIT 1"
@@ -132,6 +160,8 @@ impl Database {
                 question: row.get(3)?,
                 response: row.get(4)?,
                 timestamp: row.get(5)?,
+                input_tokens: row.get(6).ok(),
+                output_tokens: row.get(7).ok(),
             })
         })?;
         
@@ -144,7 +174,7 @@ impl Database {
     
     pub fn get_all_logs(&self) -> Result<Vec<ChatEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, chat_id, model, question, response, timestamp
+            "SELECT id, chat_id, model, question, response, timestamp, input_tokens, output_tokens
              FROM chat_logs
              ORDER BY timestamp DESC"
         )?;
@@ -157,6 +187,8 @@ impl Database {
                 question: row.get(3)?,
                 response: row.get(4)?,
                 timestamp: row.get(5)?,
+                input_tokens: row.get(6).ok(),
+                output_tokens: row.get(7).ok(),
             })
         })?;
         

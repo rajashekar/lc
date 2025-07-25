@@ -1,0 +1,180 @@
+use anyhow::Result;
+use tiktoken_rs::{get_bpe_from_model, CoreBPE};
+
+/// Token counter for various models
+pub struct TokenCounter {
+    encoder: CoreBPE,
+}
+
+impl TokenCounter {
+    /// Create a new token counter for the given model
+    pub fn new(model_name: &str) -> Result<Self> {
+        // Map model names to tiktoken model names
+        let tiktoken_model = map_model_to_tiktoken(model_name);
+        
+        let encoder = get_bpe_from_model(&tiktoken_model)
+            .map_err(|e| anyhow::anyhow!("Failed to create token encoder for model '{}': {}", model_name, e))?;
+        
+        Ok(Self { encoder })
+    }
+    
+    /// Count tokens in the given text
+    pub fn count_tokens(&self, text: &str) -> usize {
+        self.encoder.encode_with_special_tokens(text).len()
+    }
+    
+    /// Estimate tokens for a chat request including system prompt and history
+    pub fn estimate_chat_tokens(&self, prompt: &str, system_prompt: Option<&str>, history: &[crate::database::ChatEntry]) -> usize {
+        let mut total_tokens = 0;
+        
+        // Count system prompt tokens
+        if let Some(sys_prompt) = system_prompt {
+            total_tokens += self.count_tokens(sys_prompt);
+            total_tokens += 4; // Overhead for system message formatting
+        }
+        
+        // Count history tokens
+        for entry in history {
+            total_tokens += self.count_tokens(&entry.question);
+            total_tokens += self.count_tokens(&entry.response);
+            total_tokens += 8; // Overhead for message formatting (role, etc.)
+        }
+        
+        // Count current prompt tokens
+        total_tokens += self.count_tokens(prompt);
+        total_tokens += 4; // Overhead for user message formatting
+        
+        // Add some buffer for response generation
+        total_tokens += 100; // Reserve space for response start
+        
+        total_tokens
+    }
+    
+    /// Check if the estimated tokens exceed the context limit
+    pub fn exceeds_context_limit(&self, prompt: &str, system_prompt: Option<&str>, history: &[crate::database::ChatEntry], context_limit: u32) -> bool {
+        let estimated_tokens = self.estimate_chat_tokens(prompt, system_prompt, history);
+        estimated_tokens > context_limit as usize
+    }
+    
+    /// Truncate input to fit within context limit
+    pub fn truncate_to_fit(&self, prompt: &str, system_prompt: Option<&str>, history: &[crate::database::ChatEntry], context_limit: u32, max_output_tokens: Option<u32>) -> (String, Vec<crate::database::ChatEntry>) {
+        let max_output = max_output_tokens.unwrap_or(4096) as usize;
+        let available_tokens = (context_limit as usize).saturating_sub(max_output);
+        
+        // Always preserve the current prompt and system prompt
+        let mut used_tokens = self.count_tokens(prompt) + 4; // User message overhead
+        if let Some(sys_prompt) = system_prompt {
+            used_tokens += self.count_tokens(sys_prompt) + 4; // System message overhead
+        }
+        
+        if used_tokens >= available_tokens {
+            // Even the prompt alone is too large, truncate it
+            let max_prompt_tokens = available_tokens.saturating_sub(100); // Leave some buffer
+            let truncated_prompt = self.truncate_text(prompt, max_prompt_tokens);
+            return (truncated_prompt, Vec::new());
+        }
+        
+        // Include as much history as possible
+        let mut truncated_history = Vec::new();
+        let remaining_tokens = available_tokens - used_tokens;
+        let mut history_tokens = 0;
+        
+        // Include history from most recent to oldest
+        for entry in history.iter().rev() {
+            let entry_tokens = self.count_tokens(&entry.question) + self.count_tokens(&entry.response) + 8;
+            if history_tokens + entry_tokens <= remaining_tokens {
+                history_tokens += entry_tokens;
+                truncated_history.insert(0, entry.clone());
+            } else {
+                break;
+            }
+        }
+        
+        (prompt.to_string(), truncated_history)
+    }
+    
+    /// Truncate text to fit within token limit
+    fn truncate_text(&self, text: &str, max_tokens: usize) -> String {
+        let tokens = self.encoder.encode_with_special_tokens(text);
+        if tokens.len() <= max_tokens {
+            return text.to_string();
+        }
+        
+        let truncated_tokens = &tokens[..max_tokens];
+        match self.encoder.decode(truncated_tokens.to_vec()) {
+            Ok(decoded) => decoded,
+            Err(_) => {
+                // Fallback: truncate by characters (rough approximation)
+                let chars: Vec<char> = text.chars().collect();
+                let estimated_chars = max_tokens * 3; // Rough estimate: 1 token ≈ 3-4 chars
+                if chars.len() > estimated_chars {
+                    chars[..estimated_chars].iter().collect()
+                } else {
+                    text.to_string()
+                }
+            }
+        }
+    }
+}
+
+/// Map model names to tiktoken-compatible model names
+fn map_model_to_tiktoken(model_name: &str) -> String {
+    // Handle common model name patterns
+    let lower_name = model_name.to_lowercase();
+    
+    if lower_name.contains("gpt-4") {
+        "gpt-4".to_string()
+    } else if lower_name.contains("gpt-3.5") {
+        "gpt-3.5-turbo".to_string()
+    } else if lower_name.contains("claude") {
+        // Claude uses a similar tokenizer to GPT-4
+        "gpt-4".to_string()
+    } else if lower_name.contains("llama") {
+        // Llama models use a different tokenizer, but GPT-4 is a reasonable approximation
+        "gpt-4".to_string()
+    } else if lower_name.contains("gemini") {
+        // Gemini uses a different tokenizer, but GPT-4 is a reasonable approximation
+        "gpt-4".to_string()
+    } else if lower_name.contains("mistral") {
+        // Mistral uses a different tokenizer, but GPT-4 is a reasonable approximation
+        "gpt-4".to_string()
+    } else {
+        // Default to GPT-4 tokenizer for unknown models
+        "gpt-4".to_string()
+    }
+}
+
+/// Get byte size of text (for size-based limits)
+pub fn get_text_size_bytes(text: &str) -> usize {
+    text.as_bytes().len()
+}
+
+/// Check if text exceeds byte size limit
+pub fn exceeds_byte_limit(text: &str, limit_bytes: usize) -> bool {
+    get_text_size_bytes(text) > limit_bytes
+}
+
+/// Truncate text to fit within byte limit
+pub fn truncate_to_byte_limit(text: &str, limit_bytes: usize) -> String {
+    if !exceeds_byte_limit(text, limit_bytes) {
+        return text.to_string();
+    }
+    
+    // Truncate by bytes, being careful not to split UTF-8 characters
+    let bytes = text.as_bytes();
+    if bytes.len() <= limit_bytes {
+        return text.to_string();
+    }
+    
+    // Find a safe truncation point that doesn't split UTF-8 characters
+    let mut truncate_at = limit_bytes;
+    while truncate_at > 0 && !text.is_char_boundary(truncate_at) {
+        truncate_at -= 1;
+    }
+    
+    if truncate_at == 0 {
+        return String::new();
+    }
+    
+    format!("{}...[truncated]", &text[..truncate_at])
+}

@@ -253,4 +253,130 @@ time lc -m gpt-3.5-turbo "Hello"
 # Shows detailed memory statistics
 ```
 
-This comprehensive set of examples should help users get started with `lc` and understand its full capabilities.
+## Model Discovery and Filtering Examples
+
+### Basic Model Listing
+```bash
+# List all available models with metadata
+lc models
+
+# Search for specific models
+lc models -q claude
+lc models -q gpt-4
+lc models -q llama
+```
+
+### Capability-Based Filtering
+```bash
+# Find all models with function calling support
+lc models --tools
+
+# Find models with vision capabilities
+lc models --vision
+
+# Find reasoning models (like OpenAI o1 series)
+lc models --reasoning
+
+# Find models optimized for code generation
+lc models --code
+
+# Find models with audio processing support
+lc models --audio
+```
+
+### Context Length Filtering
+```bash
+# Find models with at least 128k context length
+lc models --ctx 128k
+
+# Find models with at least 200k context length
+lc models --ctx 200k
+
+# Find models with at least 1M context length
+lc models --ctx 1m
+```
+
+### Combined Filtering Examples
+```bash
+# Find Claude models with vision and tools support
+lc models -q claude --vision --tools
+
+# Find reasoning models with at least 128k context
+lc models --reasoning --ctx 128k
+
+# Find code generation models with function calling
+lc models --code --tools
+
+# Find vision models with large context windows
+lc models --vision --ctx 200k
+
+# Complex filter: tools + vision + large context
+lc models --tools --vision --ctx 128k
+```
+
+### Practical Model Discovery Workflows
+```bash
+# Workflow 1: Find the best model for coding tasks
+echo "Finding coding models with function calling..."
+lc models --code --tools
+
+# Workflow 2: Find multimodal models for image analysis
+echo "Finding vision models with large context..."
+lc models --vision --ctx 100k
+
+# Workflow 3: Find reasoning models for complex problems
+echo "Finding reasoning models..."
+lc models --reasoning
+
+# Workflow 4: Find affordable models with specific capabilities
+echo "Finding tools-enabled models..."
+lc models --tools --input-price 1.0
+```
+
+### Model Metadata Understanding
+```bash
+# The models listing shows rich metadata:
+# 🔧 tools    - Function calling/tool use support
+# 👁 vision   - Image processing capabilities
+# 🧠 reasoning - Advanced reasoning capabilities
+# 💻 code     - Optimized for code generation
+# 🔊 audio    - Audio processing support
+# (200k ctx)  - Context length information
+# (Model Name) - Human-readable display names
+
+# Example output interpretation:
+# claude-3-5-sonnet-20241022 (Claude Sonnet 3.5 (New)) [🔧 tools 👁 vision] (200k ctx)
+# ↑ Model ID                  ↑ Display Name              ↑ Capabilities    ↑ Context
+```
+
+### Cache Management
+```bash
+# Refresh the models cache to get latest models
+lc models refresh
+
+# Check cache information
+lc models info
+
+# Dump raw provider responses for debugging
+lc models dump
+```
+
+### Integration with Chat Commands
+```bash
+# Use discovered models directly in chat
+# First, find a good coding model:
+lc models --code --tools -q deepseek
+
+# Then use it:
+lc -m "deepseek/deepseek-r1" "Write a Python function to parse JSON"
+
+# Find a vision model and use it:
+lc models --vision -q gpt-4o
+lc -m "gpt-4o" "Analyze this image: [image description]"
+
+# Find a reasoning model for complex problems:
+lc models --reasoning -q o1
+lc -m "o1" "Solve this complex mathematical proof..."
+```
+
+This comprehensive set of examples should help users get started with `lc` and understand its full capabilities, including the powerful new model discovery and filtering features.

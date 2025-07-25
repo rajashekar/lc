@@ -1,0 +1,71 @@
+{
+  "data": [
+    {
+      "created": 1752002370,
+      "id": "dengcao/Qwen3-Embedding-4B:Q8_0",
+      "object": "model",
+      "owned_by": "dengcao"
+    },
+    {
+      "created": 1751404828,
+      "id": "gemma3n:latest",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1751064600,
+      "id": "codegemma:7b",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1751064348,
+      "id": "starcoder2:7b",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1750923916,
+      "id": "codellama:7b",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1750923916,
+      "id": "git-commit:latest",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1750759197,
+      "id": "gemma3:12b",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1749844202,
+      "id": "llama3:8b",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1741132609,
+      "id": "deepseek-r1:14b",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1741123034,
+      "id": "deepseek-r1:latest",
+      "object": "model",
+      "owned_by": "library"
+    },
+    {
+      "created": 1733769442,
+      "id": "llama3.2:latest",
+      "object": "model",
+      "owned_by": "library"
+    }
+  ],
+  "object": "list"
+}

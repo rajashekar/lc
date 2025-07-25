@@ -343,6 +343,53 @@ lc providers headers <name> delete <header>                # Remove custom heade
 lc providers headers <name> list                           # List custom headers (alias: lc p h <name> l)
 ```
 
+### Models Commands
+```bash
+lc models                                                  # List all models with metadata (alias: lc m)
+lc models -q <query>                                       # Search models by name (alias: lc m -q)
+lc models --tools                                          # Filter models with function calling support
+lc models --reasoning                                      # Filter models with reasoning capabilities
+lc models --vision                                         # Filter models with vision/image support
+lc models --audio                                          # Filter models with audio support
+lc models --code                                           # Filter models optimized for code generation
+lc models --ctx <length>                                   # Filter by minimum context length (e.g., 128k, 200k)
+lc models --input <length>                                 # Filter by minimum input token length
+lc models --output <length>                                # Filter by minimum output token length
+lc models --input-price <price>                            # Filter by maximum input price per million tokens
+lc models --output-price <price>                           # Filter by maximum output price per million tokens
+lc models refresh                                          # Refresh models cache (alias: lc m r)
+lc models info                                             # Show cache information (alias: lc m i)
+lc models dump                                             # Dump raw provider responses (alias: lc m d)
+```
+
+**Model Filtering Examples:**
+```bash
+# Find all models with function calling support
+lc models --tools
+
+# Find vision models with at least 128k context
+lc models --vision --ctx 128k
+
+# Find reasoning models from Claude
+lc models -q claude --reasoning
+
+# Find code generation models with tools support
+lc models --code --tools
+
+# Combine multiple filters
+lc models --tools --vision --ctx 200k
+```
+
+**Model Metadata Display:**
+The models listing shows rich metadata with capability indicators:
+- 🔧 **tools** - Function calling/tool use support
+- 👁 **vision** - Image processing capabilities
+- 🧠 **reasoning** - Advanced reasoning capabilities
+- 💻 **code** - Optimized for code generation
+- 🔊 **audio** - Audio processing support
+- **(200k ctx)** - Context length information
+- **(Model Display Name)** - Human-readable model names
+
 **Custom Endpoint Options:**
 - `-m, --models-path <PATH>`: Custom models endpoint (default: `/models`)
 - `-c, --chat-path <PATH>`: Custom chat completions endpoint (default: `/chat/completions`)

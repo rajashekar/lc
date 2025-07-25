@@ -5,7 +5,9 @@ mod provider;
 mod chat;
 mod error;
 mod models_cache;
+mod model_metadata;
 mod proxy;
+mod token_utils;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
@@ -14,6 +16,9 @@ use clap::Parser;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    
+    // Check for piped input first
+    let piped_input = check_for_piped_input()?;
     
     // Handle direct prompt or subcommands
     match (cli.prompt.is_empty(), cli.command) {
@@ -29,10 +34,10 @@ async fn main() -> Result<()> {
                     if cli.prompt.len() > 1 {
                         // Use template as system prompt and remaining args as user prompt
                         let user_prompt = cli.prompt[1..].join(" ");
-                        cli::handle_direct_prompt(user_prompt, cli.provider, cli.model, Some(template_content.clone()), cli.max_tokens, cli.temperature, cli.attachments).await?;
+                        handle_prompt_with_optional_piped_input(user_prompt, Some(template_content.clone()), piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments).await?;
                     } else {
                         // Use template content as the prompt (no additional user prompt)
-                        cli::handle_direct_prompt(template_content.clone(), cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments).await?;
+                        handle_prompt_with_optional_piped_input(template_content.clone(), cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments).await?;
                     }
                 } else {
                     anyhow::bail!("Template '{}' not found", template_name);
@@ -40,7 +45,7 @@ async fn main() -> Result<()> {
             } else {
                 // Regular direct prompt - join all arguments
                 let prompt = cli.prompt.join(" ");
-                cli::handle_direct_prompt(prompt, cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments).await?;
+                handle_prompt_with_optional_piped_input(prompt, cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments).await?;
             }
         }
         (true, Some(Commands::Providers { command })) => {
@@ -58,8 +63,8 @@ async fn main() -> Result<()> {
         (true, Some(Commands::Chat { model, provider, cid })) => {
             cli::handle_chat_command(model, provider, cid).await?;
         }
-        (true, Some(Commands::Models { command, query })) => {
-            cli::handle_models_command(command, query).await?;
+        (true, Some(Commands::Models { command, query, tools, reasoning, vision, audio, code, context_length, input_length, output_length, input_price, output_price })) => {
+            cli::handle_models_command(command, query, tools, reasoning, vision, audio, code, context_length, input_length, output_length, input_price, output_price).await?;
         }
         (true, Some(Commands::Alias { command })) => {
             cli::handle_alias_command(command).await?;
@@ -72,39 +77,20 @@ async fn main() -> Result<()> {
         }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped
-            use std::io::{self, Read};
-            
-            // Check if stdin has data (piped input)
-            let mut stdin = io::stdin();
-            let mut buffer = String::new();
-            
-            // Try to read from stdin with a timeout-like approach
-            // If stdin is a terminal (not piped), this will block
-            // If stdin is piped, this will read the data
-            match stdin.read_to_string(&mut buffer) {
-                Ok(0) => {
-                    // No input available, show help
+            if let Some(piped_content) = piped_input {
+                // Input was piped, use it as a direct prompt
+                if !piped_content.trim().is_empty() {
+                    cli::handle_direct_prompt_with_piped_input(piped_content, cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments).await?;
+                } else {
                     use clap::CommandFactory;
                     let mut cmd = Cli::command();
                     cmd.print_help()?;
                 }
-                Ok(_) => {
-                    // Input was piped, use it as a direct prompt
-                    let prompt = buffer.trim().to_string();
-                    if !prompt.is_empty() {
-                        cli::handle_direct_prompt_with_piped_input(prompt, cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments).await?;
-                    } else {
-                        use clap::CommandFactory;
-                        let mut cmd = Cli::command();
-                        cmd.print_help()?;
-                    }
-                }
-                Err(_) => {
-                    // Error reading stdin, show help
-                    use clap::CommandFactory;
-                    let mut cmd = Cli::command();
-                    cmd.print_help()?;
-                }
+            } else {
+                // No input available, show help
+                use clap::CommandFactory;
+                let mut cmd = Cli::command();
+                cmd.print_help()?;
             }
         }
         (false, Some(_)) => {
@@ -114,4 +100,46 @@ async fn main() -> Result<()> {
     }
     
     Ok(())
+}
+
+// Helper function to check for piped input
+fn check_for_piped_input() -> Result<Option<String>> {
+    use std::io::{self, Read};
+    
+    // Check if stdin is a terminal (interactive) or piped
+    if atty::is(atty::Stream::Stdin) {
+        // stdin is a terminal, no piped input
+        return Ok(None);
+    }
+    
+    // stdin is piped, read the content
+    let mut stdin = io::stdin();
+    let mut buffer = String::new();
+    
+    match stdin.read_to_string(&mut buffer) {
+        Ok(0) => Ok(None), // No input available
+        Ok(_) => Ok(Some(buffer)), // Input was piped
+        Err(_) => Ok(None), // Error reading stdin
+    }
+}
+
+// Helper function to handle prompt with optional piped input
+async fn handle_prompt_with_optional_piped_input(
+    prompt: String,
+    system_prompt: Option<String>,
+    piped_input: Option<String>,
+    provider: Option<String>,
+    model: Option<String>,
+    max_tokens: Option<String>,
+    temperature: Option<String>,
+    attachments: Vec<String>,
+) -> Result<()> {
+    if let Some(piped_content) = piped_input {
+        // Combine prompt with piped input
+        let combined_prompt = format!("{}\n\n=== Piped Input ===\n{}", prompt, piped_content);
+        cli::handle_direct_prompt(combined_prompt, provider, model, system_prompt, max_tokens, temperature, attachments).await
+    } else {
+        // No piped input, use regular prompt handling
+        cli::handle_direct_prompt(prompt, provider, model, system_prompt, max_tokens, temperature, attachments).await
+    }
 }

@@ -89,6 +89,36 @@ pub enum Commands {
         /// Search query for models (case-insensitive)
         #[arg(short = 'q', long = "query")]
         query: Option<String>,
+        /// Filter models that support tools/function calling
+        #[arg(long = "tools")]
+        tools: bool,
+        /// Filter models that support reasoning
+        #[arg(long = "reasoning")]
+        reasoning: bool,
+        /// Filter models that support vision
+        #[arg(long = "vision")]
+        vision: bool,
+        /// Filter models that support audio
+        #[arg(long = "audio")]
+        audio: bool,
+        /// Filter models that support code generation
+        #[arg(long = "code")]
+        code: bool,
+        /// Filter models with minimum context length (e.g., 128k)
+        #[arg(long = "ctx")]
+        context_length: Option<String>,
+        /// Filter models with minimum input token length (e.g., 128k)
+        #[arg(long = "input")]
+        input_length: Option<String>,
+        /// Filter models with minimum output token length (e.g., 128k)
+        #[arg(long = "output")]
+        output_length: Option<String>,
+        /// Filter models with maximum input price per million tokens
+        #[arg(long = "input-price")]
+        input_price: Option<f64>,
+        /// Filter models with maximum output price per million tokens
+        #[arg(long = "output-price")]
+        output_price: Option<f64>,
     },
     /// Model alias management (alias: a)
     #[command(alias = "a")]
@@ -134,6 +164,9 @@ pub enum ModelsCommands {
     /// Show cache information (alias: i)
     #[command(alias = "i")]
     Info,
+    /// Dump raw /models responses to JSON files (alias: d)
+    #[command(alias = "d")]
+    Dump,
 }
 
 #[derive(Subcommand)]
@@ -505,12 +538,17 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
             }
             
             println!("\n{}", "Configured Providers:".bold().blue());
-            for (name, provider_config) in &config.providers {
+            
+            // Sort providers by name for easier lookup
+            let mut sorted_providers: Vec<_> = config.providers.iter().collect();
+            sorted_providers.sort_by(|a, b| a.0.cmp(b.0));
+            
+            for (name, provider_config) in sorted_providers {
                 let has_key = provider_config.api_key.is_some();
                 let key_status = if has_key { "✓".green() } else { "✗".red() };
-                println!("  {} {} - {} (API Key: {})", 
-                    "•".blue(), 
-                    name.bold(), 
+                println!("  {} {} - {} (API Key: {})",
+                    "•".blue(),
+                    name.bold(),
                     provider_config.endpoint,
                     key_status
                 );
@@ -529,11 +567,21 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
             }
             
             println!("Fetching models from provider '{}'...", name);
-            let models = client.list_models().await?;
             
-            println!("\n{} Available models:", "Models:".bold());
-            for model in models {
-                println!("  • {}", model.id);
+            // Try to load enhanced metadata for this provider
+            let enhanced_models = load_provider_enhanced_models(&name).await?;
+            
+            if !enhanced_models.is_empty() {
+                // Display with rich metadata
+                println!("\n{} Available models:", "Models:".bold());
+                display_provider_models(&enhanced_models)?;
+            } else {
+                // Fallback to basic listing
+                let models = client.list_models().await?;
+                println!("\n{} Available models:", "Models:".bold());
+                for model in models {
+                    println!("  • {}", model.id);
+                }
             }
         }
         ProviderCommands::Headers { provider, command } => {
@@ -695,14 +743,21 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                 println!("\n{}", "Chat Logs:".bold().blue());
                 
                 for entry in entries {
-                    println!("\n{} {} ({})", 
+                    println!("\n{} {} ({})",
                         "Session:".bold(),
                         &entry.chat_id[..8],
                         entry.timestamp.format("%Y-%m-%d %H:%M:%S")
                     );
                     println!("{} {}", "Model:".bold(), entry.model);
+                    
+                    // Show token usage if available
+                    if let (Some(input_tokens), Some(output_tokens)) = (entry.input_tokens, entry.output_tokens) {
+                        println!("{} {} input + {} output = {} total tokens",
+                                 "Tokens:".bold(), input_tokens, output_tokens, input_tokens + output_tokens);
+                    }
+                    
                     println!("{} {}", "Q:".yellow(), entry.question);
-                    println!("{} {}", "A:".green(), 
+                    println!("{} {}", "A:".green(),
                         if entry.response.len() > 200 {
                             format!("{}...", &entry.response[..200])
                         } else {
@@ -780,6 +835,13 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                             entry.timestamp.format("%Y-%m-%d %H:%M:%S")
                         );
                         println!("{} {}", "Model:".bold(), entry.model);
+                        
+                        // Show token usage if available
+                        if let (Some(input_tokens), Some(output_tokens)) = (entry.input_tokens, entry.output_tokens) {
+                            println!("{} {} input + {} output = {} total tokens",
+                                     "Tokens:".bold(), input_tokens, output_tokens, input_tokens + output_tokens);
+                        }
+                        
                         println!("{} {}", "Q:".yellow(), entry.question);
                         println!("{} {}", "A:".green(),
                             if entry.response.len() > 150 {
@@ -1033,7 +1095,7 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
             println!("  {} logs.db", "•".blue());
         }
         None => {
-            // Show current configuration
+            // Show current configuration with enhanced model metadata
             let config = config::Config::load()?;
             println!("\n{}", "Current Configuration:".bold().blue());
             
@@ -1044,7 +1106,88 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
             }
             
             if let Some(model) = &config.default_model {
-                println!("model {}", model);
+                // Try to find model metadata to display rich information
+                if let Some(provider) = &config.default_provider {
+                    match load_provider_enhanced_models(provider).await {
+                        Ok(models) => {
+                            // Find the specific model
+                            if let Some(model_metadata) = models.iter().find(|m| m.id == *model) {
+                                // Display model with metadata
+                                let mut model_info = vec![model.clone()];
+                                
+                                // Build capability indicators
+                                let mut capabilities = Vec::new();
+                                if model_metadata.supports_tools || model_metadata.supports_function_calling {
+                                    capabilities.push("🔧 tools".blue());
+                                }
+                                if model_metadata.supports_vision {
+                                    capabilities.push("👁 vision".magenta());
+                                }
+                                if model_metadata.supports_audio {
+                                    capabilities.push("🔊 audio".yellow());
+                                }
+                                if model_metadata.supports_reasoning {
+                                    capabilities.push("🧠 reasoning".cyan());
+                                }
+                                if model_metadata.supports_code {
+                                    capabilities.push("💻 code".green());
+                                }
+                                
+                                // Build context and pricing info
+                                let mut info_parts = Vec::new();
+                                if let Some(ctx) = model_metadata.context_length {
+                                    if ctx >= 1000000 {
+                                        info_parts.push(format!("{}m ctx", ctx / 1000000));
+                                    } else if ctx >= 1000 {
+                                        info_parts.push(format!("{}k ctx", ctx / 1000));
+                                    } else {
+                                        info_parts.push(format!("{} ctx", ctx));
+                                    }
+                                }
+                                if let Some(input_price) = model_metadata.input_price_per_m {
+                                    info_parts.push(format!("${:.2}/M in", input_price));
+                                }
+                                if let Some(output_price) = model_metadata.output_price_per_m {
+                                    info_parts.push(format!("${:.2}/M out", output_price));
+                                }
+                                
+                                // Display model name with metadata
+                                let model_display = if let Some(ref display_name) = model_metadata.display_name {
+                                    if display_name != &model_metadata.id {
+                                        format!("{} ({})", model, display_name)
+                                    } else {
+                                        model.clone()
+                                    }
+                                } else {
+                                    model.clone()
+                                };
+                                
+                                print!("model {}", model_display);
+                                
+                                if !capabilities.is_empty() {
+                                    let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+                                    print!(" [{}]", capability_strings.join(" "));
+                                }
+                                
+                                if !info_parts.is_empty() {
+                                    print!(" ({})", info_parts.join(", ").dimmed());
+                                }
+                                
+                                println!();
+                            } else {
+                                // Model not found in metadata, show basic info
+                                println!("model {}", model);
+                            }
+                        }
+                        Err(_) => {
+                            // Failed to load metadata, show basic info
+                            println!("model {}", model);
+                        }
+                    }
+                } else {
+                    // No provider set, show basic info
+                    println!("model {}", model);
+                }
             } else {
                 println!("model {}", "not set".dimmed());
             }
@@ -1254,13 +1397,13 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature).await {
-        Ok(response) => {
+    match chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name).await {
+        Ok((response, input_tokens, output_tokens)) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
             
-            // Save to database (save original prompt for cleaner logs)
-            if let Err(e) = db.save_chat_entry(&session_id, &model_name, &prompt, &response) {
+            // Save to database with token counts (save original prompt for cleaner logs)
+            if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &prompt, &response, input_tokens, output_tokens) {
                 eprintln!("Warning: Failed to save chat entry: {}", e);
             }
         }
@@ -1351,19 +1494,19 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature).await {
-        Ok(response) => {
+    match chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name).await {
+        Ok((response, input_tokens, output_tokens)) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
             
-            // Save to database (save a shortened version for cleaner logs)
+            // Save to database with token counts (save a shortened version for cleaner logs)
             let log_prompt = if piped_content.len() > 100 {
                 format!("{}... (piped content)", &piped_content[..100])
             } else {
                 format!("{} (piped content)", piped_content)
             };
             
-            if let Err(e) = db.save_chat_entry(&session_id, &model_name, &log_prompt, &response) {
+            if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &log_prompt, &response, input_tokens, output_tokens) {
                 eprintln!("Warning: Failed to save chat entry: {}", e);
             }
         }
@@ -1475,13 +1618,13 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
             None
         };
         
-        match chat::send_chat_request(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature).await {
-            Ok(response) => {
+        match chat::send_chat_request_with_validation(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name).await {
+            Ok((response, input_tokens, output_tokens)) => {
                 print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                 println!("{} {}", "Assistant:".bold().blue(), response);
                 
-                // Save to database
-                if let Err(e) = db.save_chat_entry(&session_id, &current_model, input, &response) {
+                // Save to database with token counts
+                if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, &response, input_tokens, output_tokens) {
                     eprintln!("Warning: Failed to save chat entry: {}", e);
                 }
             }
@@ -1498,8 +1641,22 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
 }
 
 // Models command handlers
-pub async fn handle_models_command(command: Option<ModelsCommands>, query: Option<String>) -> Result<()> {
+pub async fn handle_models_command(
+    command: Option<ModelsCommands>,
+    query: Option<String>,
+    tools: bool,
+    reasoning: bool,
+    vision: bool,
+    audio: bool,
+    code: bool,
+    context_length: Option<String>,
+    input_length: Option<String>,
+    output_length: Option<String>,
+    input_price: Option<f64>,
+    output_price: Option<f64>,
+) -> Result<()> {
     use crate::models_cache::ModelsCache;
+    use crate::model_metadata::{MetadataExtractor, ModelMetadata};
     use colored::Colorize;
     
     match command {
@@ -1513,45 +1670,36 @@ pub async fn handle_models_command(command: Option<ModelsCommands>, query: Optio
             println!("\n{}", "Models Cache Information:".bold().blue());
             println!("{}", info);
         }
+        Some(ModelsCommands::Dump) => {
+            dump_models_data().await?;
+        }
         None => {
-            // List models (with optional search)
-            let mut cache = ModelsCache::load()?;
+            // List models with enhanced metadata and filtering
+            let enhanced_models = load_enhanced_models().await?;
             
-            // Check if cache needs refresh
-            if cache.needs_refresh() {
-                println!("{} Models cache is empty or expired. Refreshing...", "⚠".yellow());
-                cache.refresh().await?;
-            }
+            // Apply filters
+            let filtered_models = apply_model_filters(
+                enhanced_models,
+                &query,
+                tools,
+                reasoning,
+                vision,
+                audio,
+                code,
+                &context_length,
+                &input_length,
+                &output_length,
+                input_price,
+                output_price,
+            )?;
             
-            let models = if let Some(ref search_query) = query {
-                cache.search_models(search_query)
-            } else {
-                cache.get_all_models()
-            };
-            
-            if models.is_empty() {
-                if let Some(ref search_query) = query {
-                    println!("No models found matching query '{}'", search_query);
-                } else {
-                    println!("No models found in cache.");
-                }
+            if filtered_models.is_empty() {
+                println!("No models found matching the specified criteria.");
                 return Ok(());
             }
             
-            if let Some(ref search_query) = query {
-                println!("\n{} Models matching '{}' ({} found):", "Search Results:".bold().blue(), search_query, models.len());
-            } else {
-                println!("\n{} All available models ({} total):", "Models:".bold().blue(), models.len());
-            }
-            
-            let mut current_provider = String::new();
-            for model in models {
-                if model.provider != current_provider {
-                    current_provider = model.provider.clone();
-                    println!("\n{}", format!("{}:", current_provider).bold().green());
-                }
-                println!("  {}:{}", model.provider, model.model);
-            }
+            // Display results
+            display_enhanced_models(&filtered_models, &query)?;
         }
     }
     
@@ -1684,6 +1832,343 @@ pub async fn handle_proxy_command(
     Ok(())
 }
 
+// Dump models data function
+async fn dump_models_data() -> Result<()> {
+    use crate::{config::Config, provider::OpenAIClient, chat};
+    use reqwest::Client;
+    use serde_json::Value;
+    use std::time::Duration;
+    
+    println!("{} Dumping /models for each provider...", "🔍".blue());
+    
+    // Load configuration
+    let config = Config::load()?;
+    
+    // Create models directory if it doesn't exist
+    std::fs::create_dir_all("models")?;
+    
+    let mut successful_dumps = 0;
+    let mut total_providers = 0;
+    
+    for (provider_name, provider_config) in &config.providers {
+        total_providers += 1;
+        
+        // Skip providers without API keys
+        if provider_config.api_key.is_none() {
+            println!("{} Skipping {} (no API key)", "⚠️".yellow(), provider_name);
+            continue;
+        }
+        
+        println!("{} Fetching models from {}...", "📡".blue(), provider_name);
+        
+        // Create authenticated client
+        let mut config_mut = config.clone();
+        match chat::create_authenticated_client(&mut config_mut, provider_name).await {
+            Ok(client) => {
+                // Make raw request to get full JSON response
+                match fetch_raw_models_response(&client, provider_config).await {
+                    Ok(raw_response) => {
+                        // Save raw response to file
+                        let filename = format!("models/{}.json", provider_name);
+                        match std::fs::write(&filename, &raw_response) {
+                            Ok(_) => {
+                                println!("{} Saved {} models data to {}", "✅".green(), provider_name, filename);
+                                successful_dumps += 1;
+                            }
+                            Err(e) => {
+                                println!("{} Failed to save {} models data: {}", "❌".red(), provider_name, e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("{} Failed to fetch models from {}: {}", "❌".red(), provider_name, e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("{} Failed to create client for {}: {}", "❌".red(), provider_name, e);
+            }
+        }
+    }
+    
+    println!("\n{} Summary:", "📊".blue());
+    println!("   Total providers: {}", total_providers);
+    println!("   Successful dumps: {}", successful_dumps);
+    println!("   Models data saved to: ./models/");
+    
+    if successful_dumps > 0 {
+        println!("\n{} Model data collection complete!", "🎉".green());
+        println!("   Next step: Analyze the JSON files to extract metadata patterns");
+    }
+    
+    Ok(())
+}
+
+// Enhanced models functionality
+async fn load_enhanced_models() -> Result<Vec<crate::model_metadata::ModelMetadata>> {
+    use crate::model_metadata::MetadataExtractor;
+    use std::fs;
+    
+    let mut all_models = Vec::new();
+    
+    // Check if models directory exists
+    if !std::path::Path::new("models").exists() {
+        println!("{} Models metadata not found. Run 'lc models dump' first to collect model data.", "⚠".yellow());
+        return Ok(all_models);
+    }
+    
+    // Read all JSON files from models directory
+    let entries = fs::read_dir("models")?;
+    
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if let Some(extension) = path.extension() {
+            if extension == "json" {
+                if let Some(provider_name) = path.file_stem().and_then(|s| s.to_str()) {
+                    match fs::read_to_string(&path) {
+                        Ok(json_content) => {
+                            match MetadataExtractor::extract_from_provider(provider_name, &json_content) {
+                                Ok(mut models) => {
+                                    all_models.append(&mut models);
+                                }
+                                Err(e) => {
+                                    eprintln!("Warning: Failed to extract metadata from {}: {}", provider_name, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Failed to read {}: {}", path.display(), e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(all_models)
+}
+
+fn apply_model_filters(
+    models: Vec<crate::model_metadata::ModelMetadata>,
+    query: &Option<String>,
+    tools: bool,
+    reasoning: bool,
+    vision: bool,
+    audio: bool,
+    code: bool,
+    context_length: &Option<String>,
+    input_length: &Option<String>,
+    output_length: &Option<String>,
+    input_price: Option<f64>,
+    output_price: Option<f64>,
+) -> Result<Vec<crate::model_metadata::ModelMetadata>> {
+    let mut filtered = models;
+    
+    // Apply text search filter
+    if let Some(ref search_query) = query {
+        let query_lower = search_query.to_lowercase();
+        filtered.retain(|model| {
+            model.id.to_lowercase().contains(&query_lower) ||
+            model.display_name.as_ref().map_or(false, |name| name.to_lowercase().contains(&query_lower)) ||
+            model.description.as_ref().map_or(false, |desc| desc.to_lowercase().contains(&query_lower))
+        });
+    }
+    
+    // Apply capability filters
+    if tools {
+        filtered.retain(|model| model.supports_tools || model.supports_function_calling);
+    }
+    
+    if reasoning {
+        filtered.retain(|model| model.supports_reasoning);
+    }
+    
+    if vision {
+        filtered.retain(|model| model.supports_vision);
+    }
+    
+    if audio {
+        filtered.retain(|model| model.supports_audio);
+    }
+    
+    if code {
+        filtered.retain(|model| model.supports_code);
+    }
+    
+    // Apply context length filter
+    if let Some(ref ctx_str) = context_length {
+        let min_ctx = parse_token_count(ctx_str)?;
+        filtered.retain(|model| {
+            model.context_length.map_or(false, |ctx| ctx >= min_ctx)
+        });
+    }
+    
+    // Apply input length filter
+    if let Some(ref input_str) = input_length {
+        let min_input = parse_token_count(input_str)?;
+        filtered.retain(|model| {
+            model.max_input_tokens.map_or(false, |input| input >= min_input) ||
+            model.context_length.map_or(false, |ctx| ctx >= min_input)
+        });
+    }
+    
+    // Apply output length filter
+    if let Some(ref output_str) = output_length {
+        let min_output = parse_token_count(output_str)?;
+        filtered.retain(|model| {
+            model.max_output_tokens.map_or(false, |output| output >= min_output)
+        });
+    }
+    
+    // Apply price filters
+    if let Some(max_input_price) = input_price {
+        filtered.retain(|model| {
+            model.input_price_per_m.map_or(true, |price| price <= max_input_price)
+        });
+    }
+    
+    if let Some(max_output_price) = output_price {
+        filtered.retain(|model| {
+            model.output_price_per_m.map_or(true, |price| price <= max_output_price)
+        });
+    }
+    
+    // Sort by provider, then by model name
+    filtered.sort_by(|a, b| {
+        a.provider.cmp(&b.provider).then(a.id.cmp(&b.id))
+    });
+    
+    Ok(filtered)
+}
+
+fn parse_token_count(input: &str) -> Result<u32> {
+    let input = input.to_lowercase();
+    if let Some(num_str) = input.strip_suffix('k') {
+        let num: f32 = num_str.parse()
+            .map_err(|_| anyhow::anyhow!("Invalid token count format: '{}'", input))?;
+        Ok((num * 1000.0) as u32)
+    } else if let Some(num_str) = input.strip_suffix('m') {
+        let num: f32 = num_str.parse()
+            .map_err(|_| anyhow::anyhow!("Invalid token count format: '{}'", input))?;
+        Ok((num * 1000000.0) as u32)
+    } else {
+        input.parse()
+            .map_err(|_| anyhow::anyhow!("Invalid token count format: '{}'", input))
+    }
+}
+
+fn display_enhanced_models(models: &[crate::model_metadata::ModelMetadata], query: &Option<String>) -> Result<()> {
+    use colored::Colorize;
+    
+    if let Some(ref search_query) = query {
+        println!("\n{} Models matching '{}' ({} found):", "Search Results:".bold().blue(), search_query, models.len());
+    } else {
+        println!("\n{} Available models ({} total):", "Models:".bold().blue(), models.len());
+    }
+    
+    let mut current_provider = String::new();
+    for model in models {
+        if model.provider != current_provider {
+            current_provider = model.provider.clone();
+            println!("\n{}", format!("{}:", current_provider).bold().green());
+        }
+        
+        // Build capability indicators
+        let mut capabilities = Vec::new();
+        if model.supports_tools || model.supports_function_calling {
+            capabilities.push("🔧 tools".blue());
+        }
+        if model.supports_vision {
+            capabilities.push("👁 vision".magenta());
+        }
+        if model.supports_audio {
+            capabilities.push("🔊 audio".yellow());
+        }
+        if model.supports_reasoning {
+            capabilities.push("🧠 reasoning".cyan());
+        }
+        if model.supports_code {
+            capabilities.push("💻 code".green());
+        }
+        
+        // Build context info
+        let mut context_info = Vec::new();
+        if let Some(ctx) = model.context_length {
+            context_info.push(format!("{}k ctx", ctx / 1000));
+        }
+        if let Some(max_out) = model.max_output_tokens {
+            context_info.push(format!("{}k out", max_out / 1000));
+        }
+        
+        // Display model with metadata
+        let model_display = if let Some(ref display_name) = model.display_name {
+            format!("{} ({})", model.id, display_name)
+        } else {
+            model.id.clone()
+        };
+        
+        print!("  {} {}", "•".blue(), model_display.bold());
+        
+        if !capabilities.is_empty() {
+            let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+            print!(" [{}]", capability_strings.join(" "));
+        }
+        
+        if !context_info.is_empty() {
+            print!(" ({})", context_info.join(", ").dimmed());
+        }
+        
+        println!();
+    }
+    
+    Ok(())
+}
+
+async fn fetch_raw_models_response(client: &crate::provider::OpenAIClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
+    use reqwest::Client;
+    use serde_json::Value;
+    use std::time::Duration;
+    
+    let http_client = Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()?;
+    
+    let url = format!("{}{}", provider_config.endpoint.trim_end_matches('/'), provider_config.models_path);
+    
+    let mut req = http_client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", provider_config.api_key.as_ref().unwrap()))
+        .header("Content-Type", "application/json");
+    
+    // Add custom headers
+    for (name, value) in &provider_config.headers {
+        req = req.header(name, value);
+    }
+    
+    let response = req.send().await?;
+    
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        anyhow::bail!("API request failed with status {}: {}", status, text);
+    }
+    
+    let response_text = response.text().await?;
+    
+    // Pretty print the JSON for better readability
+    match serde_json::from_str::<Value>(&response_text) {
+        Ok(json_value) => {
+            Ok(serde_json::to_string_pretty(&json_value)?)
+        }
+        Err(_) => {
+            // If it's not valid JSON, return as-is
+            Ok(response_text)
+        }
+    }
+}
+
 // Alias command handlers
 pub async fn handle_alias_command(command: AliasCommands) -> Result<()> {
     use colored::Colorize;
@@ -1714,6 +2199,110 @@ pub async fn handle_alias_command(command: AliasCommands) -> Result<()> {
                 }
             }
         }
+    }
+    
+    Ok(())
+}
+
+// Load enhanced models for a specific provider
+async fn load_provider_enhanced_models(provider_name: &str) -> Result<Vec<crate::model_metadata::ModelMetadata>> {
+    use crate::model_metadata::MetadataExtractor;
+    use std::fs;
+    
+    let filename = format!("models/{}.json", provider_name);
+    
+    if !std::path::Path::new(&filename).exists() {
+        return Ok(Vec::new());
+    }
+    
+    match fs::read_to_string(&filename) {
+        Ok(json_content) => {
+            match MetadataExtractor::extract_from_provider(provider_name, &json_content) {
+                Ok(models) => Ok(models),
+                Err(e) => {
+                    eprintln!("Warning: Failed to extract metadata from {}: {}", provider_name, e);
+                    Ok(Vec::new())
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Warning: Failed to read {}: {}", filename, e);
+            Ok(Vec::new())
+        }
+    }
+}
+
+// Display provider models with metadata
+fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> Result<()> {
+    use colored::Colorize;
+    
+    for model in models {
+        // Build capability indicators
+        let mut capabilities = Vec::new();
+        if model.supports_tools || model.supports_function_calling {
+            capabilities.push("🔧 tools".blue());
+        }
+        if model.supports_vision {
+            capabilities.push("👁 vision".magenta());
+        }
+        if model.supports_audio {
+            capabilities.push("🔊 audio".yellow());
+        }
+        if model.supports_reasoning {
+            capabilities.push("🧠 reasoning".cyan());
+        }
+        if model.supports_code {
+            capabilities.push("💻 code".green());
+        }
+        
+        // Build context and pricing info
+        let mut info_parts = Vec::new();
+        if let Some(ctx) = model.context_length {
+            if ctx >= 1000000 {
+                info_parts.push(format!("{}m ctx", ctx / 1000000));
+            } else if ctx >= 1000 {
+                info_parts.push(format!("{}k ctx", ctx / 1000));
+            } else {
+                info_parts.push(format!("{} ctx", ctx));
+            }
+        }
+        if let Some(max_out) = model.max_output_tokens {
+            if max_out >= 1000 {
+                info_parts.push(format!("{}k out", max_out / 1000));
+            } else {
+                info_parts.push(format!("{} out", max_out));
+            }
+        }
+        if let Some(input_price) = model.input_price_per_m {
+            info_parts.push(format!("${:.2}/M in", input_price));
+        }
+        if let Some(output_price) = model.output_price_per_m {
+            info_parts.push(format!("${:.2}/M out", output_price));
+        }
+        
+        // Display model with metadata
+        let model_display = if let Some(ref display_name) = model.display_name {
+            if display_name != &model.id {
+                format!("{} ({})", model.id, display_name)
+            } else {
+                model.id.clone()
+            }
+        } else {
+            model.id.clone()
+        };
+        
+        print!("  {} {}", "•".blue(), model_display.bold());
+        
+        if !capabilities.is_empty() {
+            let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+            print!(" [{}]", capability_strings.join(" "));
+        }
+        
+        if !info_parts.is_empty() {
+            print!(" ({})", info_parts.join(", ").dimmed());
+        }
+        
+        println!();
     }
     
     Ok(())

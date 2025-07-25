@@ -1,0 +1,83 @@
+{
+  "data": [
+    {
+      "created": 1752255238,
+      "id": "alibaba-qwen3-32b",
+      "object": "model",
+      "owned_by": "digitalocean"
+    },
+    {
+      "created": 1737056627,
+      "id": "anthropic-claude-3-opus",
+      "object": "model",
+      "owned_by": "anthropic"
+    },
+    {
+      "created": 1737056613,
+      "id": "anthropic-claude-3.5-haiku",
+      "object": "model",
+      "owned_by": "anthropic"
+    },
+    {
+      "created": 1726761051,
+      "id": "anthropic-claude-3.5-sonnet",
+      "object": "model",
+      "owned_by": "anthropic"
+    },
+    {
+      "created": 1743449238,
+      "id": "anthropic-claude-3.7-sonnet",
+      "object": "model",
+      "owned_by": "anthropic"
+    },
+    {
+      "created": 1738947921,
+      "id": "deepseek-r1-distill-llama-70b",
+      "object": "model",
+      "owned_by": "digitalocean"
+    },
+    {
+      "created": 1724446781,
+      "id": "llama3-8b-instruct",
+      "object": "model",
+      "owned_by": "digitalocean"
+    },
+    {
+      "created": 1736801780,
+      "id": "llama3.3-70b-instruct",
+      "object": "model",
+      "owned_by": "digitalocean"
+    },
+    {
+      "created": 1726761051,
+      "id": "mistral-nemo-instruct-2407",
+      "object": "model",
+      "owned_by": "digitalocean"
+    },
+    {
+      "created": 1740436938,
+      "id": "openai-gpt-4o",
+      "object": "model",
+      "owned_by": "openai"
+    },
+    {
+      "created": 1740436938,
+      "id": "openai-gpt-4o-mini",
+      "object": "model",
+      "owned_by": "openai"
+    },
+    {
+      "created": 1751565087,
+      "id": "openai-o3",
+      "object": "model",
+      "owned_by": "openai"
+    },
+    {
+      "created": 1740436938,
+      "id": "openai-o3-mini",
+      "object": "model",
+      "owned_by": "openai"
+    }
+  ],
+  "object": "list"
+}

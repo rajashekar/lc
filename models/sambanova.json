@@ -1,0 +1,126 @@
+{
+  "data": [
+    {
+      "context_length": 32768,
+      "id": "DeepSeek-R1-0528",
+      "max_completion_tokens": 7168,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000700",
+        "prompt": "0.00000500"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 131072,
+      "id": "DeepSeek-R1-Distill-Llama-70B",
+      "max_completion_tokens": 4096,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000140",
+        "prompt": "0.00000070"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 32768,
+      "id": "DeepSeek-V3-0324",
+      "max_completion_tokens": 7168,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000450",
+        "prompt": "0.00000300"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 4096,
+      "id": "E5-Mistral-7B-Instruct",
+      "max_completion_tokens": 4096,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000000",
+        "prompt": "0.00000013"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 131072,
+      "id": "Llama-3.3-Swallow-70B-Instruct-v0.4",
+      "max_completion_tokens": 3072,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000120",
+        "prompt": "0.00000060"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 131072,
+      "id": "Llama-4-Maverick-17B-128E-Instruct",
+      "max_completion_tokens": 4096,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000180",
+        "prompt": "0.00000063"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 16384,
+      "id": "Meta-Llama-3.1-8B-Instruct",
+      "max_completion_tokens": 4096,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000020",
+        "prompt": "0.00000010"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 131072,
+      "id": "Meta-Llama-3.3-70B-Instruct",
+      "max_completion_tokens": 3072,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000120",
+        "prompt": "0.00000060"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 32768,
+      "id": "Qwen3-32B",
+      "max_completion_tokens": 4096,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000080",
+        "prompt": "0.00000040"
+      },
+      "sn_metadata": {}
+    },
+    {
+      "context_length": 4096,
+      "id": "Whisper-Large-v3",
+      "max_completion_tokens": 4096,
+      "object": "model",
+      "owned_by": "no-reply@sambanova.ai",
+      "pricing": {
+        "completion": "0.00000000",
+        "duration_per_hour": "0.100",
+        "prompt": "0.00000000"
+      },
+      "sn_metadata": {}
+    }
+  ],
+  "object": "list"
+}
