@@ -13,6 +13,12 @@ pub struct Config {
     pub aliases: HashMap<String, String>, // alias_name -> provider:model
     #[serde(default)]
     pub system_prompt: Option<String>,
+    #[serde(default)]
+    pub templates: HashMap<String, String>, // template_name -> prompt_content
+    #[serde(default)]
+    pub max_tokens: Option<u32>,
+    #[serde(default)]
+    pub temperature: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -52,6 +58,9 @@ impl Config {
                 default_model: None,
                 aliases: HashMap::new(),
                 system_prompt: None,
+                templates: HashMap::new(),
+                max_tokens: None,
+                temperature: None,
             };
             
             // Ensure config directory exists
@@ -193,6 +202,57 @@ impl Config {
     
     pub fn list_aliases(&self) -> &HashMap<String, String> {
         &self.aliases
+    }
+    
+    pub fn add_template(&mut self, template_name: String, prompt_content: String) -> Result<()> {
+        self.templates.insert(template_name, prompt_content);
+        Ok(())
+    }
+    
+    pub fn remove_template(&mut self, template_name: String) -> Result<()> {
+        if self.templates.remove(&template_name).is_some() {
+            Ok(())
+        } else {
+            anyhow::bail!("Template '{}' not found", template_name);
+        }
+    }
+    
+    pub fn get_template(&self, template_name: &str) -> Option<&String> {
+        self.templates.get(template_name)
+    }
+    
+    pub fn list_templates(&self) -> &HashMap<String, String> {
+        &self.templates
+    }
+    
+    pub fn resolve_template_or_prompt(&self, input: &str) -> String {
+        if let Some(template_name) = input.strip_prefix("t:") {
+            if let Some(template_content) = self.get_template(template_name) {
+                template_content.clone()
+            } else {
+                // If template not found, return the original input
+                input.to_string()
+            }
+        } else {
+            input.to_string()
+        }
+    }
+    
+    pub fn parse_max_tokens(input: &str) -> Result<u32> {
+        let input = input.to_lowercase();
+        if let Some(num_str) = input.strip_suffix('k') {
+            let num: f32 = num_str.parse()
+                .map_err(|_| anyhow::anyhow!("Invalid max_tokens format: '{}'", input))?;
+            Ok((num * 1000.0) as u32)
+        } else {
+            input.parse()
+                .map_err(|_| anyhow::anyhow!("Invalid max_tokens format: '{}'", input))
+        }
+    }
+    
+    pub fn parse_temperature(input: &str) -> Result<f32> {
+        input.parse()
+            .map_err(|_| anyhow::anyhow!("Invalid temperature format: '{}'", input))
     }
     
     fn config_file_path() -> Result<PathBuf> {

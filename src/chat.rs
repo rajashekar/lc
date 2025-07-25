@@ -8,6 +8,8 @@ pub async fn send_chat_request(
     prompt: &str,
     history: &[ChatEntry],
     system_prompt: Option<&str>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
 ) -> Result<String> {
     let mut messages = Vec::new();
     
@@ -40,8 +42,8 @@ pub async fn send_chat_request(
     let request = ChatRequest {
         model: model.to_string(),
         messages,
-        max_tokens: Some(1024),
-        temperature: Some(0.7),
+        max_tokens: max_tokens.or(Some(1024)),
+        temperature: temperature.or(Some(0.7)),
     };
     
     client.chat(&request).await

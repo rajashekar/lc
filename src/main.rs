@@ -15,33 +15,58 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     
     // Handle direct prompt or subcommands
-    match (cli.prompt, cli.command) {
-        (Some(prompt), None) => {
-            // Direct prompt provided as argument
-            cli::handle_direct_prompt(prompt, cli.provider, cli.model, cli.system_prompt, cli.attachments).await?;
+    match (cli.prompt.is_empty(), cli.command) {
+        (false, None) => {
+            // Direct prompt(s) provided as arguments
+            let first_arg = &cli.prompt[0];
+            
+            // Check if first argument is a template reference (t:template_name)
+            if let Some(template_name) = first_arg.strip_prefix("t:") {
+                // Load config to resolve template
+                let config = config::Config::load()?;
+                if let Some(template_content) = config.get_template(template_name) {
+                    if cli.prompt.len() > 1 {
+                        // Use template as system prompt and remaining args as user prompt
+                        let user_prompt = cli.prompt[1..].join(" ");
+                        cli::handle_direct_prompt(user_prompt, cli.provider, cli.model, Some(template_content.clone()), cli.max_tokens, cli.temperature, cli.attachments).await?;
+                    } else {
+                        // Use template content as the prompt (no additional user prompt)
+                        cli::handle_direct_prompt(template_content.clone(), cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments).await?;
+                    }
+                } else {
+                    anyhow::bail!("Template '{}' not found", template_name);
+                }
+            } else {
+                // Regular direct prompt - join all arguments
+                let prompt = cli.prompt.join(" ");
+                cli::handle_direct_prompt(prompt, cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments).await?;
+            }
         }
-        (None, Some(Commands::Providers { command })) => {
+        (true, Some(Commands::Providers { command })) => {
             cli::handle_provider_command(command).await?;
         }
-        (None, Some(Commands::Keys { command })) => {
+        (true, Some(Commands::Keys { command })) => {
             cli::handle_key_command(command).await?;
         }
-        (None, Some(Commands::Logs { command })) => {
+        (true, Some(Commands::Logs { command })) => {
             cli::handle_log_command(command).await?;
         }
-        (None, Some(Commands::Config { command })) => {
+        (true, Some(Commands::Config { command })) => {
             cli::handle_config_command(command).await?;
         }
-        (None, Some(Commands::Chat { model, provider, cid })) => {
+        (true, Some(Commands::Chat { model, provider, cid })) => {
             cli::handle_chat_command(model, provider, cid).await?;
         }
-        (None, Some(Commands::Models { command, query })) => {
+        (true, Some(Commands::Models { command, query })) => {
             cli::handle_models_command(command, query).await?;
         }
-        (None, Some(Commands::Alias { command })) => {
+        (true, Some(Commands::Alias { command })) => {
             cli::handle_alias_command(command).await?;
         }
-        (None, None) => {
+        (true, Some(Commands::Templates { command })) => {
+            cli::handle_template_command(command).await?;
+        }
+        (true, None) => {
             // No subcommand or prompt provided, check if input is piped
             use std::io::{self, Read};
             
@@ -63,7 +88,7 @@ async fn main() -> Result<()> {
                     // Input was piped, use it as a direct prompt
                     let prompt = buffer.trim().to_string();
                     if !prompt.is_empty() {
-                        cli::handle_direct_prompt_with_piped_input(prompt, cli.provider, cli.model, cli.system_prompt, cli.attachments).await?;
+                        cli::handle_direct_prompt_with_piped_input(prompt, cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments).await?;
                     } else {
                         use clap::CommandFactory;
                         let mut cmd = Cli::command();
@@ -78,7 +103,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        (Some(_), Some(_)) => {
+        (false, Some(_)) => {
             // Both prompt and subcommand provided, this is an error
             anyhow::bail!("Cannot provide both a direct prompt and a subcommand");
         }

@@ -12,7 +12,7 @@ use std::io::{self, Write};
 pub struct Cli {
     /// Direct prompt to send to the default model
     #[arg(value_name = "PROMPT")]
-    pub prompt: Option<String>,
+    pub prompt: Vec<String>,
     
     /// Provider to use for the prompt
     #[arg(short = 'p', long = "provider")]
@@ -25,6 +25,14 @@ pub struct Cli {
     /// System prompt to use (when used with direct prompt)
     #[arg(short = 's', long = "system")]
     pub system_prompt: Option<String>,
+    
+    /// Max tokens override (supports 'k' suffix, e.g., '2k' for 2000)
+    #[arg(long = "max-tokens")]
+    pub max_tokens: Option<String>,
+    
+    /// Temperature override (0.0 to 2.0)
+    #[arg(long = "temperature")]
+    pub temperature: Option<String>,
     
     /// Attach file(s) to the prompt
     #[arg(short = 'a', long = "attach")]
@@ -88,6 +96,12 @@ pub enum Commands {
         #[command(subcommand)]
         command: AliasCommands,
     },
+    /// Template management (alias: t)
+    #[command(alias = "t")]
+    Templates {
+        #[command(subcommand)]
+        command: TemplateCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -117,6 +131,27 @@ pub enum AliasCommands {
         name: String,
     },
     /// List all aliases (alias: l)
+    #[command(alias = "l")]
+    List,
+}
+
+#[derive(Subcommand)]
+pub enum TemplateCommands {
+    /// Add a new template (alias: a)
+    #[command(alias = "a")]
+    Add {
+        /// Template name
+        name: String,
+        /// Template prompt content
+        prompt: String,
+    },
+    /// Remove a template (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Template name to remove
+        name: String,
+    },
+    /// List all templates (alias: l)
     #[command(alias = "l")]
     List,
 }
@@ -289,6 +324,12 @@ pub enum ConfigCommands {
         #[command(subcommand)]
         command: GetCommands,
     },
+    /// Delete/unset configuration values (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        #[command(subcommand)]
+        command: DeleteCommands,
+    },
     /// Show configuration directory path (alias: p)
     #[command(alias = "p")]
     Path,
@@ -314,6 +355,18 @@ pub enum SetCommands {
         /// System prompt text
         prompt: String,
     },
+    /// Set max tokens (alias: mt)
+    #[command(alias = "mt")]
+    MaxTokens {
+        /// Max tokens value (supports 'k' suffix, e.g., '2k' for 2000)
+        value: String,
+    },
+    /// Set temperature (alias: te)
+    #[command(alias = "te")]
+    Temperature {
+        /// Temperature value (0.0 to 2.0)
+        value: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -327,6 +380,31 @@ pub enum GetCommands {
     /// Get system prompt (alias: s)
     #[command(alias = "s")]
     SystemPrompt,
+    /// Get max tokens (alias: mt)
+    #[command(alias = "mt")]
+    MaxTokens,
+    /// Get temperature (alias: te)
+    #[command(alias = "te")]
+    Temperature,
+}
+
+#[derive(Subcommand)]
+pub enum DeleteCommands {
+    /// Delete default provider (alias: p)
+    #[command(alias = "p")]
+    Provider,
+    /// Delete default model (alias: m)
+    #[command(alias = "m")]
+    Model,
+    /// Delete system prompt (alias: s)
+    #[command(alias = "s")]
+    SystemPrompt,
+    /// Delete max tokens (alias: mt)
+    #[command(alias = "mt")]
+    MaxTokens,
+    /// Delete temperature (alias: te)
+    #[command(alias = "te")]
+    Temperature,
 }
 
 // Helper function to extract code blocks from markdown text
@@ -794,9 +872,24 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                 }
                 SetCommands::SystemPrompt { prompt } => {
                     let mut config = config::Config::load()?;
-                    config.system_prompt = Some(prompt.clone());
+                    let resolved_prompt = config.resolve_template_or_prompt(&prompt);
+                    config.system_prompt = Some(resolved_prompt);
                     config.save()?;
                     println!("{} System prompt set", "✓".green());
+                }
+                SetCommands::MaxTokens { value } => {
+                    let mut config = config::Config::load()?;
+                    let parsed_value = config::Config::parse_max_tokens(&value)?;
+                    config.max_tokens = Some(parsed_value);
+                    config.save()?;
+                    println!("{} Max tokens set to {}", "✓".green(), parsed_value);
+                }
+                SetCommands::Temperature { value } => {
+                    let mut config = config::Config::load()?;
+                    let parsed_value = config::Config::parse_temperature(&value)?;
+                    config.temperature = Some(parsed_value);
+                    config.save()?;
+                    println!("{} Temperature set to {}", "✓".green(), parsed_value);
                 }
             }
         }
@@ -822,6 +915,70 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                         println!("{}", system_prompt);
                     } else {
                         anyhow::bail!("No system prompt configured");
+                    }
+                }
+                GetCommands::MaxTokens => {
+                    if let Some(max_tokens) = &config.max_tokens {
+                        println!("{}", max_tokens);
+                    } else {
+                        anyhow::bail!("No max tokens configured");
+                    }
+                }
+                GetCommands::Temperature => {
+                    if let Some(temperature) = &config.temperature {
+                        println!("{}", temperature);
+                    } else {
+                        anyhow::bail!("No temperature configured");
+                    }
+                }
+            }
+        }
+        Some(ConfigCommands::Delete { command }) => {
+            let mut config = config::Config::load()?;
+            match command {
+                DeleteCommands::Provider => {
+                    if config.default_provider.is_some() {
+                        config.default_provider = None;
+                        config.save()?;
+                        println!("{} Default provider deleted", "✓".green());
+                    } else {
+                        anyhow::bail!("No default provider configured to delete");
+                    }
+                }
+                DeleteCommands::Model => {
+                    if config.default_model.is_some() {
+                        config.default_model = None;
+                        config.save()?;
+                        println!("{} Default model deleted", "✓".green());
+                    } else {
+                        anyhow::bail!("No default model configured to delete");
+                    }
+                }
+                DeleteCommands::SystemPrompt => {
+                    if config.system_prompt.is_some() {
+                        config.system_prompt = None;
+                        config.save()?;
+                        println!("{} System prompt deleted", "✓".green());
+                    } else {
+                        anyhow::bail!("No system prompt configured to delete");
+                    }
+                }
+                DeleteCommands::MaxTokens => {
+                    if config.max_tokens.is_some() {
+                        config.max_tokens = None;
+                        config.save()?;
+                        println!("{} Max tokens deleted", "✓".green());
+                    } else {
+                        anyhow::bail!("No max tokens configured to delete");
+                    }
+                }
+                DeleteCommands::Temperature => {
+                    if config.temperature.is_some() {
+                        config.temperature = None;
+                        config.save()?;
+                        println!("{} Temperature deleted", "✓".green());
+                    } else {
+                        anyhow::bail!("No temperature configured to delete");
                     }
                 }
             }
@@ -855,6 +1012,18 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                 println!("system_prompt {}", system_prompt);
             } else {
                 println!("system_prompt {}", "not set".dimmed());
+            }
+            
+            if let Some(max_tokens) = &config.max_tokens {
+                println!("max_tokens {}", max_tokens);
+            } else {
+                println!("max_tokens {}", "not set".dimmed());
+            }
+            
+            if let Some(temperature) = &config.temperature {
+                println!("temperature {}", temperature);
+            } else {
+                println!("temperature {}", "not set".dimmed());
             }
         }
     }
@@ -980,7 +1149,7 @@ fn is_code_file(extension: &str) -> bool {
 }
 
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, attachments: Vec<String>) -> Result<()> {
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -995,7 +1164,28 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     };
     
     // Determine system prompt to use (CLI override takes precedence over config)
-    let system_prompt = system_prompt_override.as_deref().or(config.system_prompt.as_deref());
+    let system_prompt = if let Some(override_prompt) = &system_prompt_override {
+        Some(config.resolve_template_or_prompt(override_prompt))
+    } else if let Some(config_prompt) = &config.system_prompt {
+        Some(config.resolve_template_or_prompt(config_prompt))
+    } else {
+        None
+    };
+    let system_prompt = system_prompt.as_deref();
+    
+    // Determine max_tokens to use (CLI override takes precedence over config)
+    let max_tokens = if let Some(override_tokens) = &max_tokens_override {
+        Some(config::Config::parse_max_tokens(override_tokens)?)
+    } else {
+        config.max_tokens
+    };
+    
+    // Determine temperature to use (CLI override takes precedence over config)
+    let temperature = if let Some(override_temp) = &temperature_override {
+        Some(config::Config::parse_temperature(override_temp)?)
+    } else {
+        config.temperature
+    };
     
     // Resolve provider and model
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
@@ -1023,7 +1213,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request(&client, &model_name, &final_prompt, &[], system_prompt).await {
+    match chat::send_chat_request(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature).await {
         Ok(response) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
@@ -1043,7 +1233,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
 }
 
 // Direct prompt handler for piped input (treats piped content as attachment)
-pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, attachments: Vec<String>) -> Result<()> {
+pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>) -> Result<()> {
     // For piped input, we need to determine if there's a prompt in the arguments
     // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
     // But we should provide a way to specify a prompt when piping content
@@ -1071,7 +1261,28 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     };
     
     // Determine system prompt to use (CLI override takes precedence over config)
-    let system_prompt = system_prompt_override.as_deref().or(config.system_prompt.as_deref());
+    let system_prompt = if let Some(override_prompt) = &system_prompt_override {
+        Some(config.resolve_template_or_prompt(override_prompt))
+    } else if let Some(config_prompt) = &config.system_prompt {
+        Some(config.resolve_template_or_prompt(config_prompt))
+    } else {
+        None
+    };
+    let system_prompt = system_prompt.as_deref();
+    
+    // Determine max_tokens to use (CLI override takes precedence over config)
+    let max_tokens = if let Some(override_tokens) = &max_tokens_override {
+        Some(config::Config::parse_max_tokens(override_tokens)?)
+    } else {
+        config.max_tokens
+    };
+    
+    // Determine temperature to use (CLI override takes precedence over config)
+    let temperature = if let Some(override_temp) = &temperature_override {
+        Some(config::Config::parse_temperature(override_temp)?)
+    } else {
+        config.temperature
+    };
     
     // Resolve provider and model
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
@@ -1099,7 +1310,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request(&client, &model_name, &final_prompt, &[], system_prompt).await {
+    match chat::send_chat_request(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature).await {
         Ok(response) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
@@ -1217,7 +1428,13 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
         print!("{} ", "Thinking...".dimmed());
         io::stdout().flush()?;
         
-        match chat::send_chat_request(&client, &current_model, input, &history, config.system_prompt.as_deref()).await {
+        let resolved_system_prompt = if let Some(system_prompt) = &config.system_prompt {
+            Some(config.resolve_template_or_prompt(system_prompt))
+        } else {
+            None
+        };
+        
+        match chat::send_chat_request(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature).await {
             Ok(response) => {
                 print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                 println!("{} {}", "Assistant:".bold().blue(), response);
@@ -1293,6 +1510,46 @@ pub async fn handle_models_command(command: Option<ModelsCommands>, query: Optio
                     println!("\n{}", format!("{}:", current_provider).bold().green());
                 }
                 println!("  {}:{}", model.provider, model.model);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+// Template command handlers
+pub async fn handle_template_command(command: TemplateCommands) -> Result<()> {
+    use colored::Colorize;
+    
+    match command {
+        TemplateCommands::Add { name, prompt } => {
+            let mut config = config::Config::load()?;
+            config.add_template(name.clone(), prompt.clone())?;
+            config.save()?;
+            println!("{} Template '{}' added", "✓".green(), name);
+        }
+        TemplateCommands::Delete { name } => {
+            let mut config = config::Config::load()?;
+            config.remove_template(name.clone())?;
+            config.save()?;
+            println!("{} Template '{}' removed", "✓".green(), name);
+        }
+        TemplateCommands::List => {
+            let config = config::Config::load()?;
+            let templates = config.list_templates();
+            
+            if templates.is_empty() {
+                println!("No templates configured.");
+            } else {
+                println!("\n{}", "Templates:".bold().blue());
+                for (name, prompt) in templates {
+                    let display_prompt = if prompt.len() > 60 {
+                        format!("{}...", &prompt[..60])
+                    } else {
+                        prompt.clone()
+                    };
+                    println!("  {} {} -> {}", "•".blue(), name.bold(), display_prompt);
+                }
             }
         }
     }
