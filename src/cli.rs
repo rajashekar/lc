@@ -102,6 +102,28 @@ pub enum Commands {
         #[command(subcommand)]
         command: TemplateCommands,
     },
+    /// Proxy server (alias: pr)
+    #[command(alias = "pr")]
+    Proxy {
+        /// Port to listen on
+        #[arg(short = 'p', long = "port", default_value = "6789")]
+        port: u16,
+        /// Host to bind to
+        #[arg(short = 'h', long = "host", default_value = "127.0.0.1")]
+        host: String,
+        /// Filter by provider
+        #[arg(long = "provider")]
+        provider: Option<String>,
+        /// Filter by specific model (can be provider:model or alias)
+        #[arg(short = 'm', long = "model")]
+        model: Option<String>,
+        /// API key for authentication
+        #[arg(short = 'k', long = "key")]
+        api_key: Option<String>,
+        /// Generate a random API key
+        #[arg(short = 'g', long = "generate-key")]
+        generate_key: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -496,7 +518,7 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
         }
         ProviderCommands::Models { name } => {
             let config = config::Config::load()?;
-            let provider_config = config.get_provider(&name)?;
+            let _provider_config = config.get_provider(&name)?;
             
             let mut config_mut = config.clone();
             let client = chat::create_authenticated_client(&mut config_mut, &name).await?;
@@ -1368,7 +1390,7 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
     
     // Resolve provider and model using the same logic as direct prompts
     let (provider_name, resolved_model) = resolve_model_and_provider(&config, provider, Some(model))?;
-    let provider_config = config.get_provider(&provider_name)?;
+    let _provider_config = config.get_provider(&provider_name)?;
     
     let mut config_mut = config.clone();
     let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
@@ -1572,6 +1594,92 @@ pub async fn handle_template_command(command: TemplateCommands) -> Result<()> {
             }
         }
     }
+    
+    Ok(())
+}
+
+// Proxy command handler
+pub async fn handle_proxy_command(
+    port: u16,
+    host: String,
+    provider: Option<String>,
+    model: Option<String>,
+    api_key: Option<String>,
+    generate_key: bool,
+) -> Result<()> {
+    use crate::proxy;
+    
+    // Handle API key generation
+    let final_api_key = if generate_key {
+        let generated_key = proxy::generate_api_key();
+        println!("{} Generated API key: {}", "🔑".green(), generated_key.bold());
+        Some(generated_key)
+    } else {
+        api_key
+    };
+    
+    // Validate provider if specified
+    if let Some(ref provider_name) = provider {
+        let config = config::Config::load()?;
+        if !config.has_provider(provider_name) {
+            anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", provider_name);
+        }
+    }
+    
+    // Validate model if specified (could be alias or provider:model format)
+    if let Some(ref model_name) = model {
+        let config = config::Config::load()?;
+        
+        // Check if it's an alias
+        if let Some(_alias_target) = config.get_alias(model_name) {
+            // Valid alias
+        } else if model_name.contains(':') {
+            // Check provider:model format
+            let parts: Vec<&str> = model_name.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                let provider_name = parts[0];
+                if !config.has_provider(provider_name) {
+                    anyhow::bail!("Provider '{}' not found in model specification '{}'", provider_name, model_name);
+                }
+            }
+        } else {
+            // Assume it's a model name for the default or specified provider
+            // This will be validated when requests come in
+        }
+    }
+    
+    // Show configuration summary
+    println!("\n{}", "Proxy Server Configuration:".bold().blue());
+    println!("  {} {}:{}", "Address:".bold(), host, port);
+    
+    if let Some(ref provider_filter) = provider {
+        println!("  {} {}", "Provider Filter:".bold(), provider_filter.green());
+    } else {
+        println!("  {} {}", "Provider Filter:".bold(), "All providers".dimmed());
+    }
+    
+    if let Some(ref model_filter) = model {
+        println!("  {} {}", "Model Filter:".bold(), model_filter.green());
+    } else {
+        println!("  {} {}", "Model Filter:".bold(), "All models".dimmed());
+    }
+    
+    if final_api_key.is_some() {
+        println!("  {} {}", "Authentication:".bold(), "Enabled".green());
+    } else {
+        println!("  {} {}", "Authentication:".bold(), "Disabled".yellow());
+    }
+    
+    println!("\n{}", "Available endpoints:".bold().blue());
+    println!("  {} http://{}:{}/models", "•".blue(), host, port);
+    println!("  {} http://{}:{}/v1/models", "•".blue(), host, port);
+    println!("  {} http://{}:{}/chat/completions", "•".blue(), host, port);
+    println!("  {} http://{}:{}/v1/chat/completions", "•".blue(), host, port);
+    
+    println!("\n{} Press Ctrl+C to stop the server\n", "💡".yellow());
+    
+    // Start the proxy server
+    proxy::start_proxy_server(host, port, provider, model, final_api_key).await?;
     
     Ok(())
 }

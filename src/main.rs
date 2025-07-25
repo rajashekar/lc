@@ -5,6 +5,7 @@ mod provider;
 mod chat;
 mod error;
 mod models_cache;
+mod proxy;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
@@ -65,6 +66,9 @@ async fn main() -> Result<()> {
         }
         (true, Some(Commands::Templates { command })) => {
             cli::handle_template_command(command).await?;
+        }
+        (true, Some(Commands::Proxy { port, host, provider, model, api_key, generate_key })) => {
+            cli::handle_proxy_command(port, host, provider, model, api_key, generate_key).await?;
         }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped
