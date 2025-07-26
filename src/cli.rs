@@ -183,6 +183,11 @@ pub enum Commands {
         #[arg(short = 'g', long = "generate-key")]
         generate_key: bool,
     },
+    /// MCP server management
+    Mcp {
+        #[command(subcommand)]
+        command: McpCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -500,6 +505,74 @@ pub enum DeleteCommands {
     /// Delete temperature (alias: te)
     #[command(alias = "te")]
     Temperature,
+}
+
+#[derive(Subcommand)]
+pub enum McpCommands {
+    /// Add a new MCP server (alias: a)
+    #[command(alias = "a")]
+    Add {
+        /// Server name
+        name: String,
+        /// Command or URL for the MCP server
+        command_or_url: String,
+        /// MCP server type
+        #[arg(long = "type", value_enum)]
+        server_type: McpServerType,
+    },
+    /// Delete an MCP server configuration (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Server name
+        name: String,
+    },
+    /// List all configured MCP servers (alias: l)
+    #[command(alias = "l")]
+    List,
+    /// Start an MCP server (alias: s)
+    #[command(alias = "s")]
+    Start {
+        /// Server name
+        name: String,
+        /// Enable debug output
+        #[arg(short, long)]
+        debug: bool,
+    },
+    /// Stop an MCP server (alias: st)
+    #[command(alias = "st")]
+    Stop {
+        /// Server name
+        name: String,
+    },
+    /// List running MCP servers (alias: running)
+    #[command(alias = "running")]
+    Ps,
+    /// List functions exposed by a running MCP server (alias: f)
+    #[command(alias = "f")]
+    Functions {
+        /// Server name
+        name: String,
+    },
+    /// Invoke a function from a running MCP server (alias: i)
+    #[command(alias = "i")]
+    Invoke {
+        /// Server name
+        name: String,
+        /// Function name
+        function: String,
+        /// Function arguments
+        args: Vec<String>,
+    },
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum McpServerType {
+    /// Standard I/O based MCP server
+    Stdio,
+    /// Server-Sent Events MCP server
+    Sse,
+    /// Streamable HTTP MCP server
+    Streamable,
 }
 
 // Helper function to extract code blocks from markdown text
@@ -2474,6 +2547,171 @@ fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> R
         }
         
         println!();
+    }
+    
+    Ok(())
+}
+
+// MCP command handlers
+pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> {
+    use crate::mcp::{McpConfig, McpManager, McpServerType as ConfigMcpServerType};
+    use colored::Colorize;
+    
+    match command {
+        crate::cli::McpCommands::Add { name, command_or_url, server_type } => {
+            let mut config = McpConfig::load()?;
+            
+            // Convert CLI enum to config enum
+            let config_server_type = match server_type {
+                crate::cli::McpServerType::Stdio => ConfigMcpServerType::Stdio,
+                crate::cli::McpServerType::Sse => ConfigMcpServerType::Sse,
+                crate::cli::McpServerType::Streamable => ConfigMcpServerType::Streamable,
+            };
+            
+            config.add_server(name.clone(), command_or_url.clone(), config_server_type)?;
+            config.save()?;
+            
+            println!("{} MCP server '{}' added successfully", "✓".green(), name);
+            println!("  Type: {:?}", server_type);
+            println!("  Command/URL: {}", command_or_url);
+        }
+        crate::cli::McpCommands::Delete { name } => {
+            let mut config = McpConfig::load()?;
+            
+            if config.get_server(&name).is_none() {
+                anyhow::bail!("MCP server '{}' not found", name);
+            }
+            
+            config.delete_server(&name)?;
+            config.save()?;
+            
+            println!("{} MCP server '{}' deleted successfully", "✓".green(), name);
+        }
+        crate::cli::McpCommands::List => {
+            let config = McpConfig::load()?;
+            let servers = config.list_servers();
+            
+            if servers.is_empty() {
+                println!("No MCP servers configured.");
+            } else {
+                println!("\n{} Configured MCP servers:", "Servers:".bold().blue());
+                for (name, server_config) in servers {
+                    println!("  {} {} - {:?} ({})",
+                        "•".blue(),
+                        name.bold(),
+                        server_config.server_type,
+                        server_config.command_or_url
+                    );
+                }
+            }
+        }
+        crate::cli::McpCommands::Start { name, debug } => {
+            let config = McpConfig::load()?;
+            
+            if let Some(server_config) = config.get_server(&name) {
+                let mut manager = McpManager::new();
+                
+                println!("{} Starting MCP server '{}'...", "🚀".blue(), name);
+                
+                match manager.start_server(&name, server_config, debug).await {
+                    Ok(_) => {
+                        println!("{} MCP server '{}' started successfully", "✓".green(), name);
+                    }
+                    Err(e) => {
+                        anyhow::bail!("Failed to start MCP server '{}': {}", name, e);
+                    }
+                }
+            } else {
+                anyhow::bail!("MCP server '{}' not found", name);
+            }
+        }
+        crate::cli::McpCommands::Stop { name } => {
+            let mut manager = McpManager::new();
+            
+            println!("{} Stopping MCP server '{}'...", "🛑".red(), name);
+            
+            match manager.stop_server(&name).await {
+                Ok(_) => {
+                    println!("{} MCP server '{}' stopped successfully", "✓".green(), name);
+                }
+                Err(e) => {
+                    anyhow::bail!("Failed to stop MCP server '{}': {}", name, e);
+                }
+            }
+        }
+        crate::cli::McpCommands::Ps => {
+            let manager = McpManager::new();
+            let running_servers = manager.list_running_servers().await?;
+            
+            if running_servers.is_empty() {
+                println!("No MCP servers currently running.");
+            } else {
+                println!("\n{} Running MCP servers:", "Servers:".bold().blue());
+                for (name, info) in running_servers {
+                    println!("  {} {} - {} (PID: {})",
+                        "•".green(),
+                        name.bold(),
+                        info.server_type,
+                        info.pid
+                    );
+                }
+            }
+        }
+        crate::cli::McpCommands::Functions { name } => {
+            let mut manager = McpManager::new();
+            
+            println!("{} Listing functions for MCP server '{}'...", "🔍".blue(), name);
+            
+            match manager.list_functions(&name).await {
+                Ok(functions) => {
+                    if functions.is_empty() {
+                        println!("No functions found for server '{}'", name);
+                    } else {
+                        println!("\n{} Available functions:", "Functions:".bold().blue());
+                        for function in functions {
+                            println!("  {} {} - {}",
+                                "•".blue(),
+                                function.name.bold(),
+                                function.description
+                            );
+                            
+                            if let Some(params) = &function.parameters {
+                                if let Some(properties) = params.get("properties") {
+                                    if let Some(props_obj) = properties.as_object() {
+                                        if !props_obj.is_empty() {
+                                            println!("    Parameters: {}",
+                                                props_obj.keys().map(|k| k.as_str()).collect::<Vec<_>>().join(", ").dimmed()
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    anyhow::bail!("Failed to list functions from MCP server '{}': {}", name, e);
+                }
+            }
+        }
+        crate::cli::McpCommands::Invoke { name, function, args } => {
+            let mut manager = McpManager::new();
+            
+            println!("{} Invoking function '{}' on MCP server '{}'...", "⚡".yellow(), function, name);
+            if !args.is_empty() {
+                println!("Arguments: {}", args.join(", ").dimmed());
+            }
+            
+            match manager.invoke_function(&name, &function, &args).await {
+                Ok(result) => {
+                    println!("\n{} Result:", "Response:".bold().green());
+                    println!("{}", serde_json::to_string_pretty(&result)?);
+                }
+                Err(e) => {
+                    anyhow::bail!("Failed to invoke function '{}' on MCP server '{}': {}", function, name, e);
+                }
+            }
+        }
     }
     
     Ok(())

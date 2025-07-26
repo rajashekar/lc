@@ -9,6 +9,7 @@ mod model_metadata;
 mod proxy;
 mod token_utils;
 mod unified_cache;
+mod mcp;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
@@ -78,6 +79,9 @@ async fn main() -> Result<()> {
         }
         (true, Some(Commands::Proxy { port, host, provider, model, api_key, generate_key })) => {
             cli::handle_proxy_command(port, host, provider, model, api_key, generate_key).await?;
+        }
+        (true, Some(Commands::Mcp { command })) => {
+            cli::handle_mcp_command(command).await?;
         }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped
