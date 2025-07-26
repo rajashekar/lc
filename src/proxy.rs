@@ -247,6 +247,7 @@ async fn chat_completions(
         messages: request.messages,
         max_tokens: request.max_tokens,
         temperature: request.temperature,
+        tools: None, // Proxy doesn't support tools yet
     };
     
     // Send the request

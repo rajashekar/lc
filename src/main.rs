@@ -39,10 +39,10 @@ async fn main() -> Result<()> {
                     if cli.prompt.len() > 1 {
                         // Use template as system prompt and remaining args as user prompt
                         let user_prompt = cli.prompt[1..].join(" ");
-                        handle_prompt_with_optional_piped_input(user_prompt, Some(template_content.clone()), piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments).await?;
+                        handle_prompt_with_optional_piped_input(user_prompt, Some(template_content.clone()), piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools).await?;
                     } else {
                         // Use template content as the prompt (no additional user prompt)
-                        handle_prompt_with_optional_piped_input(template_content.clone(), cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments).await?;
+                        handle_prompt_with_optional_piped_input(template_content.clone(), cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools).await?;
                     }
                 } else {
                     anyhow::bail!("Template '{}' not found", template_name);
@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
             } else {
                 // Regular direct prompt - join all arguments
                 let prompt = cli.prompt.join(" ");
-                handle_prompt_with_optional_piped_input(prompt, cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments).await?;
+                handle_prompt_with_optional_piped_input(prompt, cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools).await?;
             }
         }
         (true, Some(Commands::Providers { command })) => {
@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
             if let Some(piped_content) = piped_input {
                 // Input was piped, use it as a direct prompt
                 if !piped_content.trim().is_empty() {
-                    cli::handle_direct_prompt_with_piped_input(piped_content, cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments).await?;
+                    cli::handle_direct_prompt_with_piped_input(piped_content, cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments, cli.tools).await?;
                 } else {
                     use clap::CommandFactory;
                     let mut cmd = Cli::command();
@@ -141,13 +141,14 @@ async fn handle_prompt_with_optional_piped_input(
     max_tokens: Option<String>,
     temperature: Option<String>,
     attachments: Vec<String>,
+    tools: Option<String>,
 ) -> Result<()> {
     if let Some(piped_content) = piped_input {
         // Combine prompt with piped input
         let combined_prompt = format!("{}\n\n=== Piped Input ===\n{}", prompt, piped_content);
-        cli::handle_direct_prompt(combined_prompt, provider, model, system_prompt, max_tokens, temperature, attachments).await
+        cli::handle_direct_prompt(combined_prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools).await
     } else {
         // No piped input, use regular prompt handling
-        cli::handle_direct_prompt(prompt, provider, model, system_prompt, max_tokens, temperature, attachments).await
+        cli::handle_direct_prompt(prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools).await
     }
 }

@@ -63,6 +63,10 @@ pub struct Cli {
     #[arg(short = 'a', long = "attach")]
     pub attachments: Vec<String>,
     
+    /// Include tools from MCP server(s) (comma-separated server names)
+    #[arg(short = 't', long = "tools")]
+    pub tools: Option<String>,
+    
     /// Enable debug/verbose logging
     #[arg(short = 'd', long = "debug")]
     pub debug: bool,
@@ -1461,7 +1465,7 @@ fn is_code_file(extension: &str) -> bool {
 }
 
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>) -> Result<()> {
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -1499,6 +1503,13 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         config.temperature
     };
     
+    // Fetch MCP tools if specified
+    let mcp_tools = if let Some(tools_str) = &tools {
+        fetch_mcp_tools(tools_str).await?
+    } else {
+        None
+    };
+
     // Resolve provider and model
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
     
@@ -1525,7 +1536,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name).await {
+    match chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools).await {
         Ok((response, input_tokens, output_tokens)) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
@@ -1545,7 +1556,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
 }
 
 // Direct prompt handler for piped input (treats piped content as attachment)
-pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>) -> Result<()> {
+pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>) -> Result<()> {
     // For piped input, we need to determine if there's a prompt in the arguments
     // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
     // But we should provide a way to specify a prompt when piping content
@@ -1596,6 +1607,13 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         config.temperature
     };
     
+    // Fetch MCP tools if specified
+    let mcp_tools = if let Some(tools_str) = &tools {
+        fetch_mcp_tools(tools_str).await?
+    } else {
+        None
+    };
+
     // Resolve provider and model
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
     
@@ -1622,7 +1640,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name).await {
+    match chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools).await {
         Ok((response, input_tokens, output_tokens)) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
@@ -1746,7 +1764,7 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
             None
         };
         
-        match chat::send_chat_request_with_validation(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name).await {
+        match chat::send_chat_request_with_validation(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await {
             Ok((response, input_tokens, output_tokens)) => {
                 print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                 println!("{} {}", "Assistant:".bold().blue(), response);
@@ -2715,4 +2733,62 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
     }
     
     Ok(())
+}
+
+// Helper function to fetch MCP tools and convert them to OpenAI function format
+async fn fetch_mcp_tools(tools_str: &str) -> Result<Option<Vec<crate::provider::Tool>>> {
+    use crate::mcp::McpManager;
+    
+    // Parse comma-separated server names
+    let server_names: Vec<&str> = tools_str.split(',').map(|s| s.trim()).collect();
+    let mut all_tools = Vec::new();
+    
+    let mut manager = McpManager::new();
+    
+    for server_name in server_names {
+        if server_name.is_empty() {
+            continue;
+        }
+        
+        crate::debug_log!("Fetching tools from MCP server '{}'", server_name);
+        
+        match manager.list_functions(server_name).await {
+            Ok(functions) => {
+                crate::debug_log!("Retrieved {} functions from server '{}'", functions.len(), server_name);
+                
+                for function in functions {
+                    // Convert MCP function to OpenAI tool format
+                    let tool = crate::provider::Tool {
+                        tool_type: "function".to_string(),
+                        function: crate::provider::Function {
+                            name: function.name.clone(),
+                            description: function.description.clone(),
+                            parameters: function.parameters.unwrap_or_else(|| {
+                                serde_json::json!({
+                                    "type": "object",
+                                    "properties": {},
+                                    "required": []
+                                })
+                            }),
+                        },
+                    };
+                    
+                    all_tools.push(tool);
+                    crate::debug_log!("Added tool '{}' from server '{}'", function.name, server_name);
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to fetch tools from MCP server '{}': {}", server_name, e);
+                continue;
+            }
+        }
+    }
+    
+    if all_tools.is_empty() {
+        crate::debug_log!("No tools found from any specified MCP servers");
+        Ok(None)
+    } else {
+        crate::debug_log!("Total {} tools fetched from MCP servers", all_tools.len());
+        Ok(Some(all_tools))
+    }
 }

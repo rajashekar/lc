@@ -14,6 +14,7 @@ pub async fn send_chat_request(
     system_prompt: Option<&str>,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
+    tools: Option<Vec<crate::provider::Tool>>,
 ) -> Result<String> {
     let mut messages = Vec::new();
     
@@ -48,6 +49,7 @@ pub async fn send_chat_request(
         messages,
         max_tokens: max_tokens.or(Some(1024)),
         temperature: temperature.or(Some(0.7)),
+        tools,
     };
     
     client.chat(&request).await
@@ -62,6 +64,7 @@ pub async fn send_chat_request_with_validation(
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     provider_name: &str,
+    tools: Option<Vec<crate::provider::Tool>>,
 ) -> Result<(String, Option<i32>, Option<i32>)> {
     crate::debug_log!("Sending chat request - provider: '{}', model: '{}', prompt length: {}, history entries: {}",
                       provider_name, model, prompt.len(), history.len());
@@ -166,6 +169,7 @@ pub async fn send_chat_request_with_validation(
         messages: messages.clone(),
         max_tokens: max_tokens.or(Some(1024)),
         temperature: temperature.or(Some(0.7)),
+        tools,
     };
     
     crate::debug_log!("Sending chat request with {} messages, max_tokens: {:?}, temperature: {:?}",

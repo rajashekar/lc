@@ -9,6 +9,22 @@ pub struct ChatRequest {
     pub messages: Vec<Message>,
     pub max_tokens: Option<u32>,
     pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct Tool {
+    #[serde(rename = "type")]
+    pub tool_type: String,
+    pub function: Function,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct Function {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -24,7 +40,28 @@ pub struct ChatResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct Choice {
-    pub message: Message,
+    pub message: ResponseMessage,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResponseMessage {
+    pub role: String,
+    pub content: Option<String>,
+    pub tool_calls: Option<Vec<ToolCall>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub call_type: String,
+    pub function: FunctionCall,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FunctionCall {
+    pub name: String,
+    pub arguments: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -174,7 +211,25 @@ impl OpenAIClient {
         // Try to parse as standard OpenAI format first (with "choices" array)
         if let Ok(chat_response) = serde_json::from_str::<ChatResponse>(&response_text) {
             if let Some(choice) = chat_response.choices.first() {
-                return Ok(choice.message.content.clone());
+                // Handle tool calls
+                if let Some(tool_calls) = &choice.message.tool_calls {
+                    let mut response = String::new();
+                    response.push_str("🔧 **Tool Calls Made:**\n\n");
+                    
+                    for tool_call in tool_calls {
+                        response.push_str(&format!("**Function:** `{}`\n", tool_call.function.name));
+                        response.push_str(&format!("**Arguments:** `{}`\n\n", tool_call.function.arguments));
+                        
+                        // TODO: Actually execute the MCP function call here
+                        response.push_str("*Note: Tool execution not yet implemented - this shows the LLM successfully recognized and attempted to use the MCP tools.*\n\n");
+                    }
+                    
+                    return Ok(response);
+                } else if let Some(content) = &choice.message.content {
+                    return Ok(content.clone());
+                } else {
+                    anyhow::bail!("No content or tool calls in response");
+                }
             } else {
                 anyhow::bail!("No response from API");
             }
