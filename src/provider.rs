@@ -30,7 +30,49 @@ pub struct Function {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     pub role: String,
-    pub content: String,
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+}
+
+impl Message {
+    pub fn user(content: String) -> Self {
+        Self {
+            role: "user".to_string(),
+            content: Some(content),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+    
+    pub fn assistant(content: String) -> Self {
+        Self {
+            role: "assistant".to_string(),
+            content: Some(content),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+    
+    pub fn assistant_with_tool_calls(tool_calls: Vec<ToolCall>) -> Self {
+        Self {
+            role: "assistant".to_string(),
+            content: None,
+            tool_calls: Some(tool_calls),
+            tool_call_id: None,
+        }
+    }
+    
+    pub fn tool_result(tool_call_id: String, content: String) -> Self {
+        Self {
+            role: "tool".to_string(),
+            content: Some(content),
+            tool_calls: None,
+            tool_call_id: Some(tool_call_id),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,7 +92,7 @@ pub struct ResponseMessage {
     pub tool_calls: Option<Vec<ToolCall>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ToolCall {
     pub id: String,
     #[serde(rename = "type")]
@@ -58,7 +100,7 @@ pub struct ToolCall {
     pub function: FunctionCall,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: String,
@@ -315,9 +357,47 @@ impl OpenAIClient {
                     expanded_models.push(expanded_model);
                 }
             }
+            
         }
         
         Ok(expanded_models)
+    }
+    
+    // New method that returns the full parsed response for tool handling
+    pub async fn chat_with_tools(&self, request: &ChatRequest) -> Result<ChatResponse> {
+        let url = format!("{}{}", self.base_url, self.chat_path);
+        
+        let mut req = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json");
+        
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
+            .json(request)
+            .send()
+            .await?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("API request failed with status {}: {}", status, text);
+        }
+        
+        // Get the response text first to handle different formats
+        let response_text = response.text().await?;
+        
+        // Try to parse as standard OpenAI format first (with "choices" array)
+        if let Ok(chat_response) = serde_json::from_str::<ChatResponse>(&response_text) {
+            return Ok(chat_response);
+        }
+        
+        // If parsing fails, return an error with the response text for debugging
+        anyhow::bail!("Failed to parse chat response. Response: {}", response_text);
     }
     
     pub async fn get_token_from_url(&self, token_url: &str) -> Result<TokenResponse> {

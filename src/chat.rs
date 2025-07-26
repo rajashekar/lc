@@ -22,27 +22,20 @@ pub async fn send_chat_request(
     if let Some(sys_prompt) = system_prompt {
         messages.push(Message {
             role: "system".to_string(),
-            content: sys_prompt.to_string(),
+            content: Some(sys_prompt.to_string()),
+            tool_calls: None,
+            tool_call_id: None,
         });
     }
     
     // Add conversation history
     for entry in history {
-        messages.push(Message {
-            role: "user".to_string(),
-            content: entry.question.clone(),
-        });
-        messages.push(Message {
-            role: "assistant".to_string(),
-            content: entry.response.clone(),
-        });
+        messages.push(Message::user(entry.question.clone()));
+        messages.push(Message::assistant(entry.response.clone()));
     }
     
     // Add current prompt
-    messages.push(Message {
-        role: "user".to_string(),
-        content: prompt.to_string(),
-    });
+    messages.push(Message::user(prompt.to_string()));
     
     let request = ChatRequest {
         model: model.to_string(),
@@ -142,27 +135,20 @@ pub async fn send_chat_request_with_validation(
     if let Some(sys_prompt) = system_prompt {
         messages.push(Message {
             role: "system".to_string(),
-            content: sys_prompt.to_string(),
+            content: Some(sys_prompt.to_string()),
+            tool_calls: None,
+            tool_call_id: None,
         });
     }
     
     // Add conversation history
     for entry in &final_history {
-        messages.push(Message {
-            role: "user".to_string(),
-            content: entry.question.clone(),
-        });
-        messages.push(Message {
-            role: "assistant".to_string(),
-            content: entry.response.clone(),
-        });
+        messages.push(Message::user(entry.question.clone()));
+        messages.push(Message::assistant(entry.response.clone()));
     }
     
     // Add current prompt
-    messages.push(Message {
-        role: "user".to_string(),
-        content: final_prompt,
-    });
+    messages.push(Message::user(final_prompt));
     
     let request = ChatRequest {
         model: model.to_string(),
@@ -302,4 +288,201 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
     
     crate::debug_log!("Successfully created authenticated client for provider '{}'", provider_name);
     Ok(client)
+}
+
+// New function to handle tool execution loop
+pub async fn send_chat_request_with_tool_execution(
+    client: &OpenAIClient,
+    model: &str,
+    prompt: &str,
+    history: &[ChatEntry],
+    system_prompt: Option<&str>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
+    provider_name: &str,
+    tools: Option<Vec<crate::provider::Tool>>,
+    mcp_server_names: &[&str],
+) -> Result<(String, Option<i32>, Option<i32>)> {
+    use crate::provider::{Message, ChatRequest};
+    use crate::mcp::McpManager;
+    use crate::token_utils::TokenCounter;
+    
+    let mut conversation_messages = Vec::new();
+    let mut total_input_tokens = 0i32;
+    let mut total_output_tokens = 0i32;
+    
+    // Create token counter for tracking usage
+    let token_counter = TokenCounter::new(model).ok();
+    
+    // Add system prompt if provided
+    if let Some(sys_prompt) = system_prompt {
+        conversation_messages.push(Message {
+            role: "system".to_string(),
+            content: Some(sys_prompt.to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+        });
+    }
+    
+    // Add conversation history
+    for entry in history {
+        conversation_messages.push(Message::user(entry.question.clone()));
+        conversation_messages.push(Message::assistant(entry.response.clone()));
+    }
+    
+    // Add current prompt
+    conversation_messages.push(Message::user(prompt.to_string()));
+    
+    let mut manager = McpManager::new();
+    let max_iterations = 10; // Prevent infinite loops
+    let mut iteration = 0;
+    
+    loop {
+        iteration += 1;
+        if iteration > max_iterations {
+            anyhow::bail!("Maximum tool execution iterations reached ({})", max_iterations);
+        }
+        
+        crate::debug_log!("Tool execution iteration {}/{}", iteration, max_iterations);
+        
+        let request = ChatRequest {
+            model: model.to_string(),
+            messages: conversation_messages.clone(),
+            max_tokens: max_tokens.or(Some(1024)),
+            temperature: temperature.or(Some(0.7)),
+            tools: tools.clone(),
+        };
+        
+        // Make the API call
+        let response = client.chat_with_tools(&request).await?;
+        
+        // Track token usage if we have a counter
+        if let Some(ref counter) = token_counter {
+            let input_tokens = counter.estimate_chat_tokens("", system_prompt, &[]) as i32;
+            total_input_tokens += input_tokens;
+        }
+        
+        if let Some(choice) = response.choices.first() {
+            crate::debug_log!("Response choice - tool_calls: {}, content: {}",
+                             choice.message.tool_calls.as_ref().map_or(0, |tc| tc.len()),
+                             choice.message.content.as_ref().map_or("None", |c|
+                                 if c.len() > 50 { &c[..50] } else { c }));
+            
+            // Check if the LLM made tool calls
+            if let Some(tool_calls) = &choice.message.tool_calls {
+                crate::debug_log!("LLM made {} tool calls in iteration {}", tool_calls.len(), iteration);
+                
+                // Add the assistant's tool call message to conversation
+                conversation_messages.push(Message::assistant_with_tool_calls(tool_calls.clone()));
+                
+                // Execute each tool call
+                for (i, tool_call) in tool_calls.iter().enumerate() {
+                    crate::debug_log!("Executing tool call {}/{}: {} with args: {}",
+                                     i + 1, tool_calls.len(), tool_call.function.name, tool_call.function.arguments);
+                    
+                    // Find which MCP server has this function
+                    let mut tool_result = None;
+                    for server_name in mcp_server_names {
+                        match manager.invoke_function(
+                            server_name,
+                            &tool_call.function.name,
+                            &parse_function_arguments(&tool_call.function.arguments)?
+                        ).await {
+                            Ok(result) => {
+                                crate::debug_log!("Tool call successful on server '{}': {}", server_name,
+                                                 serde_json::to_string(&result).unwrap_or_else(|_| "invalid json".to_string()));
+                                tool_result = Some(format_tool_result(&result));
+                                break;
+                            }
+                            Err(e) => {
+                                crate::debug_log!("Tool call failed on server '{}': {}", server_name, e);
+                                continue;
+                            }
+                        }
+                    }
+                    
+                    let result_content = tool_result.unwrap_or_else(|| {
+                        format!("Error: Function '{}' not found on any MCP server", tool_call.function.name)
+                    });
+                    
+                    crate::debug_log!("Tool result for {}: {}", tool_call.function.name,
+                                     if result_content.len() > 100 {
+                                         format!("{}...", &result_content[..100])
+                                     } else {
+                                         result_content.clone()
+                                     });
+                    
+                    // Add tool result to conversation
+                    conversation_messages.push(Message::tool_result(
+                        tool_call.id.clone(),
+                        result_content
+                    ));
+                }
+                
+                // Continue the loop to get the LLM's response to the tool results
+                continue;
+            } else if let Some(content) = &choice.message.content {
+                // LLM provided a final answer without tool calls
+                crate::debug_log!("LLM provided final answer after {} iterations: {}",
+                                 iteration, if content.len() > 100 {
+                                     format!("{}...", &content[..100])
+                                 } else {
+                                     content.clone()
+                                 });
+                
+                // Track output tokens
+                if let Some(ref counter) = token_counter {
+                    total_output_tokens += counter.count_tokens(content) as i32;
+                }
+                
+                // Exit immediately when LLM provides content (final answer)
+                return Ok((content.clone(), Some(total_input_tokens), Some(total_output_tokens)));
+            } else {
+                // LLM provided neither tool calls nor content - this shouldn't happen
+                crate::debug_log!("LLM provided neither tool calls nor content in iteration {}", iteration);
+                anyhow::bail!("No content or tool calls in response from LLM in iteration {}", iteration);
+            }
+        } else {
+            anyhow::bail!("No response from API");
+        }
+    }
+}
+
+// Helper function to parse function arguments from JSON string
+fn parse_function_arguments(args_json: &str) -> Result<Vec<String>> {
+    let args_value: serde_json::Value = serde_json::from_str(args_json)?;
+    let mut args_vec = Vec::new();
+    
+    if let Some(obj) = args_value.as_object() {
+        for (key, value) in obj {
+            let arg_str = match value {
+                serde_json::Value::String(s) => format!("{}={}", key, s),
+                _ => format!("{}={}", key, value.to_string()),
+            };
+            args_vec.push(arg_str);
+        }
+    }
+    
+    Ok(args_vec)
+}
+
+// Helper function to format tool result for display
+fn format_tool_result(result: &serde_json::Value) -> String {
+    if let Some(content_array) = result.get("content") {
+        if let Some(content_items) = content_array.as_array() {
+            let mut formatted = String::new();
+            for item in content_items {
+                if let Some(text) = item.get("text") {
+                    if let Some(text_str) = text.as_str() {
+                        formatted.push_str(text_str);
+                        formatted.push('\n');
+                    }
+                }
+            }
+            return formatted.trim().to_string();
+        }
+    }
+    
+    // Fallback to pretty-printed JSON
+    serde_json::to_string_pretty(result).unwrap_or_else(|_| "Error formatting result".to_string())
 }

@@ -113,6 +113,9 @@ pub enum Commands {
         /// Chat ID to use or continue
         #[arg(long)]
         cid: Option<String>,
+        /// Include tools from MCP server(s) (comma-separated server names)
+        #[arg(short = 't', long = "tools")]
+        tools: Option<String>,
     },
     /// Global models management (alias: m)
     #[command(alias = "m")]
@@ -1504,10 +1507,10 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     };
     
     // Fetch MCP tools if specified
-    let mcp_tools = if let Some(tools_str) = &tools {
+    let (mcp_tools, mcp_server_names) = if let Some(tools_str) = &tools {
         fetch_mcp_tools(tools_str).await?
     } else {
-        None
+        (None, Vec::new())
     };
 
     // Resolve provider and model
@@ -1536,7 +1539,16 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools).await {
+    let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+        // Use tool execution loop when tools are available
+        let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+        chat::send_chat_request_with_tool_execution(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+    } else {
+        // Use regular chat when no tools
+        chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+    };
+    
+    match result {
         Ok((response, input_tokens, output_tokens)) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
@@ -1608,10 +1620,10 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     };
     
     // Fetch MCP tools if specified
-    let mcp_tools = if let Some(tools_str) = &tools {
+    let (mcp_tools, mcp_server_names) = if let Some(tools_str) = &tools {
         fetch_mcp_tools(tools_str).await?
     } else {
-        None
+        (None, Vec::new())
     };
 
     // Resolve provider and model
@@ -1640,7 +1652,16 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
     
-    match chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools).await {
+    let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+        // Use tool execution loop when tools are available
+        let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+        chat::send_chat_request_with_tool_execution(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+    } else {
+        // Use regular chat when no tools
+        chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+    };
+    
+    match result {
         Ok((response, input_tokens, output_tokens)) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
             println!("{}", response);
@@ -1666,7 +1687,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
 }
 
 // Interactive chat mode
-pub async fn handle_chat_command(model: String, provider: Option<String>, cid: Option<String>) -> Result<()> {
+pub async fn handle_chat_command(model: String, provider: Option<String>, cid: Option<String>, tools: Option<String>) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -1689,11 +1710,23 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
         config_mut.save()?;
     }
     
+    // Fetch MCP tools if specified
+    let (mcp_tools, mcp_server_names) = if let Some(tools_str) = &tools {
+        fetch_mcp_tools(tools_str).await?
+    } else {
+        (None, Vec::new())
+    };
+    
     let mut current_model = resolved_model.clone();
     
     println!("\n{} Interactive Chat Mode", "🚀".blue());
     println!("{} Session ID: {}", "📝".blue(), session_id);
     println!("{} Model: {}", "🤖".blue(), current_model);
+    if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+        println!("{} Tools: {} (from MCP servers: {})", "🔧".blue(),
+                 mcp_tools.as_ref().unwrap().len(),
+                 mcp_server_names.join(", "));
+    }
     println!("{} Type /help for commands, /exit to quit\n", "💡".yellow());
     
     loop {
@@ -1764,7 +1797,16 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
             None
         };
         
-        match chat::send_chat_request_with_validation(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await {
+        let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+            // Use tool execution loop when tools are available
+            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+            chat::send_chat_request_with_tool_execution(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await
+        } else {
+            // Use regular chat when no tools
+            chat::send_chat_request_with_validation(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+        };
+        
+        match result {
             Ok((response, input_tokens, output_tokens)) => {
                 print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                 println!("{} {}", "Assistant:".bold().blue(), response);
@@ -2736,12 +2778,13 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
 }
 
 // Helper function to fetch MCP tools and convert them to OpenAI function format
-async fn fetch_mcp_tools(tools_str: &str) -> Result<Option<Vec<crate::provider::Tool>>> {
+async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provider::Tool>>, Vec<String>)> {
     use crate::mcp::McpManager;
     
     // Parse comma-separated server names
     let server_names: Vec<&str> = tools_str.split(',').map(|s| s.trim()).collect();
     let mut all_tools = Vec::new();
+    let mut valid_server_names = Vec::new();
     
     let mut manager = McpManager::new();
     
@@ -2755,6 +2798,7 @@ async fn fetch_mcp_tools(tools_str: &str) -> Result<Option<Vec<crate::provider::
         match manager.list_functions(server_name).await {
             Ok(functions) => {
                 crate::debug_log!("Retrieved {} functions from server '{}'", functions.len(), server_name);
+                valid_server_names.push(server_name.to_string());
                 
                 for function in functions {
                     // Convert MCP function to OpenAI tool format
@@ -2786,9 +2830,9 @@ async fn fetch_mcp_tools(tools_str: &str) -> Result<Option<Vec<crate::provider::
     
     if all_tools.is_empty() {
         crate::debug_log!("No tools found from any specified MCP servers");
-        Ok(None)
+        Ok((None, valid_server_names))
     } else {
         crate::debug_log!("Total {} tools fetched from MCP servers", all_tools.len());
-        Ok(Some(all_tools))
+        Ok((Some(all_tools), valid_server_names))
     }
 }

@@ -270,7 +270,9 @@ async fn chat_completions(
             index: 0,
             message: crate::provider::Message {
                 role: "assistant".to_string(),
-                content: response_text,
+                content: Some(response_text),
+                tool_calls: None,
+                tool_call_id: None,
             },
             finish_reason: "stop".to_string(),
         }],
