@@ -370,60 +370,82 @@ pub async fn send_chat_request_with_tool_execution(
             
             // Check if the LLM made tool calls
             if let Some(tool_calls) = &choice.message.tool_calls {
-                crate::debug_log!("LLM made {} tool calls in iteration {}", tool_calls.len(), iteration);
-                
-                // Add the assistant's tool call message to conversation
-                conversation_messages.push(Message::assistant_with_tool_calls(tool_calls.clone()));
-                
-                // Execute each tool call
-                for (i, tool_call) in tool_calls.iter().enumerate() {
-                    crate::debug_log!("Executing tool call {}/{}: {} with args: {}",
-                                     i + 1, tool_calls.len(), tool_call.function.name, tool_call.function.arguments);
+                if !tool_calls.is_empty() {
+                    crate::debug_log!("LLM made {} tool calls in iteration {}", tool_calls.len(), iteration);
                     
-                    // Find which MCP server has this function
-                    let mut tool_result = None;
-                    for server_name in mcp_server_names {
-                        match manager.invoke_function(
-                            server_name,
-                            &tool_call.function.name,
-                            &parse_function_arguments(&tool_call.function.arguments)?
-                        ).await {
-                            Ok(result) => {
-                                crate::debug_log!("Tool call successful on server '{}': {}", server_name,
-                                                 serde_json::to_string(&result).unwrap_or_else(|_| "invalid json".to_string()));
-                                tool_result = Some(format_tool_result(&result));
-                                break;
-                            }
-                            Err(e) => {
-                                crate::debug_log!("Tool call failed on server '{}': {}", server_name, e);
-                                continue;
+                    // Add the assistant's tool call message to conversation
+                    conversation_messages.push(Message::assistant_with_tool_calls(tool_calls.clone()));
+                
+                    // Execute each tool call
+                    for (i, tool_call) in tool_calls.iter().enumerate() {
+                        crate::debug_log!("Executing tool call {}/{}: {} with args: {}",
+                                         i + 1, tool_calls.len(), tool_call.function.name, tool_call.function.arguments);
+                        
+                        // Find which MCP server has this function
+                        let mut tool_result = None;
+                        for server_name in mcp_server_names {
+                            match manager.invoke_function(
+                                server_name,
+                                &tool_call.function.name,
+                                &parse_function_arguments(&tool_call.function.arguments)?
+                            ).await {
+                                Ok(result) => {
+                                    crate::debug_log!("Tool call successful on server '{}': {}", server_name,
+                                                     serde_json::to_string(&result).unwrap_or_else(|_| "invalid json".to_string()));
+                                    tool_result = Some(format_tool_result(&result));
+                                    break;
+                                }
+                                Err(e) => {
+                                    crate::debug_log!("Tool call failed on server '{}': {}", server_name, e);
+                                    continue;
+                                }
                             }
                         }
+                        
+                        let result_content = tool_result.unwrap_or_else(|| {
+                            format!("Error: Function '{}' not found on any MCP server", tool_call.function.name)
+                        });
+                        
+                        crate::debug_log!("Tool result for {}: {}", tool_call.function.name,
+                                         if result_content.len() > 100 {
+                                             format!("{}...", &result_content[..100])
+                                         } else {
+                                             result_content.clone()
+                                         });
+                        
+                        // Add tool result to conversation
+                        conversation_messages.push(Message::tool_result(
+                            tool_call.id.clone(),
+                            result_content
+                        ));
                     }
                     
-                    let result_content = tool_result.unwrap_or_else(|| {
-                        format!("Error: Function '{}' not found on any MCP server", tool_call.function.name)
-                    });
-                    
-                    crate::debug_log!("Tool result for {}: {}", tool_call.function.name,
-                                     if result_content.len() > 100 {
-                                         format!("{}...", &result_content[..100])
-                                     } else {
-                                         result_content.clone()
-                                     });
-                    
-                    // Add tool result to conversation
-                    conversation_messages.push(Message::tool_result(
-                        tool_call.id.clone(),
-                        result_content
-                    ));
+                    // Continue the loop to get the LLM's response to the tool results
+                    continue;
+                } else {
+                    // Empty tool_calls array - check if we have content (final answer)
+                    if let Some(content) = &choice.message.content {
+                        if !content.trim().is_empty() {
+                            crate::debug_log!("LLM provided final answer with empty tool_calls after {} iterations: {}",
+                                             iteration, if content.len() > 100 {
+                                                 format!("{}...", &content[..100])
+                                             } else {
+                                                 content.clone()
+                                             });
+                            
+                            // Track output tokens
+                            if let Some(ref counter) = token_counter {
+                                total_output_tokens += counter.count_tokens(content) as i32;
+                            }
+                            
+                            // Exit immediately when LLM provides content (final answer)
+                            return Ok((content.clone(), Some(total_input_tokens), Some(total_output_tokens)));
+                        }
+                    }
                 }
-                
-                // Continue the loop to get the LLM's response to the tool results
-                continue;
             } else if let Some(content) = &choice.message.content {
-                // LLM provided a final answer without tool calls
-                crate::debug_log!("LLM provided final answer after {} iterations: {}",
+                // LLM provided a final answer without tool calls field
+                crate::debug_log!("LLM provided final answer without tool_calls field after {} iterations: {}",
                                  iteration, if content.len() > 100 {
                                      format!("{}...", &content[..100])
                                  } else {
