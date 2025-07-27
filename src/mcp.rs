@@ -663,23 +663,66 @@ impl McpManager {
                 // Kill the process using system commands
                 #[cfg(unix)]
                 {
-                    let output = std::process::Command::new("kill")
-                        .args(&["-TERM", &pid.to_string()])
+                    // First, try to kill the entire process group to clean up all child processes
+                    let pgid_output = std::process::Command::new("ps")
+                        .args(&["-o", "pgid=", "-p", &pid.to_string()])
                         .output();
                     
-                    match output {
-                        Ok(output) => {
-                            if !output.status.success() {
-                                // Try SIGKILL if SIGTERM failed
-                                let _ = std::process::Command::new("kill")
-                                    .args(&["-KILL", &pid.to_string()])
+                    let mut killed_group = false;
+                    if let Ok(output) = pgid_output {
+                        if let Ok(pgid_str) = String::from_utf8(output.stdout) {
+                            if let Ok(pgid) = pgid_str.trim().parse::<i32>() {
+                                // Kill the entire process group
+                                let group_kill_output = std::process::Command::new("kill")
+                                    .args(&["-TERM", &format!("-{}", pgid)])
                                     .output();
+                                
+                                if let Ok(output) = group_kill_output {
+                                    if output.status.success() {
+                                        killed_group = true;
+                                        // Wait a moment for graceful termination
+                                        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                                        
+                                        // If processes are still running, force kill the group
+                                        let _ = std::process::Command::new("kill")
+                                            .args(&["-KILL", &format!("-{}", pgid)])
+                                            .output();
+                                    }
+                                }
                             }
                         }
-                        Err(_) => {
-                            anyhow::bail!("Failed to kill process {}", pid);
+                    }
+                    
+                    // Fallback: kill individual process if group kill failed
+                    if !killed_group {
+                        let output = std::process::Command::new("kill")
+                            .args(&["-TERM", &pid.to_string()])
+                            .output();
+                        
+                        match output {
+                            Ok(output) => {
+                                if !output.status.success() {
+                                    // Try SIGKILL if SIGTERM failed
+                                    let _ = std::process::Command::new("kill")
+                                        .args(&["-KILL", &pid.to_string()])
+                                        .output();
+                                }
+                            }
+                            Err(_) => {
+                                anyhow::bail!("Failed to kill process {}", pid);
+                            }
                         }
                     }
+                    
+                    // Additional cleanup: find and kill any remaining processes related to this server
+                    let cleanup_command = format!(
+                        "pkill -f 'Application.Support.*lc.*{}'",
+                        name
+                    );
+                    let _ = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(&cleanup_command)
+                        .output();
                 }
                 
                 #[cfg(windows)]
