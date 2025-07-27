@@ -285,7 +285,7 @@ async fn chat_completions(
     Ok(Json(response))
 }
 
-fn parse_model_string(model: &str, config: &Config) -> Result<(String, String)> {
+pub fn parse_model_string(model: &str, config: &Config) -> Result<(String, String)> {
     // Check if it's an alias first
     if let Some(alias_target) = config.get_alias(model) {
         if alias_target.contains(':') {

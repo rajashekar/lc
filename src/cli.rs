@@ -1346,7 +1346,7 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
 }
 
 // Helper function to resolve model and provider from various inputs
-fn resolve_model_and_provider(
+pub fn resolve_model_and_provider(
     config: &config::Config,
     provider_override: Option<String>,
     model_override: Option<String>
@@ -1413,7 +1413,7 @@ fn resolve_model_and_provider(
 }
 
 // Helper function to read and format file contents
-fn read_and_format_attachments(attachments: &[String]) -> Result<String> {
+pub fn read_and_format_attachments(attachments: &[String]) -> Result<String> {
     if attachments.is_empty() {
         return Ok(String::new());
     }
@@ -1452,7 +1452,7 @@ fn read_and_format_attachments(attachments: &[String]) -> Result<String> {
 }
 
 // Helper function to determine if a file extension represents code
-fn is_code_file(extension: &str) -> bool {
+pub fn is_code_file(extension: &str) -> bool {
     matches!(extension.to_lowercase().as_str(),
         "rs" | "py" | "js" | "ts" | "java" | "cpp" | "c" | "h" | "hpp" |
         "go" | "rb" | "php" | "swift" | "kt" | "scala" | "sh" | "bash" |
@@ -2782,3 +2782,6 @@ async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provider:
         Ok((Some(all_tools), valid_server_names))
     }
 }
+// Include test module
+#[cfg(test)]
+mod tests;

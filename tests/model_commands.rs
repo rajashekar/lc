@@ -1,0 +1,630 @@
+//! Integration tests for models commands
+//! 
+//! This module contains comprehensive integration tests for all models-related
+//! CLI commands, testing the underlying functionality as the CLI would use it.
+
+mod common;
+
+use lc::unified_cache::UnifiedCache;
+use lc::model_metadata::{ModelMetadata, ModelType};
+
+#[cfg(test)]
+mod models_cache_tests {
+    use super::*;
+
+    #[test]
+    fn test_models_cache_directory_creation() {
+        // Test that cache directory path is correctly determined
+        let cache_dir = UnifiedCache::models_dir();
+        assert!(cache_dir.is_ok());
+        
+        let path = cache_dir.unwrap();
+        assert!(path.to_string_lossy().contains("lc"));
+        assert!(path.to_string_lossy().contains("models"));
+    }
+
+    #[test]
+    fn test_provider_cache_path() {
+        let cache_path = UnifiedCache::provider_cache_path("test-provider");
+        assert!(cache_path.is_ok());
+        
+        let path = cache_path.unwrap();
+        assert!(path.to_string_lossy().ends_with("test-provider.json"));
+    }
+
+    #[test]
+    fn test_cache_freshness_nonexistent() {
+        let is_fresh = UnifiedCache::is_cache_fresh("nonexistent-provider");
+        assert!(is_fresh.is_ok());
+        assert!(!is_fresh.unwrap()); // Non-existent cache is not fresh
+    }
+
+    #[test]
+    fn test_load_provider_models_empty() {
+        let models = UnifiedCache::load_provider_models("nonexistent-provider");
+        assert!(models.is_ok());
+        assert!(models.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_load_all_cached_models_empty() {
+        let models = UnifiedCache::load_all_cached_models();
+        assert!(models.is_ok());
+        // Should return empty vector when no cache exists
+    }
+}
+
+#[cfg(test)]
+mod models_metadata_tests {
+    use super::*;
+
+    #[test]
+    fn test_model_metadata_default() {
+        let metadata = ModelMetadata::default();
+        
+        assert_eq!(metadata.id, "");
+        assert_eq!(metadata.provider, "");
+        assert_eq!(metadata.display_name, None);
+        assert_eq!(metadata.description, None);
+        assert_eq!(metadata.context_length, None);
+        assert!(!metadata.supports_tools);
+        assert!(!metadata.supports_vision);
+        assert!(!metadata.supports_audio);
+        assert!(!metadata.supports_reasoning);
+        assert!(!metadata.supports_code);
+        assert!(!metadata.is_deprecated);
+        assert!(!metadata.is_fine_tunable);
+        assert!(matches!(metadata.model_type, ModelType::Chat));
+    }
+
+    #[test]
+    fn test_model_metadata_creation() {
+        let metadata = ModelMetadata {
+            id: "gpt-4".to_string(),
+            provider: "openai".to_string(),
+            display_name: Some("GPT-4".to_string()),
+            description: Some("Advanced language model".to_string()),
+            context_length: Some(8192),
+            supports_tools: true,
+            supports_vision: false,
+            supports_code: true,
+            input_price_per_m: Some(30.0),
+            output_price_per_m: Some(60.0),
+            ..Default::default()
+        };
+
+        assert_eq!(metadata.id, "gpt-4");
+        assert_eq!(metadata.provider, "openai");
+        assert_eq!(metadata.display_name, Some("GPT-4".to_string()));
+        assert_eq!(metadata.context_length, Some(8192));
+        assert!(metadata.supports_tools);
+        assert!(!metadata.supports_vision);
+        assert!(metadata.supports_code);
+        assert_eq!(metadata.input_price_per_m, Some(30.0));
+        assert_eq!(metadata.output_price_per_m, Some(60.0));
+    }
+
+    #[test]
+    fn test_model_type_variants() {
+        let chat_model = ModelType::Chat;
+        let completion_model = ModelType::Completion;
+        let embedding_model = ModelType::Embedding;
+        let image_model = ModelType::ImageGeneration;
+        let audio_model = ModelType::AudioGeneration;
+        let moderation_model = ModelType::Moderation;
+        let other_model = ModelType::Other("custom".to_string());
+
+        assert!(matches!(chat_model, ModelType::Chat));
+        assert!(matches!(completion_model, ModelType::Completion));
+        assert!(matches!(embedding_model, ModelType::Embedding));
+        assert!(matches!(image_model, ModelType::ImageGeneration));
+        assert!(matches!(audio_model, ModelType::AudioGeneration));
+        assert!(matches!(moderation_model, ModelType::Moderation));
+        assert!(matches!(other_model, ModelType::Other(_)));
+    }
+}
+
+#[cfg(test)]
+mod models_filtering_tests {
+    use super::*;
+
+    fn create_test_models() -> Vec<ModelMetadata> {
+        vec![
+            ModelMetadata {
+                id: "gpt-4".to_string(),
+                provider: "openai".to_string(),
+                display_name: Some("GPT-4".to_string()),
+                description: Some("Advanced language model".to_string()),
+                context_length: Some(8192),
+                supports_tools: true,
+                supports_vision: false,
+                supports_code: true,
+                input_price_per_m: Some(30.0),
+                output_price_per_m: Some(60.0),
+                ..Default::default()
+            },
+            ModelMetadata {
+                id: "gpt-4-vision".to_string(),
+                provider: "openai".to_string(),
+                display_name: Some("GPT-4 Vision".to_string()),
+                description: Some("GPT-4 with vision capabilities".to_string()),
+                context_length: Some(128000),
+                supports_tools: true,
+                supports_vision: true,
+                supports_code: true,
+                input_price_per_m: Some(10.0),
+                output_price_per_m: Some(30.0),
+                ..Default::default()
+            },
+            ModelMetadata {
+                id: "whisper-1".to_string(),
+                provider: "openai".to_string(),
+                display_name: Some("Whisper".to_string()),
+                description: Some("Speech recognition model".to_string()),
+                context_length: None,
+                supports_tools: false,
+                supports_vision: false,
+                supports_audio: true,
+                supports_code: false,
+                input_price_per_m: Some(6.0),
+                output_price_per_m: None,
+                model_type: ModelType::AudioGeneration,
+                ..Default::default()
+            },
+            ModelMetadata {
+                id: "o1-preview".to_string(),
+                provider: "openai".to_string(),
+                display_name: Some("o1-preview".to_string()),
+                description: Some("Reasoning model".to_string()),
+                context_length: Some(128000),
+                max_output_tokens: Some(32768),
+                supports_tools: false,
+                supports_vision: false,
+                supports_reasoning: true,
+                supports_code: true,
+                input_price_per_m: Some(15.0),
+                output_price_per_m: Some(60.0),
+                ..Default::default()
+            },
+            ModelMetadata {
+                id: "claude-3-sonnet".to_string(),
+                provider: "claude".to_string(),
+                display_name: Some("Claude 3 Sonnet".to_string()),
+                description: Some("Balanced AI assistant".to_string()),
+                context_length: Some(200000),
+                supports_tools: true,
+                supports_vision: true,
+                supports_code: true,
+                input_price_per_m: Some(3.0),
+                output_price_per_m: Some(15.0),
+                ..Default::default()
+            },
+        ]
+    }
+
+    #[test]
+    fn test_filter_by_query() {
+        let models = create_test_models();
+        
+        // Filter by "gpt" - should match gpt-4 and gpt-4-vision
+        let gpt_models: Vec<_> = models.iter()
+            .filter(|m| m.id.to_lowercase().contains("gpt") || 
+                       m.display_name.as_ref().map_or(false, |name| name.to_lowercase().contains("gpt")))
+            .collect();
+        
+        assert_eq!(gpt_models.len(), 2);
+        assert!(gpt_models.iter().any(|m| m.id == "gpt-4"));
+        assert!(gpt_models.iter().any(|m| m.id == "gpt-4-vision"));
+    }
+
+    #[test]
+    fn test_filter_by_tools_support() {
+        let models = create_test_models();
+        
+        let tools_models: Vec<_> = models.iter()
+            .filter(|m| m.supports_tools || m.supports_function_calling)
+            .collect();
+        
+        assert_eq!(tools_models.len(), 3); // gpt-4, gpt-4-vision, claude-3-sonnet
+        assert!(tools_models.iter().any(|m| m.id == "gpt-4"));
+        assert!(tools_models.iter().any(|m| m.id == "gpt-4-vision"));
+        assert!(tools_models.iter().any(|m| m.id == "claude-3-sonnet"));
+    }
+
+    #[test]
+    fn test_filter_by_vision_support() {
+        let models = create_test_models();
+        
+        let vision_models: Vec<_> = models.iter()
+            .filter(|m| m.supports_vision)
+            .collect();
+        
+        assert_eq!(vision_models.len(), 2); // gpt-4-vision, claude-3-sonnet
+        assert!(vision_models.iter().any(|m| m.id == "gpt-4-vision"));
+        assert!(vision_models.iter().any(|m| m.id == "claude-3-sonnet"));
+    }
+
+    #[test]
+    fn test_filter_by_audio_support() {
+        let models = create_test_models();
+        
+        let audio_models: Vec<_> = models.iter()
+            .filter(|m| m.supports_audio)
+            .collect();
+        
+        assert_eq!(audio_models.len(), 1); // whisper-1
+        assert_eq!(audio_models[0].id, "whisper-1");
+    }
+
+    #[test]
+    fn test_filter_by_reasoning_support() {
+        let models = create_test_models();
+        
+        let reasoning_models: Vec<_> = models.iter()
+            .filter(|m| m.supports_reasoning)
+            .collect();
+        
+        assert_eq!(reasoning_models.len(), 1); // o1-preview
+        assert_eq!(reasoning_models[0].id, "o1-preview");
+    }
+
+    #[test]
+    fn test_filter_by_code_support() {
+        let models = create_test_models();
+        
+        let code_models: Vec<_> = models.iter()
+            .filter(|m| m.supports_code)
+            .collect();
+        
+        assert_eq!(code_models.len(), 4); // All except whisper-1
+        assert!(!code_models.iter().any(|m| m.id == "whisper-1"));
+    }
+
+    #[test]
+    fn test_filter_by_context_length() {
+        let models = create_test_models();
+        
+        // Filter models with context length >= 100k
+        let large_context_models: Vec<_> = models.iter()
+            .filter(|m| m.context_length.map_or(false, |ctx| ctx >= 100000))
+            .collect();
+        
+        assert_eq!(large_context_models.len(), 3); // gpt-4-vision, o1-preview, claude-3-sonnet
+        assert!(large_context_models.iter().any(|m| m.id == "gpt-4-vision"));
+        assert!(large_context_models.iter().any(|m| m.id == "o1-preview"));
+        assert!(large_context_models.iter().any(|m| m.id == "claude-3-sonnet"));
+    }
+
+    #[test]
+    fn test_filter_by_input_price() {
+        let models = create_test_models();
+        
+        // Filter models with input price <= $5/M
+        let affordable_models: Vec<_> = models.iter()
+            .filter(|m| m.input_price_per_m.map_or(true, |price| price <= 5.0))
+            .collect();
+        
+        assert_eq!(affordable_models.len(), 1); // claude-3-sonnet ($3/M)
+        assert_eq!(affordable_models[0].id, "claude-3-sonnet");
+    }
+
+    #[test]
+    fn test_filter_by_output_price() {
+        let models = create_test_models();
+        
+        // Filter models with output price <= $20/M
+        let affordable_output_models: Vec<_> = models.iter()
+            .filter(|m| m.output_price_per_m.map_or(true, |price| price <= 20.0))
+            .collect();
+        
+        assert_eq!(affordable_output_models.len(), 2); // whisper-1 (None), claude-3-sonnet ($15/M)
+        assert!(affordable_output_models.iter().any(|m| m.id == "whisper-1"));
+        assert!(affordable_output_models.iter().any(|m| m.id == "claude-3-sonnet"));
+    }
+
+    #[test]
+    fn test_filter_by_provider() {
+        let models = create_test_models();
+        
+        let openai_models: Vec<_> = models.iter()
+            .filter(|m| m.provider == "openai")
+            .collect();
+        
+        assert_eq!(openai_models.len(), 4);
+        
+        let claude_models: Vec<_> = models.iter()
+            .filter(|m| m.provider == "claude")
+            .collect();
+        
+        assert_eq!(claude_models.len(), 1);
+        assert_eq!(claude_models[0].id, "claude-3-sonnet");
+    }
+
+    #[test]
+    fn test_combined_filters() {
+        let models = create_test_models();
+        
+        // Filter for vision + tools + context > 100k + input price < 5.0
+        let filtered_models: Vec<_> = models.iter()
+            .filter(|m| {
+                m.supports_vision &&
+                (m.supports_tools || m.supports_function_calling) &&
+                m.context_length.map_or(false, |ctx| ctx > 100000) &&
+                m.input_price_per_m.map_or(false, |price| price < 5.0)
+            })
+            .collect();
+        
+        assert_eq!(filtered_models.len(), 1); // claude-3-sonnet
+        assert_eq!(filtered_models[0].id, "claude-3-sonnet");
+    }
+
+    #[test]
+    fn test_no_matching_filters() {
+        let models = create_test_models();
+        
+        // Filter for impossible combination: audio + vision + reasoning
+        let impossible_models: Vec<_> = models.iter()
+            .filter(|m| m.supports_audio && m.supports_vision && m.supports_reasoning)
+            .collect();
+        
+        assert_eq!(impossible_models.len(), 0);
+    }
+}
+
+#[cfg(test)]
+mod models_sorting_tests {
+    use super::*;
+
+    #[test]
+    fn test_models_sorting_by_provider_and_name() {
+        let mut models = vec![
+            ModelMetadata {
+                id: "zebra-model".to_string(),
+                provider: "zebra".to_string(),
+                ..Default::default()
+            },
+            ModelMetadata {
+                id: "alpha-model".to_string(),
+                provider: "alpha".to_string(),
+                ..Default::default()
+            },
+            ModelMetadata {
+                id: "beta-model".to_string(),
+                provider: "alpha".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        // Sort by provider, then by model name
+        models.sort_by(|a, b| {
+            a.provider.cmp(&b.provider).then(a.id.cmp(&b.id))
+        });
+
+        assert_eq!(models[0].provider, "alpha");
+        assert_eq!(models[0].id, "alpha-model");
+        assert_eq!(models[1].provider, "alpha");
+        assert_eq!(models[1].id, "beta-model");
+        assert_eq!(models[2].provider, "zebra");
+        assert_eq!(models[2].id, "zebra-model");
+    }
+}
+
+#[cfg(test)]
+mod models_display_tests {
+    use super::*;
+
+    #[test]
+    fn test_model_display_name_fallback() {
+        let model_with_display = ModelMetadata {
+            id: "gpt-4".to_string(),
+            display_name: Some("GPT-4 Turbo".to_string()),
+            ..Default::default()
+        };
+
+        let model_without_display = ModelMetadata {
+            id: "gpt-4".to_string(),
+            display_name: None,
+            ..Default::default()
+        };
+
+        // With display name
+        let display_name = model_with_display.display_name.as_ref()
+            .unwrap_or(&model_with_display.id);
+        assert_eq!(display_name, "GPT-4 Turbo");
+
+        // Without display name (fallback to ID)
+        let display_name = model_without_display.display_name.as_ref()
+            .unwrap_or(&model_without_display.id);
+        assert_eq!(display_name, "gpt-4");
+    }
+
+    #[test]
+    fn test_model_capability_indicators() {
+        let model = ModelMetadata {
+            id: "test-model".to_string(),
+            supports_tools: true,
+            supports_vision: true,
+            supports_audio: false,
+            supports_reasoning: true,
+            supports_code: true,
+            ..Default::default()
+        };
+
+        // Test capability detection
+        assert!(model.supports_tools);
+        assert!(model.supports_vision);
+        assert!(!model.supports_audio);
+        assert!(model.supports_reasoning);
+        assert!(model.supports_code);
+
+        // Count capabilities
+        let capability_count = [
+            model.supports_tools,
+            model.supports_vision,
+            model.supports_audio,
+            model.supports_reasoning,
+            model.supports_code,
+        ].iter().filter(|&&x| x).count();
+
+        assert_eq!(capability_count, 4);
+    }
+
+    #[test]
+    fn test_model_context_info_formatting() {
+        let model_with_context = ModelMetadata {
+            id: "test-model".to_string(),
+            context_length: Some(128000),
+            max_output_tokens: Some(4096),
+            ..Default::default()
+        };
+
+        let model_without_context = ModelMetadata {
+            id: "test-model".to_string(),
+            context_length: None,
+            max_output_tokens: None,
+            ..Default::default()
+        };
+
+        // Test context length formatting
+        if let Some(ctx) = model_with_context.context_length {
+            let formatted = if ctx >= 1000 {
+                format!("{}k ctx", ctx / 1000)
+            } else {
+                format!("{} ctx", ctx)
+            };
+            assert_eq!(formatted, "128k ctx");
+        }
+
+        // Test output tokens formatting
+        if let Some(max_out) = model_with_context.max_output_tokens {
+            let formatted = if max_out >= 1000 {
+                format!("{}k out", max_out / 1000)
+            } else {
+                format!("{} out", max_out)
+            };
+            assert_eq!(formatted, "4k out");
+        }
+
+        // Test None values
+        assert!(model_without_context.context_length.is_none());
+        assert!(model_without_context.max_output_tokens.is_none());
+    }
+
+    #[test]
+    fn test_model_pricing_info_formatting() {
+        let model_with_pricing = ModelMetadata {
+            id: "test-model".to_string(),
+            input_price_per_m: Some(3.0),
+            output_price_per_m: Some(15.0),
+            ..Default::default()
+        };
+
+        let model_without_pricing = ModelMetadata {
+            id: "test-model".to_string(),
+            input_price_per_m: None,
+            output_price_per_m: None,
+            ..Default::default()
+        };
+
+        // Test pricing formatting
+        if let Some(input_price) = model_with_pricing.input_price_per_m {
+            let formatted = format!("${:.2}/M in", input_price);
+            assert_eq!(formatted, "$3.00/M in");
+        }
+
+        if let Some(output_price) = model_with_pricing.output_price_per_m {
+            let formatted = format!("${:.2}/M out", output_price);
+            assert_eq!(formatted, "$15.00/M out");
+        }
+
+        // Test None values
+        assert!(model_without_pricing.input_price_per_m.is_none());
+        assert!(model_without_pricing.output_price_per_m.is_none());
+    }
+}
+
+#[cfg(test)]
+mod models_validation_tests {
+
+    #[test]
+    fn test_token_count_parsing() {
+        // Test parsing different token count formats
+        fn parse_token_count(input: &str) -> Result<u32, String> {
+            let input = input.to_lowercase();
+            if let Some(num_str) = input.strip_suffix('k') {
+                let num: f32 = num_str.parse()
+                    .map_err(|_| format!("Invalid token count format: '{}'", input))?;
+                Ok((num * 1000.0) as u32)
+            } else if let Some(num_str) = input.strip_suffix('m') {
+                let num: f32 = num_str.parse()
+                    .map_err(|_| format!("Invalid token count format: '{}'", input))?;
+                Ok((num * 1000000.0) as u32)
+            } else {
+                input.parse()
+                    .map_err(|_| format!("Invalid token count format: '{}'", input))
+            }
+        }
+
+        // Valid formats
+        assert_eq!(parse_token_count("1000").unwrap(), 1000);
+        assert_eq!(parse_token_count("4k").unwrap(), 4000);
+        assert_eq!(parse_token_count("1.5k").unwrap(), 1500);
+        assert_eq!(parse_token_count("2m").unwrap(), 2000000);
+        assert_eq!(parse_token_count("0.5m").unwrap(), 500000);
+
+        // Invalid formats
+        assert!(parse_token_count("invalid").is_err());
+        assert!(parse_token_count("1.5.5k").is_err());
+        assert!(parse_token_count("k").is_err());
+        assert!(parse_token_count("m").is_err());
+    }
+
+    #[test]
+    fn test_price_validation() {
+        // Test price validation
+        fn validate_price(price: f64) -> bool {
+            price >= 0.0 && price.is_finite()
+        }
+
+        assert!(validate_price(0.0));
+        assert!(validate_price(1.5));
+        assert!(validate_price(100.0));
+        assert!(!validate_price(-1.0));
+        assert!(!validate_price(f64::INFINITY));
+        assert!(!validate_price(f64::NAN));
+    }
+
+    #[test]
+    fn test_model_id_validation() {
+        // Test model ID validation
+        fn validate_model_id(id: &str) -> bool {
+            !id.is_empty() && !id.trim().is_empty()
+        }
+
+        assert!(validate_model_id("gpt-4"));
+        assert!(validate_model_id("claude-3-sonnet"));
+        assert!(validate_model_id("model_with_underscores"));
+        assert!(!validate_model_id(""));
+        assert!(!validate_model_id("   "));
+        assert!(!validate_model_id("\t\n"));
+    }
+
+    #[test]
+    fn test_provider_name_validation() {
+        // Test provider name validation
+        fn validate_provider_name(name: &str) -> bool {
+            !name.is_empty() && 
+            !name.trim().is_empty() && 
+            name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        }
+
+        assert!(validate_provider_name("openai"));
+        assert!(validate_provider_name("anthropic"));
+        assert!(validate_provider_name("provider-name"));
+        assert!(validate_provider_name("provider_name"));
+        assert!(!validate_provider_name(""));
+        assert!(!validate_provider_name("   "));
+        assert!(!validate_provider_name("provider with spaces"));
+        assert!(!validate_provider_name("provider@special"));
+    }
+}
