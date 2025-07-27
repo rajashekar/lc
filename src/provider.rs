@@ -246,21 +246,27 @@ impl OpenAIClient {
         // Try to parse as standard OpenAI format first (with "choices" array)
         if let Ok(chat_response) = serde_json::from_str::<ChatResponse>(&response_text) {
             if let Some(choice) = chat_response.choices.first() {
-                // Handle tool calls
+                // Handle tool calls - check if tool_calls exists AND is not empty
                 if let Some(tool_calls) = &choice.message.tool_calls {
-                    let mut response = String::new();
-                    response.push_str("🔧 **Tool Calls Made:**\n\n");
-                    
-                    for tool_call in tool_calls {
-                        response.push_str(&format!("**Function:** `{}`\n", tool_call.function.name));
-                        response.push_str(&format!("**Arguments:** `{}`\n\n", tool_call.function.arguments));
+                    if !tool_calls.is_empty() {
+                        let mut response = String::new();
+                        response.push_str("🔧 **Tool Calls Made:**\n\n");
                         
-                        // TODO: Actually execute the MCP function call here
-                        response.push_str("*Note: Tool execution not yet implemented - this shows the LLM successfully recognized and attempted to use the MCP tools.*\n\n");
+                        for tool_call in tool_calls {
+                            response.push_str(&format!("**Function:** `{}`\n", tool_call.function.name));
+                            response.push_str(&format!("**Arguments:** `{}`\n\n", tool_call.function.arguments));
+                            
+                            // TODO: Actually execute the MCP function call here
+                            response.push_str("*Note: Tool execution not yet implemented - this shows the LLM successfully recognized and attempted to use the MCP tools.*\n\n");
+                        }
+                        
+                        return Ok(response);
                     }
-                    
-                    return Ok(response);
-                } else if let Some(content) = &choice.message.content {
+                    // If tool_calls is empty array, fall through to check content
+                }
+                
+                // Handle content (either no tool_calls or empty tool_calls array)
+                if let Some(content) = &choice.message.content {
                     return Ok(content.clone());
                 } else {
                     anyhow::bail!("No content or tool calls in response");
