@@ -6,47 +6,6 @@ use crate::token_utils::TokenCounter;
 use crate::model_metadata::MetadataExtractor;
 use chrono::{DateTime, Utc};
 
-pub async fn send_chat_request(
-    client: &OpenAIClient,
-    model: &str,
-    prompt: &str,
-    history: &[ChatEntry],
-    system_prompt: Option<&str>,
-    max_tokens: Option<u32>,
-    temperature: Option<f32>,
-    tools: Option<Vec<crate::provider::Tool>>,
-) -> Result<String> {
-    let mut messages = Vec::new();
-    
-    // Add system prompt if provided
-    if let Some(sys_prompt) = system_prompt {
-        messages.push(Message {
-            role: "system".to_string(),
-            content: Some(sys_prompt.to_string()),
-            tool_calls: None,
-            tool_call_id: None,
-        });
-    }
-    
-    // Add conversation history
-    for entry in history {
-        messages.push(Message::user(entry.question.clone()));
-        messages.push(Message::assistant(entry.response.clone()));
-    }
-    
-    // Add current prompt
-    messages.push(Message::user(prompt.to_string()));
-    
-    let request = ChatRequest {
-        model: model.to_string(),
-        messages,
-        max_tokens: max_tokens.or(Some(1024)),
-        temperature: temperature.or(Some(0.7)),
-        tools,
-    };
-    
-    client.chat(&request).await
-}
 
 pub async fn send_chat_request_with_validation(
     client: &OpenAIClient,
@@ -299,7 +258,7 @@ pub async fn send_chat_request_with_tool_execution(
     system_prompt: Option<&str>,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
-    provider_name: &str,
+    _provider_name: &str,
     tools: Option<Vec<crate::provider::Tool>>,
     mcp_server_names: &[&str],
 ) -> Result<(String, Option<i32>, Option<i32>)> {

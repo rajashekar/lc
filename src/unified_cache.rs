@@ -259,30 +259,4 @@ impl UnifiedCache {
         Ok(())
     }
 
-    /// Get cache info for a specific provider
-    pub fn get_provider_cache_info(provider: &str) -> Result<String> {
-        let cache_path = Self::provider_cache_path(provider)?;
-        
-        if !cache_path.exists() {
-            return Ok(format!("No cache file found for provider '{}'", provider));
-        }
-        
-        let content = fs::read_to_string(&cache_path)?;
-        let cached_data: CachedProviderData = serde_json::from_str(&content)?;
-        
-        let last_updated = if cached_data.last_updated > 0 {
-            let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(cached_data.last_updated);
-            format!("{:?}", datetime)
-        } else {
-            "Never".to_string()
-        };
-        
-        let is_fresh = Self::is_cache_fresh(provider)?;
-        let status = if is_fresh { "Fresh" } else { "Expired (>24h old)" };
-        
-        Ok(format!(
-            "Provider: {}\nStatus: {}\nModels: {}\nLast Updated: {}\nCache File: {}",
-            provider, status, cached_data.models.len(), last_updated, cache_path.display()
-        ))
-    }
 }

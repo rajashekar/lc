@@ -25,10 +25,6 @@ pub fn set_debug_mode(enabled: bool) {
     DEBUG_MODE.store(enabled, Ordering::Relaxed);
 }
 
-// Check if debug mode is enabled
-pub fn is_debug_mode() -> bool {
-    DEBUG_MODE.load(Ordering::Relaxed)
-}
 
 #[derive(Parser)]
 #[command(name = "lc")]
@@ -1248,7 +1244,7 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                             // Find the specific model
                             if let Some(model_metadata) = models.iter().find(|m| m.id == *model) {
                                 // Display model with metadata
-                                let mut model_info = vec![model.clone()];
+                                let _model_info = vec![model.clone()];
                                 
                                 // Build capability indicators
                                 let mut capabilities = Vec::new();
@@ -1843,8 +1839,6 @@ pub async fn handle_models_command(
     input_price: Option<f64>,
     output_price: Option<f64>,
 ) -> Result<()> {
-    use crate::models_cache::ModelsCache;
-    use crate::model_metadata::{MetadataExtractor, ModelMetadata};
     use colored::Colorize;
     
     match command {
@@ -2124,10 +2118,7 @@ pub async fn handle_proxy_command(
 
 // Dump models data function
 async fn dump_models_data() -> Result<()> {
-    use crate::{config::Config, provider::OpenAIClient, chat};
-    use reqwest::Client;
-    use serde_json::Value;
-    use std::time::Duration;
+    use crate::{config::Config, chat};
     
     println!("{} Dumping /models for each provider...", "🔍".blue());
     
@@ -2194,51 +2185,6 @@ async fn dump_models_data() -> Result<()> {
     Ok(())
 }
 
-// Enhanced models functionality
-async fn load_enhanced_models() -> Result<Vec<crate::model_metadata::ModelMetadata>> {
-    use crate::model_metadata::MetadataExtractor;
-    use std::fs;
-    
-    let mut all_models = Vec::new();
-    
-    // Check if models directory exists
-    if !std::path::Path::new("models").exists() {
-        println!("{} Models metadata not found. Run 'lc models dump' first to collect model data.", "⚠".yellow());
-        return Ok(all_models);
-    }
-    
-    // Read all JSON files from models directory
-    let entries = fs::read_dir("models")?;
-    
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        
-        if let Some(extension) = path.extension() {
-            if extension == "json" {
-                if let Some(provider_name) = path.file_stem().and_then(|s| s.to_str()) {
-                    match fs::read_to_string(&path) {
-                        Ok(json_content) => {
-                            match MetadataExtractor::extract_from_provider(provider_name, &json_content) {
-                                Ok(mut models) => {
-                                    all_models.append(&mut models);
-                                }
-                                Err(e) => {
-                                    eprintln!("Warning: Failed to extract metadata from {}: {}", provider_name, e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Warning: Failed to read {}: {}", path.display(), e);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    Ok(all_models)
-}
 
 fn apply_model_filters(
     models: Vec<crate::model_metadata::ModelMetadata>,
@@ -2416,7 +2362,7 @@ fn display_enhanced_models(models: &[crate::model_metadata::ModelMetadata], quer
     Ok(())
 }
 
-pub async fn fetch_raw_models_response(client: &crate::provider::OpenAIClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
+pub async fn fetch_raw_models_response(_client: &crate::provider::OpenAIClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
     use reqwest::Client;
     use serde_json::Value;
     use std::time::Duration;

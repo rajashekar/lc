@@ -6,7 +6,6 @@ use crate::config::Config;
 
 #[derive(Debug, Clone)]
 pub struct ChatEntry {
-    pub id: i64,
     pub chat_id: String,
     pub model: String,
     pub question: String,
@@ -88,15 +87,6 @@ impl Database {
         Ok(())
     }
     
-    pub fn save_chat_entry(
-        &self,
-        chat_id: &str,
-        model: &str,
-        question: &str,
-        response: &str,
-    ) -> Result<()> {
-        self.save_chat_entry_with_tokens(chat_id, model, question, response, None, None)
-    }
     
     pub fn save_chat_entry_with_tokens(
         &self,
@@ -125,7 +115,6 @@ impl Database {
         
         let rows = stmt.query_map([chat_id], |row| {
             Ok(ChatEntry {
-                id: row.get(0)?,
                 chat_id: row.get(1)?,
                 model: row.get(2)?,
                 question: row.get(3)?,
@@ -144,33 +133,6 @@ impl Database {
         Ok(entries)
     }
     
-    pub fn get_last_response(&self) -> Result<Option<ChatEntry>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, chat_id, model, question, response, timestamp, input_tokens, output_tokens
-             FROM chat_logs
-             ORDER BY timestamp DESC
-             LIMIT 1"
-        )?;
-        
-        let mut rows = stmt.query_map([], |row| {
-            Ok(ChatEntry {
-                id: row.get(0)?,
-                chat_id: row.get(1)?,
-                model: row.get(2)?,
-                question: row.get(3)?,
-                response: row.get(4)?,
-                timestamp: row.get(5)?,
-                input_tokens: row.get(6).ok(),
-                output_tokens: row.get(7).ok(),
-            })
-        })?;
-        
-        if let Some(row) = rows.next() {
-            Ok(Some(row?))
-        } else {
-            Ok(None)
-        }
-    }
     
     pub fn get_all_logs(&self) -> Result<Vec<ChatEntry>> {
         let mut stmt = self.conn.prepare(
@@ -181,7 +143,6 @@ impl Database {
         
         let rows = stmt.query_map([], |row| {
             Ok(ChatEntry {
-                id: row.get(0)?,
                 chat_id: row.get(1)?,
                 model: row.get(2)?,
                 question: row.get(3)?,

@@ -5,20 +5,11 @@ pub enum RllmError {
     #[error("Configuration error: {0}")]
     Config(String),
     
-    #[error("Provider error: {0}")]
-    Provider(String),
-    
     #[error("Database error: {0}")]
     Database(String),
     
     #[error("Network error: {0}")]
     Network(String),
-    
-    #[error("Authentication error: {0}")]
-    Auth(String),
-    
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
 }
 
 impl From<rusqlite::Error> for RllmError {

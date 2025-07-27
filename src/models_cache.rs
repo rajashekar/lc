@@ -136,54 +136,6 @@ impl ModelsCache {
         all_models
     }
 
-    pub fn search_models(&self, query: &str) -> Vec<CachedModel> {
-        let query_lower = query.to_lowercase();
-        let mut matching_models = Vec::new();
-        
-        for (provider, models) in &self.models {
-            for model in models {
-                if model.to_lowercase().contains(&query_lower) {
-                    matching_models.push(CachedModel {
-                        provider: provider.clone(),
-                        model: model.clone(),
-                    });
-                }
-            }
-        }
-        
-        // Sort by provider, then by model
-        matching_models.sort_by(|a, b| {
-            a.provider.cmp(&b.provider).then(a.model.cmp(&b.model))
-        });
-        
-        matching_models
-    }
-
-    pub fn get_cache_info(&self) -> Result<String> {
-        let cache_path = Self::cache_file_path()?;
-        let total_models: usize = self.models.values().map(|v| v.len()).sum();
-        let provider_count = self.models.len();
-        
-        let last_updated = if self.last_updated > 0 {
-            let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(self.last_updated);
-            format!("{:?}", datetime)
-        } else {
-            "Never".to_string()
-        };
-        
-        let status = if self.is_expired() {
-            "Expired (>24h old)"
-        } else if self.models.is_empty() {
-            "Empty"
-        } else {
-            "Fresh"
-        };
-        
-        Ok(format!(
-            "Cache Status: {}\nProviders: {}\nTotal Models: {}\nLast Updated: {}\nCache File: {}",
-            status, provider_count, total_models, last_updated, cache_path.display()
-        ))
-    }
 
     fn cache_file_path() -> Result<PathBuf> {
         let config_dir = dirs::config_dir()

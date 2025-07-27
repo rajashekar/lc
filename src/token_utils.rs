@@ -143,38 +143,3 @@ fn map_model_to_tiktoken(model_name: &str) -> String {
         "gpt-4".to_string()
     }
 }
-
-/// Get byte size of text (for size-based limits)
-pub fn get_text_size_bytes(text: &str) -> usize {
-    text.as_bytes().len()
-}
-
-/// Check if text exceeds byte size limit
-pub fn exceeds_byte_limit(text: &str, limit_bytes: usize) -> bool {
-    get_text_size_bytes(text) > limit_bytes
-}
-
-/// Truncate text to fit within byte limit
-pub fn truncate_to_byte_limit(text: &str, limit_bytes: usize) -> String {
-    if !exceeds_byte_limit(text, limit_bytes) {
-        return text.to_string();
-    }
-    
-    // Truncate by bytes, being careful not to split UTF-8 characters
-    let bytes = text.as_bytes();
-    if bytes.len() <= limit_bytes {
-        return text.to_string();
-    }
-    
-    // Find a safe truncation point that doesn't split UTF-8 characters
-    let mut truncate_at = limit_bytes;
-    while truncate_at > 0 && !text.is_char_boundary(truncate_at) {
-        truncate_at -= 1;
-    }
-    
-    if truncate_at == 0 {
-        return String::new();
-    }
-    
-    format!("{}...[truncated]", &text[..truncate_at])
-}

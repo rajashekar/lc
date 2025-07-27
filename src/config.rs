@@ -135,24 +135,6 @@ impl Config {
             .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found", name))
     }
     
-    pub fn find_provider_for_model(&self, _model: &str) -> Result<String> {
-        // For now, use the default provider or first available
-        // In a more sophisticated implementation, we could maintain
-        // a mapping of models to providers
-        
-        if let Some(default) = &self.default_provider {
-            if self.providers.contains_key(default) {
-                return Ok(default.clone());
-            }
-        }
-        
-        // Return first provider if no default
-        if let Some((name, _)) = self.providers.iter().next() {
-            Ok(name.clone())
-        } else {
-            anyhow::bail!("No providers configured. Add one with 'lc providers add'");
-        }
-    }
     
     pub fn add_header(&mut self, provider: String, header_name: String, header_value: String) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
@@ -315,20 +297,4 @@ impl Config {
         self.providers.get(provider)?.cached_token.as_ref()
     }
     
-    pub fn is_token_expired(&self, provider: &str) -> bool {
-        if let Some(cached_token) = self.get_cached_token(provider) {
-            Utc::now() >= cached_token.expires_at
-        } else {
-            true // No token means expired
-        }
-    }
-    
-    pub fn clear_cached_token(&mut self, provider: String) -> Result<()> {
-        if let Some(provider_config) = self.providers.get_mut(&provider) {
-            provider_config.cached_token = None;
-            Ok(())
-        } else {
-            anyhow::bail!("Provider '{}' not found", provider);
-        }
-    }
 }

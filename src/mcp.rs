@@ -5,8 +5,6 @@ use std::fs;
 use std::path::PathBuf;
 #[cfg(unix)]
 use std::os::unix::fs::{FileTypeExt};
-#[cfg(unix)]
-use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use serde_json::{json, Value};
 
@@ -951,7 +949,7 @@ impl McpManager {
         let log_path = Self::get_log_file_path(name)?;
         
         // Get the current size of the log file to know where to start reading from
-        let initial_size = match std::fs::metadata(&log_path) {
+        let _initial_size = match std::fs::metadata(&log_path) {
             Ok(metadata) => metadata.len(),
             Err(_) => 0,
         };

@@ -46,7 +46,6 @@ pub struct ProxyChatRequest {
     pub messages: Vec<crate::provider::Message>,
     pub max_tokens: Option<u32>,
     pub temperature: Option<f32>,
-    pub stream: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -152,7 +151,7 @@ async fn list_models(
         .as_secs();
     
     // Use models cache for fast response
-    let mut cache = ModelsCache::load().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let cache = ModelsCache::load().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
     // Check if cache needs refresh and refresh in background if needed
     if cache.needs_refresh() {

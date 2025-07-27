@@ -199,13 +199,6 @@ pub struct OpenAIClient {
 }
 
 impl OpenAIClient {
-    pub fn new(base_url: String, api_key: String) -> Self {
-        Self::new_with_paths(base_url, api_key, "/models".to_string(), "/chat/completions".to_string())
-    }
-    
-    pub fn new_with_paths(base_url: String, api_key: String, models_path: String, chat_path: String) -> Self {
-        Self::new_with_headers(base_url, api_key, models_path, chat_path, std::collections::HashMap::new())
-    }
     
     pub fn new_with_headers(base_url: String, api_key: String, models_path: String, chat_path: String, custom_headers: std::collections::HashMap<String, String>) -> Self {
         let client = Client::builder()
