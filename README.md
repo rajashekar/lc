@@ -164,6 +164,91 @@ lc embed -m text-embedding-3-small -v database_name "Your text here"
 # Use different providers for embeddings
 lc embed -p openai -m text-embedding-3-large -v docs "Technical documentation"
 lc embed -p cohere -m embed-english-v3.0 -v knowledge "Knowledge base entry"
+
+# Embed files with intelligent chunking
+lc embed -m text-embedding-3-small -v docs -f README.md
+lc embed -m text-embedding-3-small -v docs -f "*.md"
+lc embed -m text-embedding-3-small -v docs -f "/path/to/docs/*.txt"
+```
+
+### File Embedding
+
+The system supports embedding files directly with intelligent text chunking and metadata storage:
+
+```bash
+# Embed a single file
+lc embed -m text-embedding-3-small -v knowledge -f document.txt
+
+# Embed multiple files using glob patterns
+lc embed -m text-embedding-3-small -v knowledge -f "*.md"
+lc embed -m text-embedding-3-small -v knowledge -f "docs/*.txt"
+lc embed -m text-embedding-3-small -v knowledge -f "/path/to/files/*.py"
+
+# Embed multiple specific files
+lc embed -m text-embedding-3-small -v knowledge -f file1.txt,file2.md,file3.py
+
+# Combine with provider specification
+lc embed -p openai -m text-embedding-3-large -v docs -f "documentation/*.md"
+```
+
+#### File Processing Features
+
+- **🧠 Intelligent Chunking** - Automatically splits large files into 1200-character chunks with 200-character overlap
+- **📄 Smart Boundaries** - Breaks at sentence, paragraph, or line boundaries when possible
+- **🔍 Binary Detection** - Automatically filters out binary files, processing only text content
+- **📁 Glob Pattern Support** - Full glob syntax support for flexible file selection
+- **📊 File Metadata** - Stores file path, chunk index, and total chunks for each embedding
+- **🎯 Progress Tracking** - Shows processing progress for each file and chunk
+
+#### Supported File Types
+
+The system automatically detects and processes text files including:
+
+**Text Files:** `.txt`, `.md`, `.markdown`, `.rst`, `.org`, `.tex`, `.rtf`
+
+**Code Files:** `.rs`, `.py`, `.js`, `.ts`, `.java`, `.cpp`, `.c`, `.h`, `.hpp`, `.go`, `.rb`, `.php`, `.swift`, `.kt`, `.scala`, `.sh`, `.bash`, `.zsh`, `.fish`, `.ps1`, `.bat`, `.cmd`
+
+**Web Files:** `.html`, `.css`, `.scss`, `.sass`, `.less`, `.xml`, `.json`, `.yaml`, `.yml`
+
+**Config Files:** `.toml`, `.ini`, `.cfg`, `.conf`, `.sql`, `.dockerfile`, `.makefile`, `.cmake`, `.gradle`
+
+**Other:** `.log`, `.out`, `.err`, `.r`, `.m`, `.mm`, `.pl`, `.pm`, `.lua`, `.vim`
+
+Binary files (images, executables, archives, etc.) are automatically filtered out.
+
+#### File Embedding Examples
+
+```bash
+# Embed documentation files
+lc embed -m text-embedding-3-small -v docs -f "docs/*.md"
+
+# Embed source code for a project
+lc embed -m text-embedding-3-small -v codebase -f "src/**/*.rs"
+
+# Embed configuration files
+lc embed -m text-embedding-3-small -v configs -f "*.toml,*.yaml,*.json"
+
+# Embed all text files in a directory
+lc embed -m text-embedding-3-small -v knowledge -f "/path/to/data/*"
+```
+
+#### Viewing File Metadata
+
+When you view vector database information, file metadata is displayed:
+
+```bash
+lc vectors info docs
+# Output shows:
+# 📝 Recent entries:
+#   1. This is the content of the file... [README.md:1/3] (2025-01-28 01:21)
+#   2. More content from the same file... [README.md:2/3] (2025-01-28 01:21)
+#   3. Final chunk of the file...        [README.md:3/3] (2025-01-28 01:21)
+```
+
+The format `[filename:chunk/total]` shows:
+- **filename** - Original file path
+- **chunk** - Current chunk number (1-based)
+- **total** - Total number of chunks for this file
 ```
 
 ### Vector Database Management
@@ -537,6 +622,9 @@ lc models embed                                            # List embedding mode
 lc embed -m <model> "text"                                 # Generate embeddings (alias: lc e)
 lc embed -m <model> -v <database> "text"                   # Store embeddings in vector database
 lc embed -p <provider> -m <model> -v <database> "text"     # Specify provider for embeddings
+lc embed -m <model> -v <database> -f <file>                # Embed single file with chunking
+lc embed -m <model> -v <database> -f "*.ext"               # Embed files using glob patterns
+lc embed -m <model> -v <database> -f "file1,file2"         # Embed multiple specific files
 ```
 
 ### Vector Database Commands

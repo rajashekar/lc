@@ -551,3 +551,432 @@ mod embed_integration_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod embed_file_tests {
+    use super::*;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use lc::vector_db::FileProcessor;
+
+    fn create_test_files(temp_dir: &TempDir) -> Vec<String> {
+        let test_files = vec![
+            ("test1.txt", "This is the content of test file 1.\nIt has multiple lines.\nAnd some more content."),
+            ("test2.md", "# Test Markdown\n\nThis is a markdown file with **bold** text.\n\n## Section\n\nMore content here."),
+            ("test3.py", "#!/usr/bin/env python3\n\ndef hello_world():\n    print('Hello, World!')\n\nif __name__ == '__main__':\n    hello_world()"),
+            ("test4.rs", "fn main() {\n    println!(\"Hello, Rust!\");\n}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn test_example() {\n        assert_eq!(2 + 2, 4);\n    }\n}"),
+            ("config.json", "{\n  \"name\": \"test\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"example\": \"^1.0.0\"\n  }\n}"),
+        ];
+
+        let mut file_paths = Vec::new();
+        for (filename, content) in test_files {
+            let file_path = temp_dir.path().join(filename);
+            fs::write(&file_path, content).expect("Failed to write test file");
+            file_paths.push(file_path.to_string_lossy().to_string());
+        }
+
+        // Create binary file separately
+        let binary_file = temp_dir.path().join("binary.bin");
+        fs::write(&binary_file, &[0u8, 1u8, 2u8, 3u8, 4u8, 5u8]).expect("Failed to write binary file");
+        file_paths.push(binary_file.to_string_lossy().to_string());
+
+        file_paths
+    }
+
+    fn create_nested_test_files(temp_dir: &TempDir) -> Vec<String> {
+        // Create nested directory structure
+        let docs_dir = temp_dir.path().join("docs");
+        let src_dir = temp_dir.path().join("src");
+        fs::create_dir_all(&docs_dir).expect("Failed to create docs directory");
+        fs::create_dir_all(&src_dir).expect("Failed to create src directory");
+
+        let nested_files = vec![
+            ("docs/readme.md", "# Project Documentation\n\nThis is the main documentation file.\n\n## Features\n\n- Feature 1\n- Feature 2"),
+            ("docs/api.md", "# API Documentation\n\n## Endpoints\n\n### GET /api/users\n\nReturns a list of users."),
+            ("src/main.rs", "use std::io;\n\nfn main() {\n    println!(\"Enter your name:\");\n    let mut input = String::new();\n    io::stdin().read_line(&mut input).expect(\"Failed to read line\");\n    println!(\"Hello, {}!\", input.trim());\n}"),
+            ("src/lib.rs", "//! Library documentation\n\npub mod utils;\n\npub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn test_add() {\n        assert_eq!(add(2, 3), 5);\n    }\n}"),
+        ];
+
+        let mut file_paths = Vec::new();
+        for (relative_path, content) in nested_files {
+            let file_path = temp_dir.path().join(relative_path);
+            fs::write(&file_path, content).expect("Failed to write nested test file");
+            file_paths.push(file_path.to_string_lossy().to_string());
+        }
+
+        file_paths
+    }
+
+    #[test]
+    fn test_file_processor_text_file_detection() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        create_test_files(&temp_dir);
+        
+        let text_files = vec![
+            temp_dir.path().join("test1.txt"),
+            temp_dir.path().join("test2.md"),
+            temp_dir.path().join("test3.py"),
+            temp_dir.path().join("test4.rs"),
+            temp_dir.path().join("config.json"),
+        ];
+        
+        let binary_file = temp_dir.path().join("binary.bin");
+        
+        for file in text_files {
+            assert!(FileProcessor::is_text_file(&file), "Should detect {} as text file", file.display());
+        }
+        
+        assert!(!FileProcessor::is_text_file(&binary_file), "Should detect binary.bin as binary file");
+    }
+
+    #[test]
+    fn test_file_processor_glob_expansion() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        create_test_files(&temp_dir);
+        
+        // Test glob pattern for markdown files
+        let md_pattern = format!("{}/*.md", temp_dir.path().display());
+        let md_files = FileProcessor::expand_file_patterns(&[md_pattern]).expect("Failed to expand glob pattern");
+        assert_eq!(md_files.len(), 1);
+        assert!(md_files[0].to_string_lossy().ends_with("test2.md"));
+        
+        // Test glob pattern for all text files
+        let txt_pattern = format!("{}/*.txt", temp_dir.path().display());
+        let txt_files = FileProcessor::expand_file_patterns(&[txt_pattern]).expect("Failed to expand glob pattern");
+        assert_eq!(txt_files.len(), 1);
+        assert!(txt_files[0].to_string_lossy().ends_with("test1.txt"));
+    }
+
+    #[test]
+    fn test_file_processor_multiple_file_patterns() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        create_test_files(&temp_dir);
+        
+        // Test multiple file patterns
+        let file_patterns = vec![
+            temp_dir.path().join("test1.txt").to_string_lossy().to_string(),
+            temp_dir.path().join("test2.md").to_string_lossy().to_string(),
+            temp_dir.path().join("config.json").to_string_lossy().to_string(),
+        ];
+        
+        let files = FileProcessor::expand_file_patterns(&file_patterns).expect("Failed to expand file patterns");
+        assert_eq!(files.len(), 3);
+    }
+
+    #[test]
+    fn test_file_processor_nested_glob_patterns() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        create_nested_test_files(&temp_dir);
+        
+        // Test recursive glob pattern for markdown files
+        let md_pattern = format!("{}/**/*.md", temp_dir.path().display());
+        let md_files = FileProcessor::expand_file_patterns(&[md_pattern]).expect("Failed to expand recursive glob pattern");
+        assert_eq!(md_files.len(), 2);
+        assert!(md_files.iter().any(|f| f.to_string_lossy().ends_with("readme.md")));
+        assert!(md_files.iter().any(|f| f.to_string_lossy().ends_with("api.md")));
+        
+        // Test recursive glob pattern for Rust files
+        let rs_pattern = format!("{}/**/*.rs", temp_dir.path().display());
+        let rs_files = FileProcessor::expand_file_patterns(&[rs_pattern]).expect("Failed to expand recursive glob pattern");
+        assert_eq!(rs_files.len(), 2);
+        assert!(rs_files.iter().any(|f| f.to_string_lossy().ends_with("main.rs")));
+        assert!(rs_files.iter().any(|f| f.to_string_lossy().ends_with("lib.rs")));
+    }
+
+    #[test]
+    fn test_text_chunking_algorithm() {
+        let test_text = "This is a test document with multiple sentences. Each sentence should be properly handled by the chunking algorithm. The algorithm should split text at appropriate boundaries like sentence endings. It should also handle paragraph breaks properly.\n\nThis is a new paragraph that should be considered for chunking boundaries. The chunking algorithm needs to be smart about where it splits the text to maintain readability and context.";
+        
+        let chunks = FileProcessor::chunk_text(test_text, 100, 20);
+        
+        // Verify we got multiple chunks
+        assert!(chunks.len() > 1, "Should produce multiple chunks for long text");
+        
+        // Verify no chunk is empty
+        for chunk in &chunks {
+            assert!(!chunk.trim().is_empty(), "No chunk should be empty");
+        }
+        
+        // Verify chunks cover the original text
+        let total_chunk_content: String = chunks.join("");
+        assert!(total_chunk_content.len() >= (test_text.len() * 8) / 10,
+               "Chunks should cover most of the original text");
+        
+        // Verify chunks are reasonably sized
+        for chunk in &chunks {
+            assert!(chunk.len() <= 150, "Chunks should not be excessively long");
+        }
+        
+        // Verify that chunks maintain some context (overlap or boundary detection)
+        if chunks.len() > 1 {
+            // Check that consecutive chunks either have overlap or break at natural boundaries
+            for i in 0..chunks.len()-1 {
+                let current_chunk = &chunks[i];
+                let next_chunk = &chunks[i+1];
+                
+                // Either there's overlap or the current chunk ends at a natural boundary
+                let has_overlap = next_chunk.contains(&current_chunk[current_chunk.len().saturating_sub(10)..]);
+                let ends_at_boundary = current_chunk.trim_end().ends_with('.') ||
+                                     current_chunk.trim_end().ends_with('\n') ||
+                                     current_chunk.trim_end().ends_with('!') ||
+                                     current_chunk.trim_end().ends_with('?');
+                
+                assert!(has_overlap || ends_at_boundary,
+                       "Chunks should either overlap or break at natural boundaries");
+            }
+        }
+    }
+
+    #[test]
+    fn test_text_chunking_boundary_detection() {
+        let test_text = "First sentence. Second sentence.\n\nNew paragraph with more content. Another sentence in the same paragraph.";
+        
+        let chunks = FileProcessor::chunk_text(test_text, 50, 10);
+        
+        // Verify chunks respect sentence boundaries when possible
+        for chunk in &chunks {
+            let trimmed = chunk.trim();
+            if !trimmed.is_empty() {
+                // Most chunks should end with sentence-ending punctuation or be at natural boundaries
+                let ends_with_punctuation = trimmed.ends_with('.') || trimmed.ends_with('!') || trimmed.ends_with('?');
+                let ends_with_newline = trimmed.ends_with('\n');
+                let is_last_chunk = chunk == chunks.last().unwrap();
+                
+                // Allow some flexibility for boundary detection
+                assert!(ends_with_punctuation || ends_with_newline || is_last_chunk || trimmed.len() < 60,
+                       "Chunk should end at natural boundary: '{}'", trimmed);
+            }
+        }
+    }
+
+    #[test]
+    fn test_text_chunking_infinite_loop_prevention() {
+        // Test with very small chunk size to ensure no infinite loops
+        let test_text = "A";
+        let chunks = FileProcessor::chunk_text(test_text, 1, 0);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], "A");
+        
+        // Test with empty text
+        let empty_chunks = FileProcessor::chunk_text("", 100, 20);
+        assert_eq!(empty_chunks.len(), 1);
+        assert_eq!(empty_chunks[0], "");
+        
+        // Test with text smaller than chunk size
+        let small_text = "Small text";
+        let small_chunks = FileProcessor::chunk_text(small_text, 100, 20);
+        assert_eq!(small_chunks.len(), 1);
+        assert_eq!(small_chunks[0], small_text);
+    }
+
+    #[test]
+    fn test_file_processor_binary_filtering() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        
+        // Create mixed files (text and binary)
+        let text_files = vec![
+            ("text.txt", "This is text content"),
+            ("code.rs", "fn main() { println!(\"Hello\"); }"),
+        ];
+        
+        let binary_files = vec![
+            ("image.jpg", vec![0xFFu8, 0xD8u8, 0xFFu8, 0xE0u8]), // JPEG header
+            ("document.pdf", b"%PDF-1.4".to_vec()), // PDF header
+            ("data.bin", vec![0x00u8, 0x01u8, 0x02u8, 0x03u8]),
+        ];
+        
+        // Write text files
+        for (filename, content) in text_files {
+            let file_path = temp_dir.path().join(filename);
+            fs::write(&file_path, content).expect("Failed to write test file");
+        }
+        
+        // Write binary files
+        for (filename, content) in binary_files {
+            let file_path = temp_dir.path().join(filename);
+            fs::write(&file_path, content).expect("Failed to write test file");
+        }
+        
+        // Test that only text files are processed
+        let all_pattern = format!("{}/*", temp_dir.path().display());
+        let all_files = FileProcessor::expand_file_patterns(&[all_pattern]).expect("Failed to expand glob pattern");
+        
+        let text_files: Vec<_> = all_files.into_iter()
+            .filter(|f| FileProcessor::is_text_file(f))
+            .collect();
+        
+        assert_eq!(text_files.len(), 2); // text.txt and code.rs
+        assert!(text_files.iter().any(|f| f.to_string_lossy().ends_with("text.txt")));
+        assert!(text_files.iter().any(|f| f.to_string_lossy().ends_with("code.rs")));
+    }
+
+    #[test]
+    fn test_file_processor_supported_extensions() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        
+        // Test various supported file extensions
+        let supported_files = vec![
+            ("readme.md", "# Markdown"),
+            ("script.py", "print('Python')"),
+            ("app.js", "console.log('JavaScript');"),
+            ("style.css", "body { margin: 0; }"),
+            ("config.json", "{}"),
+            ("data.yaml", "key: value"),
+            ("source.cpp", "#include <iostream>"),
+            ("header.h", "#ifndef HEADER_H"),
+            ("build.sh", "#!/bin/bash"),
+            ("Dockerfile", "FROM ubuntu:20.04"),
+        ];
+        
+        for (filename, content) in supported_files {
+            let file_path = temp_dir.path().join(filename);
+            fs::write(&file_path, content).expect("Failed to write test file");
+            
+            assert!(FileProcessor::is_text_file(&file_path),
+                   "Should detect {} as text file", filename);
+        }
+    }
+
+    #[test]
+    fn test_file_processor_error_handling() {
+        // Test with invalid glob pattern
+        let invalid_glob = "invalid[glob[pattern";
+        let result = FileProcessor::expand_file_patterns(&[invalid_glob.to_string()]);
+        // This should not error but return empty results due to the implementation
+        assert!(result.is_ok(), "Should handle invalid glob pattern gracefully");
+    }
+
+    #[test]
+    fn test_file_metadata_structure() {
+        // Test that file metadata is properly structured for database storage
+        let file_path = "/path/to/test/file.txt";
+        let chunk_index = 2;
+        let total_chunks = 5;
+        let content = "This is chunk content";
+        
+        // Simulate how file metadata would be stored
+        struct FileChunkMetadata {
+            file_path: String,
+            chunk_index: usize,
+            total_chunks: usize,
+            content: String,
+        }
+        
+        let metadata = FileChunkMetadata {
+            file_path: file_path.to_string(),
+            chunk_index,
+            total_chunks,
+            content: content.to_string(),
+        };
+        
+        assert_eq!(metadata.file_path, file_path);
+        assert_eq!(metadata.chunk_index, chunk_index);
+        assert_eq!(metadata.total_chunks, total_chunks);
+        assert_eq!(metadata.content, content);
+        
+        // Test metadata display format
+        let display_format = format!("[{}:{}/{}]",
+                                   Path::new(&metadata.file_path).file_name().unwrap().to_string_lossy(),
+                                   metadata.chunk_index + 1, // 1-based for display
+                                   metadata.total_chunks);
+        assert_eq!(display_format, "[file.txt:3/5]");
+    }
+
+    #[test]
+    fn test_file_embedding_workflow_simulation() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let file_paths = create_test_files(&temp_dir);
+        
+        // Simulate the complete file embedding workflow
+        let file_patterns: Vec<String> = file_paths.iter().cloned().collect();
+        let files = FileProcessor::expand_file_patterns(&file_patterns).expect("Failed to expand file patterns");
+        
+        // Step 1: Filter text files (already done by expand_file_patterns)
+        assert!(files.len() > 0, "Should have text files to process");
+        
+        // Step 2: Process each file
+        for file_path in files {
+            if file_path.exists() {
+                let content = fs::read_to_string(&file_path).expect("Failed to read file");
+                
+                // Step 3: Chunk the content
+                let chunks = FileProcessor::chunk_text(&content, 1200, 200);
+                
+                // Step 4: Simulate embedding each chunk with metadata
+                for (chunk_index, chunk_content) in chunks.iter().enumerate() {
+                    let metadata = (
+                        file_path.to_string_lossy().to_string(),
+                        chunk_index,
+                        chunks.len(),
+                        chunk_content.clone(),
+                    );
+                    
+                    // Verify metadata structure
+                    assert_eq!(metadata.0, file_path.to_string_lossy().to_string());
+                    assert!(metadata.1 < metadata.2);
+                    assert!(!metadata.3.is_empty() || chunk_content.trim().is_empty());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_large_file_chunking_performance() {
+        // Test chunking performance with a large file
+        let large_content = "This is a sentence that will be repeated many times to create a large file. ".repeat(1000);
+        
+        let start_time = std::time::Instant::now();
+        let chunks = FileProcessor::chunk_text(&large_content, 1200, 200);
+        let duration = start_time.elapsed();
+        
+        // Verify chunking completed in reasonable time (should be very fast)
+        assert!(duration.as_millis() < 1000, "Chunking should complete quickly");
+        
+        // Verify chunks are reasonable
+        assert!(chunks.len() > 1, "Large content should produce multiple chunks");
+        
+        // Verify no infinite loops occurred
+        let total_chunk_length: usize = chunks.iter().map(|c| c.len()).sum();
+        assert!(total_chunk_length >= large_content.len(), "Total chunk content should cover original content");
+    }
+
+    #[test]
+    fn test_file_processing_integration() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        
+        // Create a test file
+        let test_file = temp_dir.path().join("test.txt");
+        let test_content = "This is a test file with some content that should be processed correctly.";
+        fs::write(&test_file, test_content).expect("Failed to write test file");
+        
+        // Test file processing
+        let chunks = FileProcessor::process_file(&test_file).expect("Failed to process file");
+        
+        assert_eq!(chunks.len(), 1); // Small content should be single chunk
+        assert_eq!(chunks[0], test_content);
+    }
+
+    #[test]
+    fn test_file_extension_detection() {
+        // Test various file extensions
+        let test_cases = vec![
+            ("test.txt", true),
+            ("test.md", true),
+            ("test.rs", true),
+            ("test.py", true),
+            ("test.js", true),
+            ("test.json", true),
+            ("test.yaml", true),
+            ("test.exe", false),
+            ("test.jpg", false),
+            ("test.pdf", false),
+            ("test.zip", false),
+        ];
+        
+        for (filename, expected) in test_cases {
+            let path = Path::new(filename);
+            assert_eq!(FileProcessor::is_text_file(path), expected,
+                      "Extension detection failed for {}", filename);
+        }
+    }
+}

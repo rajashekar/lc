@@ -213,8 +213,14 @@ pub enum Commands {
         /// Vector database name to store embeddings
         #[arg(short = 'v', long = "vectordb")]
         database: Option<String>,
-        /// Text to embed
-        text: String,
+        /// Files to embed (supports glob patterns)
+        #[arg(short = 'f', long = "files")]
+        files: Vec<String>,
+        /// Text to embed (optional if files are provided)
+        text: Option<String>,
+        /// Enable debug/verbose logging
+        #[arg(short = 'd', long = "debug")]
+        debug: bool,
     },
     /// Find similar text using vector similarity (alias: s)
     #[command(alias = "s")]
@@ -3001,8 +3007,18 @@ fn display_embedding_models(models: &[crate::model_metadata::ModelMetadata]) -> 
 }
 
 // Embed command handler
-pub async fn handle_embed_command(model: String, provider: Option<String>, database: Option<String>, text: String) -> Result<()> {
+pub async fn handle_embed_command(model: String, provider: Option<String>, database: Option<String>, files: Vec<String>, text: Option<String>, debug: bool) -> Result<()> {
     use colored::Colorize;
+    
+    // Set debug mode if requested
+    if debug {
+        set_debug_mode(true);
+    }
+    
+    // Validate input: either text or files must be provided
+    if text.is_none() && files.is_empty() {
+        anyhow::bail!("Either text or files must be provided for embedding");
+    }
     
     let config = config::Config::load()?;
     
@@ -3024,80 +3040,170 @@ pub async fn handle_embed_command(model: String, provider: Option<String>, datab
         config_mut.save()?;
     }
     
-    // Create embedding request
-    let embedding_request = crate::provider::EmbeddingRequest {
-        model: resolved_model.clone(),
-        input: text.clone(),
-        encoding_format: Some("float".to_string()),
-    };
-    
-    println!("{} Generating embeddings...", "🔄".blue());
+    println!("{} Starting embedding process...", "🔄".blue());
     println!("{} Model: {}", "📊".blue(), resolved_model);
     println!("{} Provider: {}", "🏢".blue(), provider_name);
-    println!("{} Text: \"{}\"", "📝".blue(), if text.len() > 50 { format!("{}...", &text[..50]) } else { text.clone() });
     
-    match client.embeddings(&embedding_request).await {
-        Ok(response) => {
-            println!("\n{} Embedding generated successfully!", "✅".green());
+    let mut total_embeddings = 0;
+    let mut total_tokens = 0;
+    
+    // Process files if provided
+    if !files.is_empty() {
+        println!("{} Processing files with glob patterns...", "📁".blue());
+        
+        // Expand file patterns and filter for text files
+        let file_paths = crate::vector_db::FileProcessor::expand_file_patterns(&files)?;
+        
+        if file_paths.is_empty() {
+            println!("{} No text files found matching the patterns", "⚠️".yellow());
+        } else {
+            println!("{} Found {} text files to process", "✅".green(), file_paths.len());
             
-            if let Some(embedding_data) = response.data.first() {
-                println!("{} Vector dimensions: {}", "📏".blue(), embedding_data.embedding.len());
-                println!("{} Usage: {} tokens", "💰".yellow(), response.usage.total_tokens);
+            for file_path in file_paths {
+                println!("\n{} Processing file: {}", "📄".blue(), file_path.display());
                 
-                // Display first few and last few dimensions for preview
-                let embedding = &embedding_data.embedding;
-                if embedding.len() > 10 {
-                    println!("\n{} Vector preview:", "🔍".blue());
-                    print!("  [");
-                    for (i, val) in embedding.iter().take(5).enumerate() {
-                        if i > 0 { print!(", "); }
-                        print!("{:.6}", val);
-                    }
-                    print!(" ... ");
-                    for (i, val) in embedding.iter().skip(embedding.len() - 5).enumerate() {
-                        if i > 0 { print!(", "); }
-                        print!("{:.6}", val);
-                    }
-                    println!("]");
-                } else {
-                    println!("\n{} Full vector:", "🔍".blue());
-                    print!("  [");
-                    for (i, val) in embedding.iter().enumerate() {
-                        if i > 0 { print!(", "); }
-                        print!("{:.6}", val);
-                    }
-                    println!("]");
-                }
-                
-                // Store in vector database if specified
-                if let Some(db_name) = &database {
-                    match crate::vector_db::VectorDatabase::new(db_name) {
-                        Ok(vector_db) => {
-                            match vector_db.add_vector(&text, &embedding, &resolved_model, &provider_name) {
-                                Ok(id) => {
-                                    println!("\n{} Stored in vector database '{}' with ID: {}", "💾".green(), db_name, id);
+                // Read and chunk the file
+                match crate::vector_db::FileProcessor::process_file(&file_path) {
+                    Ok(chunks) => {
+                        println!("{} Split into {} chunks", "✂️".blue(), chunks.len());
+                        
+                        // Process each chunk
+                        for (chunk_index, chunk) in chunks.iter().enumerate() {
+                            let embedding_request = crate::provider::EmbeddingRequest {
+                                model: resolved_model.clone(),
+                                input: chunk.clone(),
+                                encoding_format: Some("float".to_string()),
+                            };
+                            
+                            match client.embeddings(&embedding_request).await {
+                                Ok(response) => {
+                                    if let Some(embedding_data) = response.data.first() {
+                                        total_embeddings += 1;
+                                        total_tokens += response.usage.total_tokens;
+                                        
+                                        // Store in vector database if specified
+                                        if let Some(db_name) = &database {
+                                            match crate::vector_db::VectorDatabase::new(db_name) {
+                                                Ok(vector_db) => {
+                                                    let file_path_str = file_path.to_string_lossy();
+                                                    match vector_db.add_vector_with_metadata(
+                                                        chunk,
+                                                        &embedding_data.embedding,
+                                                        &resolved_model,
+                                                        &provider_name,
+                                                        Some(&file_path_str),
+                                                        Some(chunk_index as i32),
+                                                        Some(chunks.len() as i32)
+                                                    ) {
+                                                        Ok(id) => {
+                                                            println!("  {} Chunk {}/{} stored with ID: {}",
+                                                                "💾".green(), chunk_index + 1, chunks.len(), id);
+                                                        }
+                                                        Err(e) => {
+                                                            eprintln!("  Warning: Failed to store chunk {}: {}", chunk_index + 1, e);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("  Warning: Failed to create/open vector database '{}': {}", db_name, e);
+                                                }
+                                            }
+                                        } else {
+                                            // Just show progress without storing
+                                            println!("  {} Chunk {}/{} embedded ({} dimensions)",
+                                                "✅".green(), chunk_index + 1, chunks.len(), embedding_data.embedding.len());
+                                        }
+                                    }
                                 }
                                 Err(e) => {
-                                    eprintln!("Warning: Failed to store in vector database: {}", e);
+                                    eprintln!("  Warning: Failed to embed chunk {}: {}", chunk_index + 1, e);
                                 }
                             }
                         }
-                        Err(e) => {
-                            eprintln!("Warning: Failed to create/open vector database '{}': {}", db_name, e);
-                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Failed to process file '{}': {}", file_path.display(), e);
                     }
                 }
-                
-                // Optionally output full vector as JSON for programmatic use
-                println!("\n{} Full vector (JSON):", "📋".dimmed());
-                println!("{}", serde_json::to_string(&embedding)?);
-            } else {
-                anyhow::bail!("No embedding data in response");
             }
         }
-        Err(e) => {
-            anyhow::bail!("Failed to generate embeddings: {}", e);
+    }
+    
+    // Process text if provided
+    if let Some(text_content) = text {
+        println!("\n{} Processing text input...", "📝".blue());
+        println!("{} Text: \"{}\"", "📝".blue(), if text_content.len() > 50 { format!("{}...", &text_content[..50]) } else { text_content.clone() });
+        
+        let embedding_request = crate::provider::EmbeddingRequest {
+            model: resolved_model.clone(),
+            input: text_content.clone(),
+            encoding_format: Some("float".to_string()),
+        };
+        
+        match client.embeddings(&embedding_request).await {
+            Ok(response) => {
+                if let Some(embedding_data) = response.data.first() {
+                    total_embeddings += 1;
+                    total_tokens += response.usage.total_tokens;
+                    
+                    println!("{} Vector dimensions: {}", "📏".blue(), embedding_data.embedding.len());
+                    
+                    // Display vector preview
+                    let embedding = &embedding_data.embedding;
+                    if embedding.len() > 10 {
+                        println!("\n{} Vector preview:", "🔍".blue());
+                        print!("  [");
+                        for (i, val) in embedding.iter().take(5).enumerate() {
+                            if i > 0 { print!(", "); }
+                            print!("{:.6}", val);
+                        }
+                        print!(" ... ");
+                        for (i, val) in embedding.iter().skip(embedding.len() - 5).enumerate() {
+                            if i > 0 { print!(", "); }
+                            print!("{:.6}", val);
+                        }
+                        println!("]");
+                    }
+                    
+                    // Store in vector database if specified
+                    if let Some(db_name) = &database {
+                        match crate::vector_db::VectorDatabase::new(db_name) {
+                            Ok(vector_db) => {
+                                match vector_db.add_vector(&text_content, &embedding, &resolved_model, &provider_name) {
+                                    Ok(id) => {
+                                        println!("\n{} Stored in vector database '{}' with ID: {}", "💾".green(), db_name, id);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Warning: Failed to store in vector database: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Warning: Failed to create/open vector database '{}': {}", db_name, e);
+                            }
+                        }
+                    }
+                    
+                    // Output full vector as JSON for programmatic use
+                    if files.is_empty() { // Only show full vector for single text input
+                        println!("\n{} Full vector (JSON):", "📋".dimmed());
+                        println!("{}", serde_json::to_string(&embedding)?);
+                    }
+                }
+            }
+            Err(e) => {
+                anyhow::bail!("Failed to generate embeddings for text: {}", e);
+            }
         }
+    }
+    
+    // Summary
+    println!("\n{} Embedding process completed!", "🎉".green());
+    println!("{} Total embeddings generated: {}", "📊".blue(), total_embeddings);
+    println!("{} Total tokens used: {}", "💰".yellow(), total_tokens);
+    
+    if let Some(db_name) = &database {
+        println!("{} All embeddings stored in database: {}", "💾".green(), db_name);
     }
     
     Ok(())
@@ -3279,9 +3385,21 @@ pub async fn handle_vectors_command(command: crate::cli::VectorCommands) -> Resu
                     } else {
                         entry.text.clone()
                     };
-                    println!("  {}. {} ({})",
+                    
+                    let source_info = if let Some(ref file_path) = entry.file_path {
+                        if let (Some(chunk_idx), Some(total_chunks)) = (entry.chunk_index, entry.total_chunks) {
+                            format!(" [{}:{}/{}]", file_path, chunk_idx + 1, total_chunks)
+                        } else {
+                            format!(" [{}]", file_path)
+                        }
+                    } else {
+                        String::new()
+                    };
+                    
+                    println!("  {}. {}{} ({})",
                         i + 1,
                         preview,
+                        source_info.dimmed(),
                         entry.created_at.format("%Y-%m-%d %H:%M").to_string().dimmed()
                     );
                 }

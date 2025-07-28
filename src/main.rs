@@ -84,8 +84,8 @@ async fn main() -> Result<()> {
         (true, Some(Commands::Mcp { command })) => {
             cli::handle_mcp_command(command).await?;
         }
-        (true, Some(Commands::Embed { model, provider, database, text })) => {
-            cli::handle_embed_command(model, provider, database, text).await?;
+        (true, Some(Commands::Embed { model, provider, database, files, text, debug })) => {
+            cli::handle_embed_command(model, provider, database, files, text, debug).await?;
         }
         (true, Some(Commands::Similar { model, provider, database, limit, query })) => {
             cli::handle_similar_command(model, provider, database, limit, query).await?;
