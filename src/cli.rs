@@ -63,6 +63,10 @@ pub struct Cli {
     #[arg(short = 't', long = "tools")]
     pub tools: Option<String>,
     
+    /// Vector database name for RAG (Retrieval-Augmented Generation)
+    #[arg(short = 'v', long = "vectordb")]
+    pub vectordb: Option<String>,
+    
     /// Enable debug/verbose logging
     #[arg(short = 'd', long = "debug")]
     pub debug: bool,
@@ -112,6 +116,12 @@ pub enum Commands {
         /// Include tools from MCP server(s) (comma-separated server names)
         #[arg(short = 't', long = "tools")]
         tools: Option<String>,
+        /// Vector database name for RAG (Retrieval-Augmented Generation)
+        #[arg(short = 'v', long = "vectordb")]
+        database: Option<String>,
+        /// Enable debug/verbose logging
+        #[arg(short = 'd', long = "debug")]
+        debug: bool,
     },
     /// Global models management (alias: m)
     #[command(alias = "m")]
@@ -191,6 +201,45 @@ pub enum Commands {
         #[command(subcommand)]
         command: McpCommands,
     },
+    /// Generate embeddings for text (alias: e)
+    #[command(alias = "e")]
+    Embed {
+        /// Model to use for embeddings
+        #[arg(short, long)]
+        model: String,
+        /// Provider to use for embeddings
+        #[arg(short, long)]
+        provider: Option<String>,
+        /// Vector database name to store embeddings
+        #[arg(short = 'v', long = "vectordb")]
+        database: Option<String>,
+        /// Text to embed
+        text: String,
+    },
+    /// Find similar text using vector similarity (alias: s)
+    #[command(alias = "s")]
+    Similar {
+        /// Model to use for embeddings (optional if database has existing model)
+        #[arg(short, long)]
+        model: Option<String>,
+        /// Provider to use for embeddings (optional if database has existing model)
+        #[arg(short, long)]
+        provider: Option<String>,
+        /// Vector database name to search
+        #[arg(short = 'v', long = "vectordb")]
+        database: String,
+        /// Number of similar results to return
+        #[arg(short, long, default_value = "5")]
+        limit: usize,
+        /// Query text to find similar content
+        query: String,
+    },
+    /// Vector database management (alias: v)
+    #[command(alias = "v")]
+    Vectors {
+        #[command(subcommand)]
+        command: VectorCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -204,6 +253,9 @@ pub enum ModelsCommands {
     /// Dump raw /models responses to JSON files (alias: d)
     #[command(alias = "d")]
     Dump,
+    /// List embedding models (alias: e)
+    #[command(alias = "e")]
+    Embed,
 }
 
 #[derive(Subcommand)]
@@ -565,6 +617,25 @@ pub enum McpCommands {
         function: String,
         /// Function arguments
         args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum VectorCommands {
+    /// List all vector databases (alias: l)
+    #[command(alias = "l")]
+    List,
+    /// Delete a vector database (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Name of the vector database to delete
+        name: String,
+    },
+    /// Show information about a vector database (alias: i)
+    #[command(alias = "i")]
+    Info {
+        /// Name of the vector database
+        name: String,
     },
 }
 
@@ -1464,7 +1535,7 @@ pub fn is_code_file(extension: &str) -> bool {
 }
 
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>) -> Result<()> {
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -1531,6 +1602,22 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     let session_id = uuid::Uuid::new_v4().to_string();
     db.set_current_session_id(&session_id)?;
     
+    // RAG: Retrieve relevant context if database is specified
+    let mut enhanced_prompt = final_prompt.clone();
+    if let Some(ref db_name) = vectordb {
+        match retrieve_rag_context(db_name, &final_prompt, &client, &model_name, &provider_name).await {
+            Ok(context) => {
+                if !context.is_empty() {
+                    enhanced_prompt = format!("Context from knowledge base:\n{}\n\nUser question: {}", context, final_prompt);
+                    println!("{} Retrieved {} relevant context entries from '{}'", "🧠".blue(), context.lines().filter(|l| l.starts_with("- ")).count(), db_name);
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to retrieve RAG context: {}", e);
+            }
+        }
+    }
+    
     // Send the prompt
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
@@ -1538,10 +1625,10 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
         // Use tool execution loop when tools are available
         let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-        chat::send_chat_request_with_tool_execution(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+        chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
     } else {
         // Use regular chat when no tools
-        chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+        chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
     };
     
     match result {
@@ -1564,7 +1651,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
 }
 
 // Direct prompt handler for piped input (treats piped content as attachment)
-pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>) -> Result<()> {
+pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>) -> Result<()> {
     // For piped input, we need to determine if there's a prompt in the arguments
     // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
     // But we should provide a way to specify a prompt when piping content
@@ -1644,6 +1731,22 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     let session_id = uuid::Uuid::new_v4().to_string();
     db.set_current_session_id(&session_id)?;
     
+    // RAG: Retrieve relevant context if database is specified
+    let mut enhanced_prompt = final_prompt.clone();
+    if let Some(ref db_name) = vectordb {
+        match retrieve_rag_context(db_name, &final_prompt, &client, &model_name, &provider_name).await {
+            Ok(context) => {
+                if !context.is_empty() {
+                    enhanced_prompt = format!("Context from knowledge base:\n{}\n\nUser question: {}", context, final_prompt);
+                    println!("{} Retrieved {} relevant context entries from '{}'", "🧠".blue(), context.lines().filter(|l| l.starts_with("- ")).count(), db_name);
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to retrieve RAG context: {}", e);
+            }
+        }
+    }
+    
     // Send the prompt
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
@@ -1651,10 +1754,10 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
         // Use tool execution loop when tools are available
         let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-        chat::send_chat_request_with_tool_execution(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+        chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
     } else {
         // Use regular chat when no tools
-        chat::send_chat_request_with_validation(&client, &model_name, &final_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+        chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
     };
     
     match result {
@@ -1683,7 +1786,11 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
 }
 
 // Interactive chat mode
-pub async fn handle_chat_command(model: String, provider: Option<String>, cid: Option<String>, tools: Option<String>) -> Result<()> {
+pub async fn handle_chat_command(model: String, provider: Option<String>, cid: Option<String>, tools: Option<String>, database: Option<String>, debug: bool) -> Result<()> {
+    // Set debug mode if requested
+    if debug {
+        set_debug_mode(true);
+    }
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -1784,6 +1891,22 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
         // Send chat message
         let history = db.get_chat_history(&session_id)?;
         
+        // RAG: Retrieve relevant context if database is specified
+        let mut enhanced_input = input.to_string();
+        if let Some(ref db_name) = database {
+            match retrieve_rag_context(db_name, input, &client, &current_model, &provider_name).await {
+                Ok(context) => {
+                    if !context.is_empty() {
+                        enhanced_input = format!("Context from knowledge base:\n{}\n\nUser question: {}", context, input);
+                        println!("{} Retrieved {} relevant context entries from '{}'", "🧠".blue(), context.lines().filter(|l| l.starts_with("- ")).count(), db_name);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to retrieve RAG context: {}", e);
+                }
+            }
+        }
+        
         print!("{} ", "Thinking...".dimmed());
         io::stdout().flush()?;
         
@@ -1796,10 +1919,10 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
         let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Use tool execution loop when tools are available
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            chat::send_chat_request_with_tool_execution(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await
+            chat::send_chat_request_with_tool_execution(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await
         } else {
             // Use regular chat when no tools
-            chat::send_chat_request_with_validation(&client, &current_model, input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+            chat::send_chat_request_with_validation(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
         };
         
         match result {
@@ -1927,6 +2050,49 @@ pub async fn handle_models_command(
         }
         Some(ModelsCommands::Dump) => {
             dump_models_data().await?;
+        }
+        Some(ModelsCommands::Embed) => {
+            debug_log!("Handling embedding models command");
+            
+            // Use unified cache for embedding models command
+            debug_log!("Loading all cached models from unified cache");
+            let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models()?;
+            
+            debug_log!("Loaded {} models from cache", enhanced_models.len());
+            
+            // If no cached models found, refresh all providers
+            if enhanced_models.is_empty() {
+                debug_log!("No cached models found, refreshing all providers");
+                println!("No cached models found. Refreshing all providers...");
+                crate::unified_cache::UnifiedCache::refresh_all_providers().await?;
+                let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models()?;
+                
+                debug_log!("After refresh, loaded {} models", enhanced_models.len());
+                
+                if enhanced_models.is_empty() {
+                    debug_log!("Still no models found after refresh");
+                    println!("No models found after refresh.");
+                    return Ok(());
+                }
+            }
+            
+            debug_log!("Filtering for embedding models");
+            
+            // Filter for embedding models only
+            let embedding_models: Vec<_> = enhanced_models.into_iter()
+                .filter(|model| matches!(model.model_type, crate::model_metadata::ModelType::Embedding))
+                .collect();
+            
+            debug_log!("Found {} embedding models", embedding_models.len());
+            
+            if embedding_models.is_empty() {
+                println!("No embedding models found.");
+                return Ok(());
+            }
+            
+            // Display results
+            debug_log!("Displaying {} embedding models", embedding_models.len());
+            display_embedding_models(&embedding_models)?;
         }
         None => {
             debug_log!("Handling global models command");
@@ -2782,6 +2948,439 @@ async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provider:
         Ok((Some(all_tools), valid_server_names))
     }
 }
+
+// Display embedding models with metadata
+fn display_embedding_models(models: &[crate::model_metadata::ModelMetadata]) -> Result<()> {
+    use colored::Colorize;
+    
+    println!("\n{} Available embedding models ({} total):", "Embedding Models:".bold().blue(), models.len());
+    
+    let mut current_provider = String::new();
+    for model in models {
+        if model.provider != current_provider {
+            current_provider = model.provider.clone();
+            println!("\n{}", format!("{}:", current_provider).bold().green());
+        }
+        
+        // Build context and pricing info
+        let mut info_parts = Vec::new();
+        if let Some(ctx) = model.context_length {
+            if ctx >= 1000000 {
+                info_parts.push(format!("{}m ctx", ctx / 1000000));
+            } else if ctx >= 1000 {
+                info_parts.push(format!("{}k ctx", ctx / 1000));
+            } else {
+                info_parts.push(format!("{} ctx", ctx));
+            }
+        }
+        if let Some(input_price) = model.input_price_per_m {
+            info_parts.push(format!("${:.2}/M", input_price));
+        }
+        
+        // Display model with metadata
+        let model_display = if let Some(ref display_name) = model.display_name {
+            if display_name != &model.id {
+                format!("{} ({})", model.id, display_name)
+            } else {
+                model.id.clone()
+            }
+        } else {
+            model.id.clone()
+        };
+        
+        print!("  {} {}", "•".blue(), model_display.bold());
+        
+        if !info_parts.is_empty() {
+            print!(" ({})", info_parts.join(", ").dimmed());
+        }
+        
+        println!();
+    }
+    
+    Ok(())
+}
+
+// Embed command handler
+pub async fn handle_embed_command(model: String, provider: Option<String>, database: Option<String>, text: String) -> Result<()> {
+    use colored::Colorize;
+    
+    let config = config::Config::load()?;
+    
+    // Resolve provider and model using the same logic as direct prompts
+    let (provider_name, resolved_model) = resolve_model_and_provider(&config, provider, Some(model))?;
+    
+    // Get provider config
+    let provider_config = config.get_provider(&provider_name)?;
+    
+    if provider_config.api_key.is_none() {
+        anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
+    }
+    
+    let mut config_mut = config.clone();
+    let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+    
+    // Save config if tokens were updated
+    if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
+        config_mut.save()?;
+    }
+    
+    // Create embedding request
+    let embedding_request = crate::provider::EmbeddingRequest {
+        model: resolved_model.clone(),
+        input: text.clone(),
+        encoding_format: Some("float".to_string()),
+    };
+    
+    println!("{} Generating embeddings...", "🔄".blue());
+    println!("{} Model: {}", "📊".blue(), resolved_model);
+    println!("{} Provider: {}", "🏢".blue(), provider_name);
+    println!("{} Text: \"{}\"", "📝".blue(), if text.len() > 50 { format!("{}...", &text[..50]) } else { text.clone() });
+    
+    match client.embeddings(&embedding_request).await {
+        Ok(response) => {
+            println!("\n{} Embedding generated successfully!", "✅".green());
+            
+            if let Some(embedding_data) = response.data.first() {
+                println!("{} Vector dimensions: {}", "📏".blue(), embedding_data.embedding.len());
+                println!("{} Usage: {} tokens", "💰".yellow(), response.usage.total_tokens);
+                
+                // Display first few and last few dimensions for preview
+                let embedding = &embedding_data.embedding;
+                if embedding.len() > 10 {
+                    println!("\n{} Vector preview:", "🔍".blue());
+                    print!("  [");
+                    for (i, val) in embedding.iter().take(5).enumerate() {
+                        if i > 0 { print!(", "); }
+                        print!("{:.6}", val);
+                    }
+                    print!(" ... ");
+                    for (i, val) in embedding.iter().skip(embedding.len() - 5).enumerate() {
+                        if i > 0 { print!(", "); }
+                        print!("{:.6}", val);
+                    }
+                    println!("]");
+                } else {
+                    println!("\n{} Full vector:", "🔍".blue());
+                    print!("  [");
+                    for (i, val) in embedding.iter().enumerate() {
+                        if i > 0 { print!(", "); }
+                        print!("{:.6}", val);
+                    }
+                    println!("]");
+                }
+                
+                // Store in vector database if specified
+                if let Some(db_name) = &database {
+                    match crate::vector_db::VectorDatabase::new(db_name) {
+                        Ok(vector_db) => {
+                            match vector_db.add_vector(&text, &embedding, &resolved_model, &provider_name) {
+                                Ok(id) => {
+                                    println!("\n{} Stored in vector database '{}' with ID: {}", "💾".green(), db_name, id);
+                                }
+                                Err(e) => {
+                                    eprintln!("Warning: Failed to store in vector database: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Failed to create/open vector database '{}': {}", db_name, e);
+                        }
+                    }
+                }
+                
+                // Optionally output full vector as JSON for programmatic use
+                println!("\n{} Full vector (JSON):", "📋".dimmed());
+                println!("{}", serde_json::to_string(&embedding)?);
+            } else {
+                anyhow::bail!("No embedding data in response");
+            }
+        }
+        Err(e) => {
+            anyhow::bail!("Failed to generate embeddings: {}", e);
+        }
+    }
+    
+    Ok(())
+}
+
+// Similar command handler
+pub async fn handle_similar_command(model: Option<String>, provider: Option<String>, database: String, limit: usize, query: String) -> Result<()> {
+    use colored::Colorize;
+    
+    // Open the vector database
+    let vector_db = crate::vector_db::VectorDatabase::new(&database)?;
+    
+    // Check if database has any vectors
+    let count = vector_db.count()?;
+    if count == 0 {
+        anyhow::bail!("Vector database '{}' is empty. Add some vectors first using 'lc embed -d {}'", database, database);
+    }
+    
+    // Get model info from database if not provided
+    let (resolved_model, resolved_provider) = match (&model, &provider) {
+        (Some(m), Some(p)) => (m.clone(), p.clone()),
+        _ => {
+            if let Some((db_model, db_provider)) = vector_db.get_model_info()? {
+                if model.is_some() || provider.is_some() {
+                    println!("{} Using model from database: {}:{}", "ℹ️".blue(), db_provider, db_model);
+                }
+                (db_model, db_provider)
+            } else {
+                anyhow::bail!("No model specified and database '{}' has no stored model info", database);
+            }
+        }
+    };
+    
+    let config = config::Config::load()?;
+    
+    // Resolve provider and model
+    let (provider_name, model_name) = resolve_model_and_provider(&config, Some(resolved_provider), Some(resolved_model))?;
+    
+    // Get provider config
+    let provider_config = config.get_provider(&provider_name)?;
+    
+    if provider_config.api_key.is_none() {
+        anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
+    }
+    
+    let mut config_mut = config.clone();
+    let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+    
+    // Save config if tokens were updated
+    if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
+        config_mut.save()?;
+    }
+    
+    // Generate embedding for query
+    let embedding_request = crate::provider::EmbeddingRequest {
+        model: model_name.clone(),
+        input: query.clone(),
+        encoding_format: Some("float".to_string()),
+    };
+    
+    println!("{} Searching for similar content...", "🔍".blue());
+    println!("{} Database: {}", "📊".blue(), database);
+    println!("{} Query: \"{}\"", "📝".blue(), if query.len() > 50 { format!("{}...", &query[..50]) } else { query.clone() });
+    
+    match client.embeddings(&embedding_request).await {
+        Ok(response) => {
+            if let Some(embedding_data) = response.data.first() {
+                let query_vector = &embedding_data.embedding;
+                
+                // Find similar vectors
+                let similar_results = vector_db.find_similar(query_vector, limit)?;
+                
+                if similar_results.is_empty() {
+                    println!("\n{} No similar content found in database '{}'", "❌".red(), database);
+                } else {
+                    println!("\n{} Found {} similar results:", "✅".green(), similar_results.len());
+                    
+                    for (i, (entry, similarity)) in similar_results.iter().enumerate() {
+                        let similarity_percent = (similarity * 100.0).round() as u32;
+                        let similarity_color = if similarity_percent >= 80 {
+                            format!("{}%", similarity_percent).green()
+                        } else if similarity_percent >= 60 {
+                            format!("{}%", similarity_percent).yellow()
+                        } else {
+                            format!("{}%", similarity_percent).red()
+                        };
+                        
+                        println!("\n{} {} (Similarity: {})",
+                            format!("{}.", i + 1).bold(),
+                            similarity_color,
+                            format!("ID: {}", entry.id).dimmed()
+                        );
+                        println!("   {}", entry.text);
+                        println!("   {}", format!("Added: {}", entry.created_at.format("%Y-%m-%d %H:%M:%S UTC")).dimmed());
+                    }
+                }
+            } else {
+                anyhow::bail!("No embedding data in response");
+            }
+        }
+        Err(e) => {
+            anyhow::bail!("Failed to generate query embedding: {}", e);
+        }
+    }
+    
+    Ok(())
+}
+
+// Vectors command handler
+pub async fn handle_vectors_command(command: crate::cli::VectorCommands) -> Result<()> {
+    use colored::Colorize;
+    
+    match command {
+        crate::cli::VectorCommands::List => {
+            let databases = crate::vector_db::VectorDatabase::list_databases()?;
+            
+            if databases.is_empty() {
+                println!("No vector databases found.");
+                println!("Create one by running: {}", "lc embed -d <name> -m <model> \"your text\"".dimmed());
+            } else {
+                println!("\n{} Vector databases:", "📊".bold().blue());
+                
+                for db_name in databases {
+                    match crate::vector_db::VectorDatabase::new(&db_name) {
+                        Ok(db) => {
+                            let count = db.count().unwrap_or(0);
+                            let model_info = db.get_model_info().unwrap_or(None);
+                            
+                            print!("  {} {} ({} vectors)", "•".blue(), db_name.bold(), count);
+                            
+                            if let Some((model, provider)) = model_info {
+                                print!(" - {}:{}", provider.dimmed(), model.dimmed());
+                            }
+                            
+                            println!();
+                        }
+                        Err(_) => {
+                            println!("  {} {} (error reading)", "•".red(), db_name.bold());
+                        }
+                    }
+                }
+            }
+        }
+        crate::cli::VectorCommands::Delete { name } => {
+            // Check if database exists
+            let databases = crate::vector_db::VectorDatabase::list_databases()?;
+            if !databases.contains(&name) {
+                anyhow::bail!("Vector database '{}' not found", name);
+            }
+            
+            crate::vector_db::VectorDatabase::delete_database(&name)?;
+            println!("{} Vector database '{}' deleted successfully", "✓".green(), name);
+        }
+        crate::cli::VectorCommands::Info { name } => {
+            let databases = crate::vector_db::VectorDatabase::list_databases()?;
+            if !databases.contains(&name) {
+                anyhow::bail!("Vector database '{}' not found", name);
+            }
+            
+            let db = crate::vector_db::VectorDatabase::new(&name)?;
+            let count = db.count()?;
+            let model_info = db.get_model_info()?;
+            
+            println!("\n{} Vector database: {}", "📊".bold().blue(), name.bold());
+            println!("Vectors: {}", count);
+            
+            if let Some((model, provider)) = model_info {
+                println!("Model: {}:{}", provider, model);
+            } else {
+                println!("Model: {}", "Not set".dimmed());
+            }
+            
+            if count > 0 {
+                println!("\n{} Recent entries:", "📝".bold().blue());
+                let vectors = db.get_all_vectors()?;
+                for (i, entry) in vectors.iter().take(5).enumerate() {
+                    let preview = if entry.text.len() > 60 {
+                        format!("{}...", &entry.text[..60])
+                    } else {
+                        entry.text.clone()
+                    };
+                    println!("  {}. {} ({})",
+                        i + 1,
+                        preview,
+                        entry.created_at.format("%Y-%m-%d %H:%M").to_string().dimmed()
+                    );
+                }
+                
+                if vectors.len() > 5 {
+                    println!("  ... and {} more", vectors.len() - 5);
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+// RAG helper function to retrieve relevant context
+async fn retrieve_rag_context(
+    db_name: &str,
+    query: &str,
+    _client: &crate::provider::OpenAIClient,
+    _model: &str,
+    _provider: &str
+) -> Result<String> {
+    crate::debug_log!("RAG: Starting context retrieval for database '{}' with query '{}'", db_name, query);
+    
+    // Open the vector database
+    let vector_db = crate::vector_db::VectorDatabase::new(db_name)?;
+    crate::debug_log!("RAG: Successfully opened vector database '{}'", db_name);
+    
+    // Check if database has any vectors
+    let count = vector_db.count()?;
+    crate::debug_log!("RAG: Database '{}' contains {} vectors", db_name, count);
+    if count == 0 {
+        crate::debug_log!("RAG: Database is empty, returning empty context");
+        return Ok(String::new());
+    }
+    
+    // Get model info from database
+    let (db_model, db_provider) = if let Some((m, p)) = vector_db.get_model_info()? {
+        crate::debug_log!("RAG: Using database model '{}' from provider '{}'", m, p);
+        (m, p)
+    } else {
+        crate::debug_log!("RAG: No model info in database, returning empty context");
+        return Ok(String::new());
+    };
+    
+    // Create a client for the embedding provider (not the chat provider)
+    let config = config::Config::load()?;
+    let mut config_mut = config.clone();
+    let embedding_client = chat::create_authenticated_client(&mut config_mut, &db_provider).await?;
+    crate::debug_log!("RAG: Created embedding client for provider '{}'", db_provider);
+    
+    // Use the database's embedding model for consistency
+    let embedding_request = crate::provider::EmbeddingRequest {
+        model: db_model.clone(),
+        input: query.to_string(),
+        encoding_format: Some("float".to_string()),
+    };
+    
+    crate::debug_log!("RAG: Generating embedding for query using model '{}'", db_model);
+    
+    // Generate embedding for query using the correct provider
+    let response = embedding_client.embeddings(&embedding_request).await?;
+    crate::debug_log!("RAG: Successfully generated embedding for query");
+    
+    if let Some(embedding_data) = response.data.first() {
+        let query_vector = &embedding_data.embedding;
+        crate::debug_log!("RAG: Query vector has {} dimensions", query_vector.len());
+        
+        // Find top 3 most similar vectors for context
+        let similar_results = vector_db.find_similar(query_vector, 3)?;
+        crate::debug_log!("RAG: Found {} similar results", similar_results.len());
+        
+        if similar_results.is_empty() {
+            crate::debug_log!("RAG: No similar results found, returning empty context");
+            return Ok(String::new());
+        }
+        
+        // Format context
+        let mut context = String::new();
+        let mut included_count = 0;
+        for (entry, similarity) in similar_results {
+            crate::debug_log!("RAG: Result similarity: {:.3} for text: '{}'", similarity, &entry.text[..50.min(entry.text.len())]);
+            // Only include results with reasonable similarity (>0.3)
+            if similarity > 0.3 {
+                context.push_str(&format!("- {}\n", entry.text));
+                included_count += 1;
+            }
+        }
+        
+        crate::debug_log!("RAG: Included {} results in context (similarity > 0.3)", included_count);
+        crate::debug_log!("RAG: Final context length: {} characters", context.len());
+        
+        Ok(context)
+    } else {
+        crate::debug_log!("RAG: No embedding data in response, returning empty context");
+        Ok(String::new())
+    }
+}
+
 // Include test module
 #[cfg(test)]
 mod tests;

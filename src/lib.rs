@@ -15,6 +15,7 @@ pub mod proxy;
 pub mod token_utils;
 pub mod unified_cache;
 pub mod mcp;
+pub mod vector_db;
 
 // Re-export commonly used types for easier access in tests
 pub use config::{Config, ProviderConfig, CachedToken};

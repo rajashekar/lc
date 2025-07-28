@@ -14,6 +14,10 @@ LLM Client (lc) - A fast, Rust-based command-line tool for interacting with Larg
 - 📥 **Piped input** - Support for piped input from other commands
 - 🔄 **Multiple API formats** - Handles various response formats (OpenAI, Cohere, Llama, etc.)
 - 🏷️ **Custom headers** - Per-provider custom header support for specialized APIs (e.g., Anthropic)
+- 🧠 **Vector Database & RAG** - Built-in vector storage with similarity search and retrieval-augmented generation
+- 📚 **Embedding Support** - Generate and store text embeddings from any compatible provider
+- 🔍 **Semantic Search** - Find similar content using cosine similarity across your knowledge base
+- 🤖 **RAG-Enhanced Chat** - Augment conversations with relevant context from vector databases
 
 ## Installation
 
@@ -109,6 +113,170 @@ lc c -m gpt-4
 # Continue specific chat session
 lc chat -m gpt-4 --cid abc123
 ```
+
+## Vector Database & RAG (Retrieval-Augmented Generation)
+
+LLM Client includes a powerful built-in vector database system that enables you to store text embeddings and perform semantic search. This allows for Retrieval-Augmented Generation (RAG), where your conversations can be enhanced with relevant context from your knowledge base.
+
+### Quick Start with Vector Database
+
+```bash
+# 1. List available embedding models
+lc models embed
+# or using alias
+lc m e
+
+# 2. Generate and store embeddings in a vector database
+lc embed -m text-embedding-3-small -v knowledge "Machine learning is a subset of AI"
+lc embed -m text-embedding-3-small -v knowledge "Deep learning uses neural networks"
+lc embed -m text-embedding-3-small -v knowledge "Python is popular for data science"
+
+# 3. Search for similar content
+lc similar -v knowledge "What is neural network programming?"
+
+# 4. Use RAG-enhanced chat (context from vector database)
+lc chat -v knowledge -m gpt-4
+lc -v knowledge "Explain the relationship between AI and programming languages"
+```
+
+### Vector Database Features
+
+- **🗄️ SQLite Storage** - Efficient local storage in `~/Library/Application Support/lc/embeddings/`
+- **📐 Cosine Similarity** - Fast similarity search with proper dimension validation
+- **🔄 Model Consistency** - Automatic model/provider resolution from database metadata
+- **🎯 Context Filtering** - Smart relevance filtering (similarity > 0.3) for RAG
+- **⚡ Performance** - Optimized for fast retrieval and context generation
+- **🔧 Database Management** - Full CRUD operations for vector databases
+
+### Embedding Commands
+
+```bash
+# List embedding models with metadata
+lc models embed
+lc m e
+
+# Generate embeddings (output to console)
+lc embed -m text-embedding-3-small "Your text here"
+
+# Store embeddings in vector database
+lc embed -m text-embedding-3-small -v database_name "Your text here"
+
+# Use different providers for embeddings
+lc embed -p openai -m text-embedding-3-large -v docs "Technical documentation"
+lc embed -p cohere -m embed-english-v3.0 -v knowledge "Knowledge base entry"
+```
+
+### Vector Database Management
+
+```bash
+# List all vector databases
+lc vectors list
+lc v l
+
+# Show database information (count, model, provider)
+lc vectors info database_name
+lc v i database_name
+
+# Delete a vector database
+lc vectors delete database_name
+lc v d database_name
+```
+
+### Similarity Search
+
+```bash
+# Search for similar content
+lc similar -v database_name "your search query"
+lc s -v database_name "your search query"
+
+# Limit number of results (default: 5)
+lc similar -v docs -l 10 "search query"
+
+# The system automatically uses the same embedding model/provider as stored in the database
+```
+
+### RAG-Enhanced Conversations
+
+#### Interactive Chat with Vector Context
+```bash
+# Start RAG-enhanced chat session
+lc chat -v knowledge_base -m gpt-4
+lc c -v knowledge_base -m gpt-4
+
+# Inside chat, your messages are automatically enhanced with relevant context
+# The system retrieves similar content and includes it in the prompt
+```
+
+#### Direct RAG Prompts
+```bash
+# Single prompt with vector context
+lc -v knowledge_base "Explain machine learning concepts"
+
+# Specify both vector database and chat model
+lc -v docs -m claude-3-5-sonnet "How do I implement this feature?"
+
+# The system automatically:
+# 1. Generates embeddings for your query
+# 2. Finds similar content in the vector database
+# 3. Includes relevant context in the prompt to the LLM
+# 4. Returns an enhanced response
+```
+
+### RAG Workflow Example
+
+```bash
+# 1. Create a knowledge base about AI/ML
+lc embed -m text-embedding-3-small -v ai_knowledge "Machine learning is a method of data analysis that automates analytical model building"
+lc embed -m text-embedding-3-small -v ai_knowledge "Deep learning is part of a broader family of machine learning methods based on neural networks"
+lc embed -m text-embedding-3-small -v ai_knowledge "Python is widely used in machine learning due to libraries like scikit-learn, TensorFlow, and PyTorch"
+lc embed -m text-embedding-3-small -v ai_knowledge "Neural networks are computing systems inspired by biological neural networks"
+
+# 2. Check what's in your database
+lc vectors info ai_knowledge
+lc similar -v ai_knowledge "neural networks"
+
+# 3. Use RAG for enhanced conversations
+lc -v ai_knowledge "What programming language should I use for machine learning and why?"
+
+# The response will be enhanced with relevant context from your knowledge base
+```
+
+### Advanced RAG Features
+
+#### Model Consistency
+The system ensures embedding consistency by:
+- Storing the embedding model/provider with each vector database
+- Automatically using the same model for similarity search
+- Validating vector dimensions match the stored model
+
+#### Context Filtering
+RAG implementation includes smart filtering:
+- Only includes content with similarity > 0.3 threshold
+- Formats context with bullet points for clarity
+- Limits context length to prevent token overflow
+
+#### Provider Separation
+You can use different providers for embeddings vs chat:
+```bash
+# Use OpenAI for embeddings, Claude for chat
+lc embed -p openai -m text-embedding-3-small -v docs "content"
+lc -v docs -p claude -m claude-3-5-sonnet "query"
+```
+
+### Vector Database Storage
+
+Vector databases are stored in platform-appropriate locations:
+
+| Platform | Vector Database Directory |
+|----------|---------------------------|
+| **Linux** | `~/.config/lc/embeddings/` |
+| **macOS** | `~/Library/Application Support/lc/embeddings/` |
+| **Windows** | `%APPDATA%\lc\embeddings\` |
+
+Each database is a SQLite file containing:
+- **vectors** table - Text content, embeddings, and metadata
+- **model_info** table - Embedding model and provider information
+- **Indexes** - Optimized for fast similarity search
 
 ## Usage Examples
 
@@ -272,13 +440,14 @@ Configuration and data files are automatically stored in platform-appropriate lo
 
 | Platform | Config Directory | Files |
 |----------|------------------|-------|
-| **Linux** | `~/.config/lc/` | `config.toml`, `logs.db` |
-| **macOS** | `~/Library/Application Support/lc/` | `config.toml`, `logs.db` |
-| **Windows** | `%APPDATA%\lc\` | `config.toml`, `logs.db` |
+| **Linux** | `~/.config/lc/` | `config.toml`, `logs.db`, `embeddings/` |
+| **macOS** | `~/Library/Application Support/lc/` | `config.toml`, `logs.db`, `embeddings/` |
+| **Windows** | `%APPDATA%\lc\` | `config.toml`, `logs.db`, `embeddings/` |
 
 ### Files Stored:
 - **`config.toml`** - Provider configurations and API keys
 - **`logs.db`** - SQLite database with complete chat history and session state
+- **`embeddings/`** - Directory containing vector databases (SQLite files with embeddings)
 
 ### Automatic Directory Creation
 The tool automatically creates the necessary directories on first run, ensuring proper permissions and OS integration.
@@ -360,6 +529,34 @@ lc models --output-price <price>                           # Filter by maximum o
 lc models refresh                                          # Refresh models cache (alias: lc m r)
 lc models info                                             # Show cache information (alias: lc m i)
 lc models dump                                             # Dump raw provider responses (alias: lc m d)
+lc models embed                                            # List embedding models (alias: lc m e)
+```
+
+### Embedding Commands
+```bash
+lc embed -m <model> "text"                                 # Generate embeddings (alias: lc e)
+lc embed -m <model> -v <database> "text"                   # Store embeddings in vector database
+lc embed -p <provider> -m <model> -v <database> "text"     # Specify provider for embeddings
+```
+
+### Vector Database Commands
+```bash
+lc vectors list                                            # List all vector databases (alias: lc v l)
+lc vectors info <database>                                 # Show database information (alias: lc v i)
+lc vectors delete <database>                               # Delete vector database (alias: lc v d)
+```
+
+### Similarity Search Commands
+```bash
+lc similar -v <database> "query"                           # Search for similar content (alias: lc s)
+lc similar -v <database> -l <limit> "query"                # Limit number of results
+```
+
+### RAG-Enhanced Commands
+```bash
+lc -v <database> "prompt"                                  # Direct prompt with vector context
+lc chat -v <database> -m <model>                           # Interactive chat with vector context
+lc c -v <database> -m <model>                              # Alias for RAG-enhanced chat
 ```
 
 **Model Filtering Examples:**
@@ -645,8 +842,14 @@ lc/
 │   ├── config.rs        # Configuration management
 │   ├── provider.rs      # OpenAI-compatible HTTP client
 │   ├── database.rs      # SQLite chat history storage
+│   ├── vector_db.rs     # Vector database with embeddings and similarity search
 │   ├── chat.rs          # Chat request handling
 │   └── error.rs         # Error types and handling
+├── tests/
+│   ├── embed_commands.rs    # Embedding functionality tests
+│   ├── vector_commands.rs   # Vector database operation tests
+│   ├── similar_commands.rs  # Similarity search tests
+│   └── rag_commands.rs      # RAG functionality tests
 ├── Cargo.toml           # Dependencies and metadata
 └── README.md           # This file
 ```
@@ -716,6 +919,20 @@ lc keys add openai
 **"Model not found"**
 - List available models: `lc providers models <provider>`
 - Use exact model name from the list
+
+**"Vector database not found"**
+- List available databases: `lc vectors list`
+- Create database by storing embeddings: `lc embed -m model -v database "text"`
+
+**"Dimension mismatch in similarity search"**
+- Ensure you're using the same embedding model as stored in the database
+- Check database model info: `lc vectors info <database>`
+- The system automatically uses the correct model from database metadata
+
+**"No similar content found"**
+- Check if database has content: `lc vectors info <database>`
+- Try different search terms or lower similarity threshold
+- Add more content to your vector database
 
 ### Debug Mode
 Set `RUST_LOG=debug` for detailed logging:

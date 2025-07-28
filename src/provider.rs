@@ -13,6 +13,34 @@ pub struct ChatRequest {
     pub tools: Option<Vec<Tool>>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct EmbeddingRequest {
+    pub model: String,
+    pub input: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding_format: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EmbeddingResponse {
+    pub data: Vec<EmbeddingData>,
+    pub model: String,
+    pub usage: EmbeddingUsage,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct EmbeddingData {
+    pub embedding: Vec<f64>,
+    pub index: u32,
+    pub object: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct EmbeddingUsage {
+    pub prompt_tokens: u32,
+    pub total_tokens: u32,
+}
+
 #[derive(Debug, Serialize, Clone)]
 pub struct Tool {
     #[serde(rename = "type")]
@@ -420,5 +448,33 @@ impl OpenAIClient {
         
         let token_response: TokenResponse = response.json().await?;
         Ok(token_response)
+    }
+    
+    pub async fn embeddings(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse> {
+        let url = format!("{}/embeddings", self.base_url);
+        
+        let mut req = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json");
+        
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
+            .json(request)
+            .send()
+            .await?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Embeddings API request failed with status {}: {}", status, text);
+        }
+        
+        let embedding_response: EmbeddingResponse = response.json().await?;
+        Ok(embedding_response)
     }
 }
