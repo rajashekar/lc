@@ -2732,7 +2732,7 @@ fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> R
 
 // MCP command handlers
 pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> {
-    use crate::mcp::{McpConfig, McpManager, McpServerType as ConfigMcpServerType};
+    use crate::mcp::{McpConfig, McpServerType as ConfigMcpServerType};
     use colored::Colorize;
     
     match command {
@@ -2783,111 +2783,152 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 }
             }
         }
-        crate::cli::McpCommands::Start { name, debug } => {
+        crate::cli::McpCommands::Start { name, debug: _ } => {
             let config = McpConfig::load()?;
             
-            if let Some(server_config) = config.get_server(&name) {
-                let mut manager = McpManager::new();
-                
+            if let Some(_server_config) = config.get_server(&name) {
                 println!("{} Starting MCP server '{}'...", "🚀".blue(), name);
+                println!("{} Note: With the new SDK implementation, servers are started automatically when needed", "ℹ️".blue());
+                println!("{} MCP server '{}' will be available for use", "✓".green(), name);
+            } else {
+                anyhow::bail!("MCP server '{}' not found", name);
+            }
+        }
+        crate::cli::McpCommands::Stop { name } => {
+            println!("{} Stopping MCP server '{}'...", "🛑".red(), name);
+            
+            let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
+            match daemon_client.close_server(&name).await {
+                Ok(_) => {
+                    println!("{} MCP server '{}' connection closed successfully", "✓".green(), name);
+                }
+                Err(e) => {
+                    println!("{} Failed to close MCP server '{}': {}", "⚠️".yellow(), name, e);
+                }
+            }
+        }
+        crate::cli::McpCommands::Ps => {
+            let config = McpConfig::load()?;
+            let servers = config.list_servers();
+            
+            if servers.is_empty() {
+                println!("No MCP servers configured.");
+            } else {
+                println!("\n{} Configured MCP servers (SDK managed):", "Servers:".bold().blue());
+                for (name, server_config) in servers {
+                    println!("  {} {} - {:?} ({})",
+                        "•".blue(),
+                        name.bold(),
+                        server_config.server_type,
+                        server_config.command_or_url
+                    );
+                }
+            }
+        }
+        crate::cli::McpCommands::Functions { name } => {
+            let config = McpConfig::load()?;
+            
+            if config.get_server(&name).is_some() {
+                println!("{} Listing functions for MCP server '{}'...", "🔍".blue(), name);
                 
-                match manager.start_server(&name, server_config, debug).await {
+                // Use daemon client for persistent connections
+                let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
+                
+                // Ensure server is connected via daemon
+                match daemon_client.ensure_server_connected(&name).await {
                     Ok(_) => {
-                        println!("{} MCP server '{}' started successfully", "✓".green(), name);
+                        match daemon_client.list_tools(&name).await {
+                            Ok(all_tools) => {
+                                if let Some(tools) = all_tools.get(&name) {
+                                    if tools.is_empty() {
+                                        println!("No functions found for server '{}'", name);
+                                    } else {
+                                        println!("\n{} Available functions:", "Functions:".bold().blue());
+                                        for tool in tools {
+                                            println!("  {} {} - {}",
+                                                "•".blue(),
+                                                tool.name.bold(),
+                                                tool.description.as_ref().map(|s| s.as_ref()).unwrap_or("No description")
+                                            );
+                                            
+                                            if let Some(properties) = tool.input_schema.get("properties") {
+                                                if let Some(props_obj) = properties.as_object() {
+                                                    if !props_obj.is_empty() {
+                                                        println!("    Parameters: {}",
+                                                            props_obj.keys().map(|k| k.as_str()).collect::<Vec<_>>().join(", ").dimmed()
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    println!("No functions found for server '{}'", name);
+                                }
+                            }
+                            Err(e) => {
+                                anyhow::bail!("Failed to list functions from MCP server '{}': {}", name, e);
+                            }
+                        }
                     }
                     Err(e) => {
-                        anyhow::bail!("Failed to start MCP server '{}': {}", name, e);
+                        anyhow::bail!("Failed to connect to MCP server '{}': {}", name, e);
                     }
                 }
             } else {
                 anyhow::bail!("MCP server '{}' not found", name);
             }
         }
-        crate::cli::McpCommands::Stop { name } => {
-            let mut manager = McpManager::new();
+        crate::cli::McpCommands::Invoke { name, function, args } => {
+            let config = McpConfig::load()?;
             
-            println!("{} Stopping MCP server '{}'...", "🛑".red(), name);
-            
-            match manager.stop_server(&name).await {
-                Ok(_) => {
-                    println!("{} MCP server '{}' stopped successfully", "✓".green(), name);
+            if config.get_server(&name).is_some() {
+                println!("{} Invoking function '{}' on MCP server '{}'...", "⚡".yellow(), function, name);
+                if !args.is_empty() {
+                    println!("Arguments: {}", args.join(", ").dimmed());
                 }
-                Err(e) => {
-                    anyhow::bail!("Failed to stop MCP server '{}': {}", name, e);
-                }
-            }
-        }
-        crate::cli::McpCommands::Ps => {
-            let manager = McpManager::new();
-            let running_servers = manager.list_running_servers().await?;
-            
-            if running_servers.is_empty() {
-                println!("No MCP servers currently running.");
-            } else {
-                println!("\n{} Running MCP servers:", "Servers:".bold().blue());
-                for (name, info) in running_servers {
-                    println!("  {} {} - {} (PID: {})",
-                        "•".green(),
-                        name.bold(),
-                        info.server_type,
-                        info.pid
-                    );
-                }
-            }
-        }
-        crate::cli::McpCommands::Functions { name } => {
-            let mut manager = McpManager::new();
-            
-            println!("{} Listing functions for MCP server '{}'...", "🔍".blue(), name);
-            
-            match manager.list_functions(&name).await {
-                Ok(functions) => {
-                    if functions.is_empty() {
-                        println!("No functions found for server '{}'", name);
-                    } else {
-                        println!("\n{} Available functions:", "Functions:".bold().blue());
-                        for function in functions {
-                            println!("  {} {} - {}",
-                                "•".blue(),
-                                function.name.bold(),
-                                function.description
-                            );
-                            
-                            if let Some(params) = &function.parameters {
-                                if let Some(properties) = params.get("properties") {
-                                    if let Some(props_obj) = properties.as_object() {
-                                        if !props_obj.is_empty() {
-                                            println!("    Parameters: {}",
-                                                props_obj.keys().map(|k| k.as_str()).collect::<Vec<_>>().join(", ").dimmed()
-                                            );
-                                        }
-                                    }
+                
+                // Use daemon client for persistent connections
+                let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
+                
+                // Ensure server is connected via daemon
+                match daemon_client.ensure_server_connected(&name).await {
+                    Ok(_) => {
+                        // Parse args as key=value pairs
+                        let params = if args.is_empty() {
+                            serde_json::json!({})
+                        } else {
+                            let mut params_obj = serde_json::Map::new();
+                            for arg in args {
+                                if let Some((key, value)) = arg.split_once('=') {
+                                    params_obj.insert(key.to_string(), serde_json::json!(value));
+                                } else {
+                                    anyhow::bail!("Invalid argument format: '{}'. Expected 'key=value'", arg);
                                 }
                             }
+                            serde_json::json!(params_obj)
+                        };
+                        
+                        match daemon_client.call_tool(&name, &function, params).await {
+                            Ok(result) => {
+                                println!("\n{} Result:", "Response:".bold().green());
+                                println!("{}", serde_json::to_string_pretty(&result)?);
+                            }
+                            Err(e) => {
+                                anyhow::bail!("Failed to invoke function '{}' on MCP server '{}': {}", function, name, e);
+                            }
                         }
+                        
+                        // Connection persists in daemon - browser stays open!
+                        println!("\n{} Tool invocation completed. Server connection remains active in daemon.", "ℹ️".blue());
+                        println!("{} Use 'lc mcp stop {}' if you want to close the server connection.", "💡".yellow(), name);
+                    }
+                    Err(e) => {
+                        anyhow::bail!("Failed to connect to MCP server '{}': {}", name, e);
                     }
                 }
-                Err(e) => {
-                    anyhow::bail!("Failed to list functions from MCP server '{}': {}", name, e);
-                }
-            }
-        }
-        crate::cli::McpCommands::Invoke { name, function, args } => {
-            let mut manager = McpManager::new();
-            
-            println!("{} Invoking function '{}' on MCP server '{}'...", "⚡".yellow(), function, name);
-            if !args.is_empty() {
-                println!("Arguments: {}", args.join(", ").dimmed());
-            }
-            
-            match manager.invoke_function(&name, &function, &args).await {
-                Ok(result) => {
-                    println!("\n{} Result:", "Response:".bold().green());
-                    println!("{}", serde_json::to_string_pretty(&result)?);
-                }
-                Err(e) => {
-                    anyhow::bail!("Failed to invoke function '{}' on MCP server '{}': {}", function, name, e);
-                }
+            } else {
+                anyhow::bail!("MCP server '{}' not found", name);
             }
         }
     }
@@ -2897,14 +2938,18 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
 
 // Helper function to fetch MCP tools and convert them to OpenAI function format
 async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provider::Tool>>, Vec<String>)> {
-    use crate::mcp::McpManager;
+    use crate::mcp::McpConfig;
     
     // Parse comma-separated server names
     let server_names: Vec<&str> = tools_str.split(',').map(|s| s.trim()).collect();
     let mut all_tools = Vec::new();
     let mut valid_server_names = Vec::new();
     
-    let mut manager = McpManager::new();
+    // Load MCP configuration
+    let config = McpConfig::load()?;
+    
+    // Use daemon client for persistent connections
+    let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
     
     for server_name in server_names {
         if server_name.is_empty() {
@@ -2913,38 +2958,61 @@ async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provider:
         
         crate::debug_log!("Fetching tools from MCP server '{}'", server_name);
         
-        match manager.list_functions(server_name).await {
-            Ok(functions) => {
-                crate::debug_log!("Retrieved {} functions from server '{}'", functions.len(), server_name);
-                valid_server_names.push(server_name.to_string());
-                
-                for function in functions {
-                    // Convert MCP function to OpenAI tool format
-                    let tool = crate::provider::Tool {
-                        tool_type: "function".to_string(),
-                        function: crate::provider::Function {
-                            name: function.name.clone(),
-                            description: function.description.clone(),
-                            parameters: function.parameters.unwrap_or_else(|| {
-                                serde_json::json!({
-                                    "type": "object",
-                                    "properties": {},
-                                    "required": []
-                                })
-                            }),
-                        },
-                    };
+        // Check if server exists in configuration
+        if config.get_server(server_name).is_some() {
+            // Ensure server is connected via daemon
+            match daemon_client.ensure_server_connected(server_name).await {
+                Ok(_) => {
+                    crate::debug_log!("Successfully connected to MCP server '{}'", server_name);
+                    valid_server_names.push(server_name.to_string());
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to connect to MCP server '{}': {}", server_name, e);
+                    continue;
+                }
+            }
+        } else {
+            eprintln!("Warning: MCP server '{}' not found in configuration", server_name);
+            continue;
+        }
+    }
+    
+    // Get all tools from connected servers using daemon client
+    for server_name in &valid_server_names {
+        match daemon_client.list_tools(server_name).await {
+            Ok(server_tools) => {
+                if let Some(tools) = server_tools.get(server_name) {
+                    crate::debug_log!("Retrieved {} tools from server '{}'", tools.len(), server_name);
                     
-                    all_tools.push(tool);
-                    crate::debug_log!("Added tool '{}' from server '{}'", function.name, server_name);
+                    for tool in tools {
+                        // Convert MCP tool to OpenAI tool format
+                        let openai_tool = crate::provider::Tool {
+                            tool_type: "function".to_string(),
+                            function: crate::provider::Function {
+                                name: tool.name.to_string(),
+                                description: tool.description.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "No description".to_string()),
+                                parameters: serde_json::to_value(&*tool.input_schema).unwrap_or_else(|_| {
+                                    serde_json::json!({
+                                        "type": "object",
+                                        "properties": {},
+                                        "required": []
+                                    })
+                                }),
+                            },
+                        };
+                        
+                        all_tools.push(openai_tool);
+                        crate::debug_log!("Added tool '{}' from server '{}'", tool.name, server_name);
+                    }
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to fetch tools from MCP server '{}': {}", server_name, e);
-                continue;
+                eprintln!("Warning: Failed to list tools from MCP server '{}': {}", server_name, e);
             }
         }
     }
+    
+    // Connections persist in daemon - no cleanup needed
     
     if all_tools.is_empty() {
         crate::debug_log!("No tools found from any specified MCP servers");

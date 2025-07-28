@@ -263,7 +263,6 @@ pub async fn send_chat_request_with_tool_execution(
     mcp_server_names: &[&str],
 ) -> Result<(String, Option<i32>, Option<i32>)> {
     use crate::provider::{Message, ChatRequest};
-    use crate::mcp::McpManager;
     use crate::token_utils::TokenCounter;
     
     let mut conversation_messages = Vec::new();
@@ -291,8 +290,6 @@ pub async fn send_chat_request_with_tool_execution(
     
     // Add current prompt
     conversation_messages.push(Message::user(prompt.to_string()));
-    
-    let mut manager = McpManager::new();
     let max_iterations = 10; // Prevent infinite loops
     let mut iteration = 0;
     
@@ -340,13 +337,16 @@ pub async fn send_chat_request_with_tool_execution(
                         crate::debug_log!("Executing tool call {}/{}: {} with args: {}",
                                          i + 1, tool_calls.len(), tool_call.function.name, tool_call.function.arguments);
                         
-                        // Find which MCP server has this function
+                        // Find which MCP server has this function using daemon client
+                        let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
                         let mut tool_result = None;
                         for server_name in mcp_server_names {
-                            match manager.invoke_function(
+                            // Parse arguments as JSON value instead of Vec<String>
+                            let args_value: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)?;
+                            match daemon_client.call_tool(
                                 server_name,
                                 &tool_call.function.name,
-                                &parse_function_arguments(&tool_call.function.arguments)?
+                                args_value
                             ).await {
                                 Ok(result) => {
                                     crate::debug_log!("Tool call successful on server '{}': {}", server_name,

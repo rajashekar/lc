@@ -10,6 +10,7 @@ mod proxy;
 mod token_utils;
 mod unified_cache;
 mod mcp;
+mod mcp_daemon;
 mod vector_db;
 
 use anyhow::Result;
@@ -18,6 +19,15 @@ use clap::Parser;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Check for daemon mode first
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 && args[1] == "--mcp-daemon" {
+        // Run in daemon mode
+        let mut daemon = mcp_daemon::McpDaemon::new()?;
+        daemon.start().await?;
+        return Ok(());
+    }
+    
     let cli = Cli::parse();
     
     // Set debug mode if flag is provided

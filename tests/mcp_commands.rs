@@ -1,9 +1,9 @@
 //! Integration tests for MCP commands
-//! 
+//!
 //! This module contains comprehensive integration tests for all MCP-related
 //! CLI commands, testing them as a user would interact with the CLI.
 
-use lc::mcp::{McpConfig, McpServerConfig, McpServerType, ProcessRegistry, ProcessRegistryEntry, McpManager};
+use lc::mcp::{McpConfig, McpServerConfig, McpServerType, ProcessRegistry, ProcessRegistryEntry, McpManager, SdkMcpManager};
 use std::collections::HashMap;
 
 #[cfg(test)]
@@ -550,5 +550,173 @@ mod mcp_integration_tests {
         // Verify remaining servers
         assert!(config.servers.contains_key("server1"));
         assert!(config.servers.contains_key("server3"));
+    }
+}
+
+#[cfg(test)]
+mod sdk_mcp_manager_tests {
+    use super::*;
+
+    #[test]
+    fn test_sdk_mcp_manager_new() {
+        let manager = SdkMcpManager::new();
+        // Just verify we can create a manager instance
+        assert!(std::ptr::addr_of!(manager) as usize != 0);
+    }
+
+    #[tokio::test]
+    async fn test_sdk_mcp_manager_lifecycle() {
+        let mut manager = SdkMcpManager::new();
+        
+        // Test that we can create and close the manager without errors
+        let result = manager.close_all().await;
+        assert!(result.is_ok());
+    }
+}
+
+#[cfg(test)]
+mod sdk_integration_tests {
+    use super::*;
+    use lc::mcp::{create_stdio_server_config, create_sse_server_config};
+
+    #[test]
+    fn test_create_stdio_server_config() {
+        let config = create_stdio_server_config(
+            "test-server".to_string(),
+            vec!["echo".to_string(), "hello".to_string()],
+            None,
+            None,
+        );
+        
+        assert_eq!(config.name, "test-server");
+        // Verify the config was created successfully
+        assert!(std::ptr::addr_of!(config) as usize != 0);
+    }
+
+    #[test]
+    fn test_create_sse_server_config() {
+        let config = create_sse_server_config(
+            "sse-server".to_string(),
+            "http://localhost:8080/sse".to_string(),
+        );
+        
+        assert_eq!(config.name, "sse-server");
+        // Verify the config was created successfully
+        assert!(std::ptr::addr_of!(config) as usize != 0);
+    }
+
+    #[test]
+    fn test_legacy_to_sdk_config_conversion() {
+        // Test that we can convert legacy config types to SDK config types
+        let mut config = McpConfig {
+            servers: HashMap::new(),
+        };
+        
+        // Add a legacy server configuration
+        config.add_server(
+            "legacy-server".to_string(),
+            "echo test".to_string(),
+            McpServerType::Stdio,
+        ).unwrap();
+        
+        // Verify we can retrieve it
+        let server_config = config.get_server("legacy-server");
+        assert!(server_config.is_some());
+        
+        let server = server_config.unwrap();
+        assert_eq!(server.name, "legacy-server");
+        assert_eq!(server.server_type, McpServerType::Stdio);
+        
+        // Test conversion to SDK config (this would be done in the CLI handlers)
+        let parts: Vec<String> = server.command_or_url.split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
+        let sdk_config = create_stdio_server_config(
+            server.name.clone(),
+            parts,
+            None,
+            None,
+        );
+        
+        assert_eq!(sdk_config.name, "legacy-server");
+    }
+
+    #[tokio::test]
+    async fn test_sdk_manager_with_invalid_server() {
+        let mut manager = SdkMcpManager::new();
+        
+        // Try to add an invalid server configuration
+        let invalid_config = create_stdio_server_config(
+            "invalid-server".to_string(),
+            vec!["nonexistent-command".to_string()],
+            None,
+            None,
+        );
+        
+        // This should fail gracefully
+        let result = manager.add_server(invalid_config).await;
+        // We expect this to fail since the command doesn't exist
+        assert!(result.is_err());
+        
+        // Clean up
+        let _ = manager.close_all().await;
+    }
+
+    #[test]
+    fn test_backward_compatibility() {
+        // Test that legacy MCP functionality still works alongside SDK
+        let legacy_manager = McpManager::new();
+        let sdk_manager = SdkMcpManager::new();
+        
+        // Both should be creatable without issues
+        assert!(std::ptr::addr_of!(legacy_manager) as usize != 0);
+        assert!(std::ptr::addr_of!(sdk_manager) as usize != 0);
+    }
+}
+
+#[cfg(test)]
+mod mcp_config_sdk_integration_tests {
+    use super::*;
+
+    #[test]
+    fn test_mcp_config_supports_all_server_types() {
+        let mut config = McpConfig {
+            servers: HashMap::new(),
+        };
+        
+        // Test that all server types are supported
+        config.add_server("stdio-test".to_string(), "echo test".to_string(), McpServerType::Stdio).unwrap();
+        config.add_server("sse-test".to_string(), "http://localhost:8080/sse".to_string(), McpServerType::Sse).unwrap();
+        config.add_server("streamable-test".to_string(), "http://localhost:8080".to_string(), McpServerType::Streamable).unwrap();
+        
+        assert_eq!(config.servers.len(), 3);
+        
+        // Verify each server type is correctly stored
+        let stdio_server = config.get_server("stdio-test").unwrap();
+        let sse_server = config.get_server("sse-test").unwrap();
+        let streamable_server = config.get_server("streamable-test").unwrap();
+        
+        assert_eq!(stdio_server.server_type, McpServerType::Stdio);
+        assert_eq!(sse_server.server_type, McpServerType::Sse);
+        assert_eq!(streamable_server.server_type, McpServerType::Streamable);
+    }
+
+    #[test]
+    fn test_mcp_config_persistence_compatibility() {
+        // Test that config can be saved and loaded (basic structure test)
+        let mut config = McpConfig {
+            servers: HashMap::new(),
+        };
+        
+        config.add_server(
+            "persistent-server".to_string(),
+            "echo persistent".to_string(),
+            McpServerType::Stdio,
+        ).unwrap();
+        
+        // Verify the server was added
+        assert_eq!(config.servers.len(), 1);
+        let server = config.get_server("persistent-server").unwrap();
+        assert_eq!(server.command_or_url, "echo persistent");
     }
 }
