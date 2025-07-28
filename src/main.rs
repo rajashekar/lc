@@ -12,10 +12,51 @@ mod unified_cache;
 mod mcp;
 mod mcp_daemon;
 mod vector_db;
+mod webchatproxy;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
 use clap::Parser;
+use colored::Colorize;
+use chrono::{DateTime, Utc};
+use database::{Database, ChatEntry};
+
+#[derive(Debug, Clone)]
+struct ChatMessage {
+    role: String,
+    content: String,
+    model: Option<String>,
+}
+
+// Helper functions for database operations
+async fn get_current_session() -> Result<Option<String>> {
+    let db = Database::new()?;
+    db.get_current_session_id()
+}
+
+async fn get_conversation_history(session_id: &str) -> Result<Vec<ChatMessage>> {
+    let db = Database::new()?;
+    let entries = db.get_chat_history(session_id)?;
+    
+    let mut messages = Vec::new();
+    for entry in entries {
+        // Add user message
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: entry.question,
+            model: Some(entry.model.clone()),
+        });
+        
+        // Add assistant message
+        messages.push(ChatMessage {
+            role: "assistant".to_string(),
+            content: entry.response,
+            model: Some(entry.model),
+        });
+    }
+    
+    Ok(messages)
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -50,10 +91,10 @@ async fn main() -> Result<()> {
                     if cli.prompt.len() > 1 {
                         // Use template as system prompt and remaining args as user prompt
                         let user_prompt = cli.prompt[1..].join(" ");
-                        handle_prompt_with_optional_piped_input(user_prompt, Some(template_content.clone()), piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb).await?;
+                        handle_prompt_with_optional_piped_input(user_prompt, Some(template_content.clone()), piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id).await?;
                     } else {
                         // Use template content as the prompt (no additional user prompt)
-                        handle_prompt_with_optional_piped_input(template_content.clone(), cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb).await?;
+                        handle_prompt_with_optional_piped_input(template_content.clone(), cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id).await?;
                     }
                 } else {
                     anyhow::bail!("Template '{}' not found", template_name);
@@ -61,7 +102,7 @@ async fn main() -> Result<()> {
             } else {
                 // Regular direct prompt - join all arguments
                 let prompt = cli.prompt.join(" ");
-                handle_prompt_with_optional_piped_input(prompt, cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb).await?;
+                handle_prompt_with_optional_piped_input(prompt, cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id).await?;
             }
         }
         (true, Some(Commands::Providers { command })) => {
@@ -103,12 +144,15 @@ async fn main() -> Result<()> {
         (true, Some(Commands::Vectors { command })) => {
             cli::handle_vectors_command(command).await?;
         }
+        (true, Some(Commands::WebChatProxy { command })) => {
+            cli::handle_webchatproxy_command(command).await?;
+        }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped
             if let Some(piped_content) = piped_input {
                 // Input was piped, use it as a direct prompt
                 if !piped_content.trim().is_empty() {
-                    cli::handle_direct_prompt_with_piped_input(piped_content, cli.provider, cli.model, cli.system_prompt, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb).await?;
+                    handle_prompt_with_optional_piped_input_continue(piped_content, cli.system_prompt, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id).await?;
                 } else {
                     use clap::CommandFactory;
                     let mut cmd = Cli::command();
@@ -163,13 +207,227 @@ async fn handle_prompt_with_optional_piped_input(
     attachments: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
+    continue_session: bool,
+    chat_id: Option<String>,
 ) -> Result<()> {
     if let Some(piped_content) = piped_input {
         // Combine prompt with piped input
         let combined_prompt = format!("{}\n\n=== Piped Input ===\n{}", prompt, piped_content);
-        cli::handle_direct_prompt(combined_prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb).await
+        handle_direct_prompt_with_session(combined_prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, continue_session, chat_id).await
     } else {
         // No piped input, use regular prompt handling
+        handle_direct_prompt_with_session(prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, continue_session, chat_id).await
+    }
+}
+
+// Helper function to handle piped input with continue support
+async fn handle_prompt_with_optional_piped_input_continue(
+    piped_content: String,
+    system_prompt: Option<String>,
+    provider: Option<String>,
+    model: Option<String>,
+    max_tokens: Option<String>,
+    temperature: Option<String>,
+    attachments: Vec<String>,
+    tools: Option<String>,
+    vectordb: Option<String>,
+    continue_session: bool,
+    chat_id: Option<String>,
+) -> Result<()> {
+    if continue_session || chat_id.is_some() {
+        // Use piped content as prompt with session continuation
+        handle_direct_prompt_with_session(piped_content, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, continue_session, chat_id).await
+    } else {
+        // Use existing piped input handler
+        cli::handle_direct_prompt_with_piped_input(piped_content, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb).await
+    }
+}
+
+async fn handle_direct_prompt_with_session(
+    prompt: String,
+    provider: Option<String>,
+    model: Option<String>,
+    system_prompt: Option<String>,
+    max_tokens: Option<String>,
+    temperature: Option<String>,
+    attachments: Vec<String>,
+    tools: Option<String>,
+    vectordb: Option<String>,
+    continue_session: bool,
+    chat_id: Option<String>,
+) -> Result<()> {
+    if continue_session {
+        // Get or create session ID
+        let session_id = if let Some(cid) = chat_id {
+            cid
+        } else {
+            // Get current session from database
+            match get_current_session().await {
+                Ok(Some(session)) => session,
+                Ok(None) => {
+                    eprintln!("No current session found. Start a new conversation first.");
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("Error retrieving current session: {}", e);
+                    return Ok(());
+                }
+            }
+        };
+
+        // Get conversation history
+        let history = match get_conversation_history(&session_id).await {
+            Ok(history) => history,
+            Err(e) => {
+                eprintln!("Error retrieving conversation history: {}", e);
+                return Ok(());
+            }
+        };
+
+        if history.is_empty() {
+            eprintln!("No conversation history found for session: {}", session_id);
+            return Ok(());
+        }
+
+        // Use provided model/provider if available, otherwise try to infer from history
+        let final_model = model.or_else(|| {
+            // Get model from the first message in history
+            history.first().and_then(|msg| msg.model.clone())
+        });
+
+        let final_provider = provider.or_else(|| {
+            // If model contains provider prefix, extract it
+            if let Some(ref m) = final_model {
+                if m.contains(':') {
+                    Some(m.split(':').next().unwrap().to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
+
+        if final_model.is_none() {
+            eprintln!("Could not determine model. Please specify with -m/--model");
+            return Ok(());
+        }
+
+        if final_provider.is_none() {
+            eprintln!("Could not determine provider. Please specify with -p/--provider or use full model format (provider:model)");
+            return Ok(());
+        }
+
+        handle_session_prompt(prompt, final_provider, final_model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, session_id, history).await
+    } else {
+        // Use regular prompt handling
         cli::handle_direct_prompt(prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb).await
     }
+}
+
+async fn handle_session_prompt(
+    prompt: String,
+    provider: Option<String>,
+    model: Option<String>,
+    system_prompt: Option<String>,
+    max_tokens: Option<String>,
+    temperature: Option<String>,
+    _attachments: Vec<String>,
+    _tools: Option<String>,
+    _vectordb: Option<String>,
+    _session_id: String,
+    history: Vec<ChatMessage>,
+) -> Result<()> {
+    // Convert ChatMessage history to ChatEntry format expected by the chat module
+    let mut chat_entries = Vec::new();
+    let mut i = 0;
+    while i < history.len() {
+        if i + 1 < history.len() && history[i].role == "user" && history[i + 1].role == "assistant" {
+            // We have a user-assistant pair
+            let entry = ChatEntry {
+                chat_id: "temp".to_string(),
+                model: history[i].model.clone().unwrap_or_default(),
+                question: history[i].content.clone(),
+                response: history[i + 1].content.clone(),
+                timestamp: chrono::Utc::now(),
+                input_tokens: None,
+                output_tokens: None,
+            };
+            chat_entries.push(entry);
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    
+    // Parse parameters
+    let max_tokens_parsed = max_tokens.as_ref().and_then(|s| s.parse().ok());
+    let temperature_parsed = temperature.as_ref().and_then(|s| s.parse().ok());
+    
+    // Get provider and model - if not provided, try to infer from history
+    let (provider_name, model_name) = if let (Some(p), Some(m)) = (&provider, &model) {
+        // Both provided explicitly
+        (p.clone(), m.clone())
+    } else if let Some(first_msg) = history.first() {
+        if let Some(full_model) = &first_msg.model {
+            if full_model.contains(':') {
+                // Model is in format "provider:model"
+                let parts: Vec<&str> = full_model.split(':').collect();
+                let inferred_provider = parts[0].to_string();
+                let inferred_model = full_model.clone(); // Keep full model name
+                
+                (
+                    provider.unwrap_or(inferred_provider),
+                    model.unwrap_or(inferred_model)
+                )
+            } else {
+                // Model doesn't contain provider prefix
+                (
+                    provider.unwrap_or_else(|| "openai".to_string()),
+                    model.unwrap_or_else(|| full_model.clone())
+                )
+            }
+        } else {
+            // No model in history
+            (
+                provider.unwrap_or_else(|| "openai".to_string()),
+                model.unwrap_or_else(|| "gpt-3.5-turbo".to_string())
+            )
+        }
+    } else {
+        // No history available
+        (
+            provider.unwrap_or_else(|| "openai".to_string()),
+            model.unwrap_or_else(|| "gpt-3.5-turbo".to_string())
+        )
+    };
+    
+    // Create authenticated client
+    let mut config = config::Config::load()?;
+    let client = chat::create_authenticated_client(&mut config, &provider_name).await?;
+    
+    // Strip provider prefix from model name for API call
+    let api_model_name = if model_name.contains(':') {
+        model_name.split(':').nth(1).unwrap_or(&model_name).to_string()
+    } else {
+        model_name.clone()
+    };
+    
+    // Send chat request with history
+    let (response, _input_tokens, _output_tokens) = chat::send_chat_request_with_validation(
+        &client,
+        &api_model_name,
+        &prompt,
+        &chat_entries,
+        system_prompt.as_deref(),
+        max_tokens_parsed,
+        temperature_parsed,
+        &provider_name,
+        None, // No tools for now
+    ).await?;
+    
+    // Print the response
+    println!("{}", response);
+    
+    Ok(())
 }

@@ -71,6 +71,14 @@ pub struct Cli {
     #[arg(short = 'd', long = "debug")]
     pub debug: bool,
     
+    /// Continue the current session (use existing session ID)
+    #[arg(short = 'c', long = "continue")]
+    pub continue_session: bool,
+    
+    /// Chat ID to use or continue (alternative to --continue)
+    #[arg(long = "cid")]
+    pub chat_id: Option<String>,
+    
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -245,6 +253,12 @@ pub enum Commands {
     Vectors {
         #[command(subcommand)]
         command: VectorCommands,
+    },
+    /// Web chat proxy for non-OpenAI compatible services (alias: w)
+    #[command(alias = "w")]
+    WebChatProxy {
+        #[command(subcommand)]
+        command: WebChatProxyCommands,
     },
 }
 
@@ -642,6 +656,66 @@ pub enum VectorCommands {
     Info {
         /// Name of the vector database
         name: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum WebChatProxyCommands {
+    /// List supported providers (alias: p)
+    #[command(alias = "p")]
+    Providers {
+        #[command(subcommand)]
+        command: Option<WebChatProxyProviderCommands>,
+    },
+    /// Start proxy server for a provider (alias: s)
+    #[command(alias = "s")]
+    Start {
+        /// Provider name
+        provider: String,
+        /// Port to listen on
+        #[arg(short = 'p', long = "port", default_value = "8080")]
+        port: u16,
+        /// Host to bind to
+        #[arg(long = "host", default_value = "127.0.0.1")]
+        host: String,
+        /// API key for authentication
+        #[arg(short = 'k', long = "key")]
+        key: Option<String>,
+        /// Generate a random API key
+        #[arg(short = 'g', long = "generate-key")]
+        generate_key: bool,
+        /// Run in daemon mode (background)
+        #[arg(short = 'd', long = "daemon")]
+        daemon: bool,
+    },
+    /// Stop proxy server for a provider
+    Stop {
+        /// Provider name
+        provider: String,
+    },
+    /// List running proxy servers (alias: ps)
+    #[command(alias = "ps")]
+    List,
+}
+
+#[derive(Subcommand)]
+pub enum WebChatProxyProviderCommands {
+    /// List all supported providers (alias: l)
+    #[command(alias = "l")]
+    List,
+    /// Set authentication for Kagi provider
+    Kagi {
+        #[command(subcommand)]
+        command: WebChatProxyKagiCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum WebChatProxyKagiCommands {
+    /// Set authentication token
+    Auth {
+        /// Authentication token
+        token: Option<String>,
     },
 }
 
@@ -2937,7 +3011,7 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
 }
 
 // Helper function to fetch MCP tools and convert them to OpenAI function format
-async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provider::Tool>>, Vec<String>)> {
+pub async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provider::Tool>>, Vec<String>)> {
     use crate::mcp::McpConfig;
     
     // Parse comma-separated server names
@@ -3483,7 +3557,7 @@ pub async fn handle_vectors_command(command: crate::cli::VectorCommands) -> Resu
 }
 
 // RAG helper function to retrieve relevant context
-async fn retrieve_rag_context(
+pub async fn retrieve_rag_context(
     db_name: &str,
     query: &str,
     _client: &crate::provider::OpenAIClient,
@@ -3565,6 +3639,171 @@ async fn retrieve_rag_context(
         crate::debug_log!("RAG: No embedding data in response, returning empty context");
         Ok(String::new())
     }
+}
+
+// WebChatProxy command handlers
+pub async fn handle_webchatproxy_command(command: WebChatProxyCommands) -> Result<()> {
+    match command {
+        WebChatProxyCommands::Providers { command } => {
+            match command {
+                Some(WebChatProxyProviderCommands::List) => {
+                    handle_webchatproxy_providers_list().await?;
+                }
+                Some(WebChatProxyProviderCommands::Kagi { command }) => {
+                    handle_webchatproxy_kagi_command(command).await?;
+                }
+                None => {
+                    handle_webchatproxy_providers_list().await?;
+                }
+            }
+        }
+        WebChatProxyCommands::Start { provider, port, host, key, generate_key, daemon } => {
+            handle_webchatproxy_start(provider, port, host, key, generate_key, daemon).await?;
+        }
+        WebChatProxyCommands::Stop { provider } => {
+            handle_webchatproxy_stop(provider).await?;
+        }
+        WebChatProxyCommands::List => {
+            handle_webchatproxy_list().await?;
+        }
+    }
+    Ok(())
+}
+
+async fn handle_webchatproxy_providers_list() -> Result<()> {
+    use colored::Colorize;
+    
+    println!("\n{}", "Supported WebChatProxy Providers:".bold().blue());
+    println!("  {} {} - Kagi Assistant API", "•".blue(), "kagi".bold());
+    println!("\n{}", "Usage:".bold().blue());
+    println!("  {} Set auth: {}", "•".blue(), "lc w providers set kagi auth <token>".dimmed());
+    println!("  {} Start proxy: {}", "•".blue(), "lc w start kagi".dimmed());
+    
+    Ok(())
+}
+
+async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> Result<()> {
+    use colored::Colorize;
+    use std::io::{self, Write};
+    
+    match command {
+        WebChatProxyKagiCommands::Auth { token } => {
+            let auth_token = if let Some(token) = token {
+                token
+            } else {
+                print!("Enter authentication token for kagi: ");
+                io::stdout().flush()?;
+                rpassword::read_password()?
+            };
+            
+            // Store the auth token in webchatproxy config
+            let mut config = crate::webchatproxy::WebChatProxyConfig::load()?;
+            config.set_provider_auth("kagi", &auth_token)?;
+            config.save()?;
+            
+            println!("{} Authentication set for provider 'kagi'", "✓".green());
+        }
+    }
+    
+    Ok(())
+}
+
+async fn handle_webchatproxy_start(provider: String, port: u16, host: String, key: Option<String>, generate_key: bool, daemon: bool) -> Result<()> {
+    use colored::Colorize;
+    
+    if provider != "kagi" {
+        anyhow::bail!("Unsupported provider '{}'. Currently only 'kagi' is supported.", provider);
+    }
+    
+    // Generate API key if requested
+    let final_key = if generate_key {
+        let generated_key = crate::proxy::generate_api_key();
+        println!("{} Generated API key: {}", "🔑".green(), generated_key.bold());
+        Some(generated_key)
+    } else {
+        key
+    };
+    
+    println!("\n{}", "WebChatProxy Server Configuration:".bold().blue());
+    println!("  {} {}:{}", "Address:".bold(), host, port);
+    println!("  {} {}", "Provider:".bold(), provider.green());
+    
+    if final_key.is_some() {
+        println!("  {} {}", "Authentication:".bold(), "Enabled".green());
+    } else {
+        println!("  {} {}", "Authentication:".bold(), "Disabled".yellow());
+    }
+    
+    println!("\n{}", "Available endpoints:".bold().blue());
+    println!("  {} http://{}:{}/chat/completions", "•".blue(), host, port);
+    println!("  {} http://{}:{}/v1/chat/completions", "•".blue(), host, port);
+    
+    if daemon {
+        println!("\n{} Starting in daemon mode...", "🔄".blue());
+        println!("{} Logs will be written to: ~/Library/Application Support/lc/{}.log", "📝".blue(), provider);
+        
+        // Start the webchatproxy server in daemon mode
+        crate::webchatproxy::start_webchatproxy_daemon(host, port, provider.clone(), final_key).await?;
+    } else {
+        println!("\n{} Press Ctrl+C to stop the server\n", "💡".yellow());
+        
+        // Start the webchatproxy server
+        crate::webchatproxy::start_webchatproxy_server(host, port, provider, final_key).await?;
+    }
+    
+    Ok(())
+}
+
+async fn handle_webchatproxy_stop(provider: String) -> Result<()> {
+    use colored::Colorize;
+    
+    if provider != "kagi" {
+        anyhow::bail!("Unsupported provider '{}'. Currently only 'kagi' is supported.", provider);
+    }
+    
+    println!("{} Stopping webchatproxy server for '{}'...", "🛑".red(), provider);
+    
+    // Stop the webchatproxy daemon
+    match crate::webchatproxy::stop_webchatproxy_daemon(&provider).await {
+        Ok(_) => {
+            println!("{} WebChatProxy server for '{}' stopped successfully", "✓".green(), provider);
+        }
+        Err(e) => {
+            println!("{} Failed to stop WebChatProxy server for '{}': {}", "⚠️".yellow(), provider, e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn handle_webchatproxy_list() -> Result<()> {
+    use colored::Colorize;
+    
+    println!("\n{} Running WebChatProxy servers:", "📊".bold().blue());
+    
+    // List running webchatproxy daemons
+    match crate::webchatproxy::list_webchatproxy_daemons().await {
+        Ok(servers) => {
+            if servers.is_empty() {
+                println!("No WebChatProxy servers currently running.");
+            } else {
+                for (provider, info) in servers {
+                    println!("  {} {} - {}:{} (PID: {})",
+                        "•".blue(),
+                        provider.bold(),
+                        info.host,
+                        info.port,
+                        info.pid
+                    );
+                }
+            }
+        }
+        Err(e) => {
+            println!("{} Failed to list WebChatProxy servers: {}", "⚠️".yellow(), e);
+        }
+    }
+    
+    Ok(())
 }
 
 // Include test module
