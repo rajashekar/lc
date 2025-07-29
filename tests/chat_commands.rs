@@ -6,12 +6,11 @@
 mod common;
 
 use lc::config::Config;
-use lc::chat::{send_chat_request_with_validation, create_authenticated_client};
-use lc::provider::{OpenAIClient, ChatRequest, Message, Tool, Function};
-use lc::database::{Database, ChatEntry};
+use lc::provider::{ChatRequest, Message, Tool, Function};
+use lc::database::ChatEntry;
 use std::collections::HashMap;
 use tempfile::TempDir;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 #[cfg(test)]
 mod chat_model_resolution_tests {
@@ -778,7 +777,7 @@ mod chat_integration_tests {
         };
         
         // Simulate chat workflow
-        let session_id = uuid::Uuid::new_v4().to_string();
+        let _session_id = uuid::Uuid::new_v4().to_string();
         let prompt = "Hello, how are you?";
         
         // Test model resolution
@@ -968,5 +967,338 @@ mod chat_integration_tests {
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");
         assert_eq!(model, "gpt-4");
+    }
+}
+
+#[cfg(test)]
+mod chat_session_continuation_tests {
+    use super::*;
+
+    #[test]
+    fn test_continue_session_flag_parsing() {
+        // Test that --continue flag is properly parsed
+        use clap::Parser;
+        
+        // Test with --continue flag
+        let args = vec!["lc", "--continue", "Hello", "world"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        assert!(cli.continue_session);
+        assert_eq!(cli.prompt, vec!["Hello", "world"]);
+        
+        // Test with -c short flag
+        let args = vec!["lc", "-c", "Hello", "world"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        assert!(cli.continue_session);
+        assert_eq!(cli.prompt, vec!["Hello", "world"]);
+        
+        // Test without continue flag
+        let args = vec!["lc", "Hello", "world"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        assert!(!cli.continue_session);
+        assert_eq!(cli.prompt, vec!["Hello", "world"]);
+    }
+
+    #[test]
+    fn test_chat_id_option_parsing() {
+        use clap::Parser;
+        
+        // Test with --cid option
+        let args = vec!["lc", "--cid", "test-session-123", "Hello", "world"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        assert_eq!(cli.chat_id, Some("test-session-123".to_string()));
+        assert_eq!(cli.prompt, vec!["Hello", "world"]);
+        
+        // Test without --cid option
+        let args = vec!["lc", "Hello", "world"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        assert_eq!(cli.chat_id, None);
+        assert_eq!(cli.prompt, vec!["Hello", "world"]);
+    }
+
+    #[test]
+    fn test_continue_and_cid_together() {
+        use clap::Parser;
+        
+        // Test that both --continue and --cid can be used together
+        let args = vec!["lc", "--continue", "--cid", "session-456", "Hello", "world"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        assert!(cli.continue_session);
+        assert_eq!(cli.chat_id, Some("session-456".to_string()));
+        assert_eq!(cli.prompt, vec!["Hello", "world"]);
+    }
+
+    #[test]
+    fn test_chat_command_cid_option() {
+        use clap::Parser;
+        
+        // Test chat subcommand with --cid option
+        let args = vec!["lc", "chat", "-m", "gpt-4", "--cid", "chat-session-789"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        
+        if let Some(lc::cli::Commands::Chat { model, cid, .. }) = cli.command {
+            assert_eq!(model, "gpt-4");
+            assert_eq!(cid, Some("chat-session-789".to_string()));
+        } else {
+            panic!("Expected Chat command");
+        }
+    }
+
+    #[test]
+    fn test_session_id_validation() {
+        // Test various session ID formats
+        let valid_session_ids = vec![
+            "simple-session",
+            "session_with_underscores",
+            "session-123-456",
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890", // UUID format
+            "very-long-session-id-with-many-characters-123456789",
+        ];
+        
+        for session_id in valid_session_ids {
+            use clap::Parser;
+            let args = vec!["lc", "--cid", session_id, "test prompt"];
+            let cli = lc::cli::Cli::try_parse_from(args);
+            assert!(cli.is_ok(), "Session ID '{}' should be valid", session_id);
+            let cli = cli.unwrap();
+            assert_eq!(cli.chat_id, Some(session_id.to_string()));
+        }
+    }
+
+    #[test]
+    fn test_session_continuation_logic() {
+        // Test the logic for determining session ID in chat scenarios
+        
+        // Case 1: --cid provided, should use that
+        let provided_cid = Some("user-provided-session".to_string());
+        let continue_flag = false;
+        
+        let session_id = provided_cid.clone().unwrap_or_else(|| {
+            if continue_flag {
+                // In real implementation, this would get from database
+                "existing-session-from-db".to_string()
+            } else {
+                uuid::Uuid::new_v4().to_string()
+            }
+        });
+        
+        assert_eq!(session_id, "user-provided-session");
+        
+        // Case 2: --continue flag set, no --cid (would use existing session)
+        let provided_cid: Option<String> = None;
+        let continue_flag = true;
+        
+        let session_id = provided_cid.unwrap_or_else(|| {
+            if continue_flag {
+                "existing-session-from-db".to_string()
+            } else {
+                uuid::Uuid::new_v4().to_string()
+            }
+        });
+        
+        assert_eq!(session_id, "existing-session-from-db");
+        
+        // Case 3: Neither flag set (should generate new session)
+        let provided_cid: Option<String> = None;
+        let continue_flag = false;
+        
+        let session_id = provided_cid.unwrap_or_else(|| {
+            if continue_flag {
+                "existing-session-from-db".to_string()
+            } else {
+                uuid::Uuid::new_v4().to_string()
+            }
+        });
+        
+        // Should be a new UUID (36 characters)
+        assert_eq!(session_id.len(), 36);
+    }
+
+    #[test]
+    fn test_session_precedence_rules() {
+        // Test precedence: --cid takes precedence over --continue
+        
+        struct SessionConfig {
+            cid: Option<String>,
+            continue_session: bool,
+        }
+        
+        let test_cases = vec![
+            // (cid, continue, expected_behavior)
+            (Some("explicit-session".to_string()), false, "explicit-session"),
+            (Some("explicit-session".to_string()), true, "explicit-session"), // cid wins
+            (None, true, "continue-existing"),
+            (None, false, "new-session"),
+        ];
+        
+        for (cid, continue_flag, expected_behavior) in test_cases {
+            let config = SessionConfig {
+                cid: cid.clone(),
+                continue_session: continue_flag,
+            };
+            
+            let result_behavior = if let Some(session_id) = config.cid {
+                session_id
+            } else if config.continue_session {
+                "continue-existing".to_string()
+            } else {
+                "new-session".to_string()
+            };
+            
+            assert_eq!(result_behavior, expected_behavior,
+                "Failed for cid={:?}, continue={}", cid, continue_flag);
+        }
+    }
+
+    #[test]
+    fn test_direct_prompt_with_session_options() {
+        // Test that direct prompts work with session options
+        use clap::Parser;
+        
+        // Test direct prompt with --continue
+        let args = vec!["lc", "--continue", "-m", "gpt-4", "What", "is", "AI?"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        assert!(cli.continue_session);
+        assert_eq!(cli.model, Some("gpt-4".to_string()));
+        assert_eq!(cli.prompt, vec!["What", "is", "AI?"]);
+        
+        // Test direct prompt with --cid
+        let args = vec!["lc", "--cid", "my-session", "-m", "gpt-4", "What", "is", "AI?"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        assert_eq!(cli.chat_id, Some("my-session".to_string()));
+        assert_eq!(cli.model, Some("gpt-4".to_string()));
+        assert_eq!(cli.prompt, vec!["What", "is", "AI?"]);
+    }
+
+    #[test]
+    fn test_session_options_with_other_flags() {
+        use clap::Parser;
+        
+        // Test session options combined with other common flags
+        let args = vec![
+            "lc",
+            "--continue",
+            "--cid", "test-session",
+            "-p", "openai",
+            "-m", "gpt-4",
+            "-s", "You are helpful",
+            "--max-tokens", "1000",
+            "--temperature", "0.7",
+            "-a", "file.txt",
+            "-t", "mcp-server",
+            "-v", "vector-db",
+            "Analyze", "this"
+        ];
+        
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        
+        // Verify session options
+        assert!(cli.continue_session);
+        assert_eq!(cli.chat_id, Some("test-session".to_string()));
+        
+        // Verify other options are preserved
+        assert_eq!(cli.provider, Some("openai".to_string()));
+        assert_eq!(cli.model, Some("gpt-4".to_string()));
+        assert_eq!(cli.system_prompt, Some("You are helpful".to_string()));
+        assert_eq!(cli.max_tokens, Some("1000".to_string()));
+        assert_eq!(cli.temperature, Some("0.7".to_string()));
+        assert_eq!(cli.attachments, vec!["file.txt"]);
+        assert_eq!(cli.tools, Some("mcp-server".to_string()));
+        assert_eq!(cli.vectordb, Some("vector-db".to_string()));
+        assert_eq!(cli.prompt, vec!["Analyze", "this"]);
+    }
+
+    #[test]
+    fn test_session_options_error_cases() {
+        use clap::Parser;
+        
+        // Test missing value for --cid (should fail)
+        let args = vec!["lc", "--cid"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_err(), "--cid without value should fail");
+        
+        // Test --continue with no additional arguments (should be ok)
+        let args = vec!["lc", "--continue"];
+        let cli = lc::cli::Cli::try_parse_from(args);
+        assert!(cli.is_ok(), "--continue alone should be valid");
+        let cli = cli.unwrap();
+        assert!(cli.continue_session);
+        assert!(cli.prompt.is_empty());
+    }
+
+    #[test]
+    fn test_uuid_session_id_format() {
+        // Test that generated session IDs follow UUID format
+        let session_id = uuid::Uuid::new_v4().to_string();
+        
+        // UUID format: 8-4-4-4-12 characters separated by hyphens
+        assert_eq!(session_id.len(), 36);
+        assert_eq!(session_id.chars().filter(|&c| c == '-').count(), 4);
+        
+        // Test that multiple generated UUIDs are unique
+        let mut session_ids = std::collections::HashSet::new();
+        for _ in 0..100 {
+            let id = uuid::Uuid::new_v4().to_string();
+            assert!(session_ids.insert(id), "Generated duplicate session ID");
+        }
+    }
+
+    #[test]
+    fn test_session_workflow_simulation() {
+        // Simulate a complete session workflow
+        
+        // Step 1: Start new session (no flags)
+        let session_id_1 = uuid::Uuid::new_v4().to_string();
+        assert_eq!(session_id_1.len(), 36);
+        
+        // Step 2: Continue session with --continue
+        // In real implementation, this would retrieve the last session ID from database
+        let last_session_id = session_id_1.clone();
+        let continue_session_id = last_session_id; // Would come from DB
+        assert_eq!(continue_session_id, session_id_1);
+        
+        // Step 3: Use specific session with --cid
+        let specific_session_id = "user-chosen-session-123".to_string();
+        assert_eq!(specific_session_id, "user-chosen-session-123");
+        
+        // Step 4: Verify session continuity
+        let conversation_history = vec![
+            ("Hello", "Hi there!"),
+            ("How are you?", "I'm doing well!"),
+        ];
+        
+        // Each entry would be associated with the same session ID
+        for (question, response) in conversation_history {
+            let entry = ChatEntry {
+                chat_id: session_id_1.clone(),
+                model: "gpt-4".to_string(),
+                question: question.to_string(),
+                response: response.to_string(),
+                timestamp: Utc::now(),
+                input_tokens: Some(10),
+                output_tokens: Some(15),
+            };
+            
+            assert_eq!(entry.chat_id, session_id_1);
+        }
     }
 }

@@ -1047,5 +1047,3 @@ lc -p vercel -m v0-1.0-md "Create a React component for a todo list"
 # Interactive chat with v0 model
 lc chat -m v0-1.0-md
 ```
-
-This implementation provides a fast, efficient alternative to Python-based LLM CLI tools with significant performance improvements and a clean, intuitive interface.

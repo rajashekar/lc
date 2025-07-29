@@ -6,9 +6,9 @@
 use lc::config::{Config, ProviderConfig};
 use std::collections::HashMap;
 use tempfile::TempDir;
-use chrono::Utc;
 
 /// Helper function to create a temporary config for testing
+#[allow(dead_code)]
 pub fn create_test_config() -> (Config, TempDir) {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     
@@ -27,6 +27,7 @@ pub fn create_test_config() -> (Config, TempDir) {
 }
 
 /// Helper function to create a test provider config
+#[allow(dead_code)]
 pub fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
     ProviderConfig {
         endpoint: endpoint.to_string(),
@@ -41,6 +42,7 @@ pub fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
 }
 
 /// Helper function to create a config with test providers
+#[allow(dead_code)]
 pub fn create_config_with_providers() -> Config {
     let mut config = Config {
         providers: HashMap::new(),
@@ -71,6 +73,7 @@ pub fn create_config_with_providers() -> Config {
 
 /// Test data constants
 pub mod test_data {
+    #[allow(dead_code)]
     pub const TEST_PROVIDERS: &[(&str, &str)] = &[
         ("openai", "https://api.openai.com"),
         ("anthropic", "https://api.anthropic.com"),
@@ -78,6 +81,7 @@ pub mod test_data {
         ("huggingface", "https://api-inference.huggingface.co"),
     ];
     
+    #[allow(dead_code)]
     pub const TEST_MODELS: &[&str] = &[
         "gpt-4",
         "gpt-3.5-turbo",
@@ -85,6 +89,7 @@ pub mod test_data {
         "claude-3-sonnet",
     ];
     
+    #[allow(dead_code)]
     pub const TEST_HEADERS: &[(&str, &str)] = &[
         ("X-API-Version", "2023-12-01"),
         ("X-Client", "lc-cli"),
@@ -96,42 +101,50 @@ pub mod test_data {
 pub mod assertions {
     use lc::config::Config;
     
+    #[allow(dead_code)]
     pub fn assert_provider_exists(config: &Config, name: &str) {
         assert!(config.has_provider(name), "Provider '{}' should exist", name);
     }
     
+    #[allow(dead_code)]
     pub fn assert_provider_not_exists(config: &Config, name: &str) {
         assert!(!config.has_provider(name), "Provider '{}' should not exist", name);
     }
     
+    #[allow(dead_code)]
     pub fn assert_provider_endpoint(config: &Config, name: &str, expected_endpoint: &str) {
         let provider = config.get_provider(name).expect("Provider should exist");
         assert_eq!(provider.endpoint, expected_endpoint, 
                    "Provider '{}' endpoint should be '{}'", name, expected_endpoint);
     }
     
+    #[allow(dead_code)]
     pub fn assert_provider_has_api_key(config: &Config, name: &str) {
         let provider = config.get_provider(name).expect("Provider should exist");
         assert!(provider.api_key.is_some(), "Provider '{}' should have an API key", name);
     }
     
+    #[allow(dead_code)]
     pub fn assert_provider_api_key(config: &Config, name: &str, expected_key: &str) {
         let provider = config.get_provider(name).expect("Provider should exist");
         assert_eq!(provider.api_key.as_ref().unwrap(), expected_key,
                    "Provider '{}' API key should be '{}'", name, expected_key);
     }
     
+    #[allow(dead_code)]
     pub fn assert_default_provider(config: &Config, expected_name: &str) {
         assert_eq!(config.default_provider.as_ref().unwrap(), expected_name,
                    "Default provider should be '{}'", expected_name);
     }
     
+    #[allow(dead_code)]
     pub fn assert_header_exists(config: &Config, provider: &str, header_name: &str, expected_value: &str) {
         let headers = config.list_headers(provider).expect("Provider should exist");
         assert_eq!(headers.get(header_name).unwrap(), expected_value,
                    "Header '{}' should have value '{}'", header_name, expected_value);
     }
     
+    #[allow(dead_code)]
     pub fn assert_header_count(config: &Config, provider: &str, expected_count: usize) {
         let headers = config.list_headers(provider).expect("Provider should exist");
         assert_eq!(headers.len(), expected_count,
