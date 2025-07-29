@@ -717,6 +717,9 @@ pub enum WebChatProxyKagiCommands {
         /// Authentication token
         token: Option<String>,
     },
+    /// List available Kagi models (alias: m)
+    #[command(alias = "m")]
+    Models,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -3682,6 +3685,10 @@ async fn handle_webchatproxy_providers_list() -> Result<()> {
     Ok(())
 }
 
+async fn fetch_kagi_models() -> Result<Vec<crate::webchatproxy::KagiModelProfile>> {
+    crate::webchatproxy::fetch_kagi_models().await
+}
+
 async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> Result<()> {
     use colored::Colorize;
     use std::io::{self, Write};
@@ -3702,6 +3709,60 @@ async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> 
             config.save()?;
             
             println!("{} Authentication set for provider 'kagi'", "✓".green());
+        }
+        WebChatProxyKagiCommands::Models => {
+            // Fetch and display Kagi models
+            match fetch_kagi_models().await {
+                Ok(models) => {
+                    println!("\n{} Available Kagi models:", "Models:".bold().blue());
+                    for model in models {
+                        let mut capabilities = Vec::new();
+                        if model.internet_access {
+                            capabilities.push("🌐 web".blue());
+                        }
+                        if model.personalizations {
+                            capabilities.push("👤 personal".magenta());
+                        }
+                        
+                        let mut info_parts = Vec::new();
+                        if let Some(ctx) = model.model_input_limit {
+                            if ctx >= 1000000 {
+                                info_parts.push(format!("{}m ctx", ctx / 1000000));
+                            } else if ctx >= 1000 {
+                                info_parts.push(format!("{}k ctx", ctx / 1000));
+                            } else {
+                                info_parts.push(format!("{} ctx", ctx));
+                            }
+                        }
+                        
+                        print!("  {} {} ({})", "•".blue(), model.model_name.bold(), model.model);
+                        
+                        if !capabilities.is_empty() {
+                            let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+                            print!(" [{}]", capability_strings.join(" "));
+                        }
+                        
+                        if !info_parts.is_empty() {
+                            print!(" ({})", info_parts.join(", ").dimmed());
+                        }
+                        
+                        if let Some(description) = &model.scorecard.description {
+                            print!(" - {}", description.dimmed());
+                        }
+                        
+                        if model.scorecard.recommended {
+                            print!(" {}", "⭐ recommended".yellow());
+                        }
+                        
+                        println!();
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} Failed to fetch Kagi models: {}", "❌".red(), e);
+                    eprintln!("Make sure you have set your Kagi authentication token with:");
+                    eprintln!("  {}", "lc w p kagi auth".dimmed());
+                }
+            }
         }
     }
     

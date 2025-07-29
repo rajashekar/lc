@@ -3,7 +3,7 @@ use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
     response::Json,
-    routing::post,
+    routing::{get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -129,6 +129,21 @@ pub struct ChatUsage {
     pub total_tokens: u32,
 }
 
+// OpenAI-compatible models response structures
+#[derive(Serialize)]
+pub struct ModelsListResponse {
+    pub object: String,
+    pub data: Vec<ModelInfo>,
+}
+
+#[derive(Serialize)]
+pub struct ModelInfo {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub owned_by: String,
+}
+
 // Kagi-specific structures
 #[derive(Serialize)]
 pub struct KagiRequest {
@@ -150,6 +165,39 @@ pub struct KagiProfile {
     pub internet_access: bool,
     pub model: String,
     pub lens_id: Option<String>,
+}
+
+// Kagi models structures
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KagiModelsResponse {
+    pub profiles: Vec<KagiModelProfile>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KagiModelProfile {
+    pub id: Option<String>,
+    pub name: String,
+    pub model: String,
+    pub model_name: String,
+    pub model_provider: String,
+    pub model_input_limit: Option<u32>,
+    pub scorecard: KagiScorecard,
+    pub model_provider_name: String,
+    pub internet_access: bool,
+    pub personalizations: bool,
+    pub shortcut: String,
+    pub is_default_profile: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KagiScorecard {
+    pub speed: f32,
+    pub accuracy: f32,
+    pub cost: f32,
+    pub context_window: f32,
+    pub privacy: f32,
+    pub description: Option<String>,
+    pub recommended: bool,
 }
 
 // Daemon management structures
@@ -238,6 +286,8 @@ pub async fn start_webchatproxy_server(
     let app = Router::new()
         .route("/chat/completions", post(chat_completions))
         .route("/v1/chat/completions", post(chat_completions))
+        .route("/models", get(list_models))
+        .route("/v1/models", get(list_models))
         .layer(CorsLayer::permissive())
         .with_state(Arc::new(state));
     
@@ -292,6 +342,64 @@ async fn chat_completions(
     }
 }
 
+// List models endpoint
+async fn list_models(
+    State(state): State<Arc<WebChatProxyState>>,
+    headers: HeaderMap,
+) -> Result<Json<ModelsListResponse>, StatusCode> {
+    println!("🔄 Received models list request for provider: {}", state.provider);
+    
+    // Authenticate if API key is configured
+    if let Err(e) = authenticate(&headers, &state).await {
+        println!("❌ Authentication failed");
+        return Err(e);
+    }
+    
+    match state.provider.as_str() {
+        "kagi" => handle_kagi_models_request(&state).await,
+        _ => {
+            println!("❌ Unsupported provider: {}", state.provider);
+            Err(StatusCode::BAD_REQUEST)
+        },
+    }
+}
+
+// Handle Kagi models list request
+async fn handle_kagi_models_request(
+    _state: &WebChatProxyState,
+) -> Result<Json<ModelsListResponse>, StatusCode> {
+    match fetch_kagi_models().await {
+        Ok(kagi_models) => {
+            let current_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            
+            let models: Vec<ModelInfo> = kagi_models
+                .into_iter()
+                .map(|model| ModelInfo {
+                    id: model.model.clone(),
+                    object: "model".to_string(),
+                    created: current_time,
+                    owned_by: model.model_provider_name.clone(),
+                })
+                .collect();
+            
+            let response = ModelsListResponse {
+                object: "list".to_string(),
+                data: models,
+            };
+            
+            println!("✅ Successfully fetched {} Kagi models", response.data.len());
+            Ok(Json(response))
+        }
+        Err(e) => {
+            println!("❌ Failed to fetch Kagi models: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
 // Handle Kagi-specific requests
 async fn handle_kagi_request(
     state: &WebChatProxyState,
@@ -319,7 +427,7 @@ async fn handle_kagi_request(
             id: None,
             personalizations: false,
             internet_access: true,
-            model: "llama-4-scout".to_string(),
+            model: request.model.clone(),
             lens_id: None,
         },
     };
@@ -645,4 +753,64 @@ pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> 
     registry.save()?;
     
     Ok(active_daemons)
+}
+
+// Function to fetch Kagi models from the profile_list endpoint
+pub async fn fetch_kagi_models() -> Result<Vec<KagiModelProfile>> {
+    let config = WebChatProxyConfig::load()?;
+    
+    // Get Kagi auth token
+    let auth_token = config.get_provider_auth("kagi")
+        .ok_or_else(|| anyhow::anyhow!("No Kagi authentication token configured. Set one with 'lc w p kagi auth'"))?;
+    
+    // Make request to Kagi profile_list endpoint
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://kagi.com/assistant/profile_list")
+        .header("Content-Type", "application/json")
+        .header("Cookie", format!("kagi_session={}", auth_token))
+        .json(&serde_json::json!({}))
+        .send()
+        .await?;
+    
+    if !response.status().is_success() {
+        anyhow::bail!("Failed to fetch Kagi models: HTTP {}", response.status());
+    }
+    
+    let response_text = response.text().await?;
+    
+    // Parse the HTML response to extract JSON data
+    parse_kagi_models_response(&response_text)
+}
+
+// Parse Kagi's HTML response to extract model profiles
+fn parse_kagi_models_response(html: &str) -> Result<Vec<KagiModelProfile>> {
+    let lines: Vec<&str> = html.lines().collect();
+    
+    // Look for the <div hidden> tag that contains the profiles JSON
+    for line in lines.iter() {
+        if line.contains("<div hidden>") && line.contains("profiles") {
+            // Extract content between <div hidden> and </div>
+            if let Some(start) = line.find("<div hidden>") {
+                let content_start = start + 12; // Length of '<div hidden>'
+                if let Some(end) = line[content_start..].find("</div>") {
+                    let json_content = &line[content_start..content_start + end];
+                    
+                    // Decode HTML entities
+                    let decoded_json = json_content
+                        .replace("&quot;", "\"")
+                        .replace("&lt;", "<")
+                        .replace("&gt;", ">")
+                        .replace("&amp;", "&")
+                        .replace("&#39;", "'");
+                    
+                    if let Ok(parsed) = serde_json::from_str::<KagiModelsResponse>(&decoded_json) {
+                        return Ok(parsed.profiles);
+                    }
+                }
+            }
+        }
+    }
+    
+    anyhow::bail!("Could not parse Kagi models response - no profiles data found")
 }
