@@ -91,8 +91,11 @@ pub struct WebChatProxyState {
 pub struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
+    #[allow(dead_code)]
     pub max_tokens: Option<u32>,
+    #[allow(dead_code)]
     pub temperature: Option<f32>,
+    #[allow(dead_code)]
     pub stream: Option<bool>,
 }
 
@@ -200,6 +203,7 @@ impl DaemonRegistry {
         self.daemons.remove(provider)
     }
     
+    #[allow(dead_code)]
     pub fn get_daemon(&self, provider: &str) -> Option<&DaemonInfo> {
         self.daemons.get(provider)
     }

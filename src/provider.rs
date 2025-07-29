@@ -24,6 +24,7 @@ pub struct EmbeddingRequest {
 #[derive(Debug, Deserialize)]
 pub struct EmbeddingResponse {
     pub data: Vec<EmbeddingData>,
+    #[allow(dead_code)]
     pub model: String,
     pub usage: EmbeddingUsage,
 }
@@ -31,12 +32,15 @@ pub struct EmbeddingResponse {
 #[derive(Debug, Deserialize, Clone)]
 pub struct EmbeddingData {
     pub embedding: Vec<f64>,
+    #[allow(dead_code)]
     pub index: u32,
+    #[allow(dead_code)]
     pub object: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct EmbeddingUsage {
+    #[allow(dead_code)]
     pub prompt_tokens: u32,
     pub total_tokens: u32,
 }
@@ -115,6 +119,7 @@ pub struct Choice {
 
 #[derive(Debug, Deserialize)]
 pub struct ResponseMessage {
+    #[allow(dead_code)]
     pub role: String,
     pub content: Option<String>,
     pub tool_calls: Option<Vec<ToolCall>>,
@@ -141,6 +146,7 @@ pub struct LlamaChatResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct LlamaMessage {
+    #[allow(dead_code)]
     pub role: String,
     pub content: LlamaContent,
 }
@@ -148,6 +154,7 @@ pub struct LlamaMessage {
 #[derive(Debug, Deserialize)]
 pub struct LlamaContent {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     pub content_type: String,
     pub text: String,
 }
@@ -159,6 +166,7 @@ pub struct CohereChatResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct CohereMessage {
+    #[allow(dead_code)]
     pub role: String,
     pub content: Vec<CohereContentItem>,
 }
@@ -166,6 +174,7 @@ pub struct CohereMessage {
 #[derive(Debug, Deserialize)]
 pub struct CohereContentItem {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     pub content_type: String,
     pub text: String,
 }
@@ -191,10 +200,13 @@ pub struct CohereModel {
 #[derive(Debug, Deserialize)]
 pub struct Provider {
     pub provider: String,
+    #[allow(dead_code)]
     pub status: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub supports_tools: bool,
     #[serde(default)]
+    #[allow(dead_code)]
     pub supports_structured_output: bool,
 }
 

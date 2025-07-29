@@ -17,8 +17,6 @@ mod webchatproxy;
 use anyhow::Result;
 use cli::{Cli, Commands};
 use clap::Parser;
-use colored::Colorize;
-use chrono::{DateTime, Utc};
 use database::{Database, ChatEntry};
 
 #[derive(Debug, Clone)]

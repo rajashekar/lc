@@ -429,23 +429,6 @@ pub async fn send_chat_request_with_tool_execution(
     }
 }
 
-// Helper function to parse function arguments from JSON string
-fn parse_function_arguments(args_json: &str) -> Result<Vec<String>> {
-    let args_value: serde_json::Value = serde_json::from_str(args_json)?;
-    let mut args_vec = Vec::new();
-    
-    if let Some(obj) = args_value.as_object() {
-        for (key, value) in obj {
-            let arg_str = match value {
-                serde_json::Value::String(s) => format!("{}={}", key, s),
-                _ => format!("{}={}", key, value.to_string()),
-            };
-            args_vec.push(arg_str);
-        }
-    }
-    
-    Ok(args_vec)
-}
 
 // Helper function to format tool result for display
 fn format_tool_result(result: &serde_json::Value) -> String {

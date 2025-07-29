@@ -20,7 +20,6 @@ pub struct VectorEntry {
 #[derive(Debug)]
 pub struct VectorDatabase {
     db_path: PathBuf,
-    name: String,
 }
 
 impl VectorDatabase {
@@ -32,7 +31,22 @@ impl VectorDatabase {
         
         let db = Self {
             db_path,
-            name: name.to_string(),
+        };
+        
+        db.initialize()?;
+        Ok(db)
+    }
+    
+    // Test-friendly constructor that allows custom directory
+    #[allow(dead_code)]
+    pub fn new_with_path(name: &str, base_dir: &std::path::Path) -> Result<Self> {
+        let embeddings_dir = base_dir.join("embeddings");
+        fs::create_dir_all(&embeddings_dir)?;
+        
+        let db_path = embeddings_dir.join(format!("{}.db", name));
+        
+        let db = Self {
+            db_path,
         };
         
         db.initialize()?;
@@ -47,14 +61,17 @@ impl VectorDatabase {
     
     pub fn list_databases() -> Result<Vec<String>> {
         let embeddings_dir = Self::embeddings_dir()?;
-        
+        Self::list_databases_in_dir(&embeddings_dir)
+    }
+    
+    pub fn list_databases_in_dir(embeddings_dir: &std::path::Path) -> Result<Vec<String>> {
         if !embeddings_dir.exists() {
             return Ok(Vec::new());
         }
         
         let mut databases = Vec::new();
         
-        for entry in fs::read_dir(&embeddings_dir)? {
+        for entry in fs::read_dir(embeddings_dir)? {
             let entry = entry?;
             let path = entry.path();
             
@@ -75,6 +92,10 @@ impl VectorDatabase {
     
     pub fn delete_database(name: &str) -> Result<()> {
         let embeddings_dir = Self::embeddings_dir()?;
+        Self::delete_database_in_dir(name, &embeddings_dir)
+    }
+    
+    pub fn delete_database_in_dir(name: &str, embeddings_dir: &std::path::Path) -> Result<()> {
         let db_path = embeddings_dir.join(format!("{}.db", name));
         
         if db_path.exists() {
@@ -87,6 +108,7 @@ impl VectorDatabase {
     fn initialize(&self) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
         
+        // First, create the table with the basic schema if it doesn't exist
         conn.execute(
             "CREATE TABLE IF NOT EXISTS vectors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,13 +116,43 @@ impl VectorDatabase {
                 vector BLOB NOT NULL,
                 model TEXT NOT NULL,
                 provider TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                file_path TEXT,
-                chunk_index INTEGER,
-                total_chunks INTEGER
+                created_at TEXT NOT NULL
             )",
             [],
         )?;
+        
+        // Check if we need to migrate the schema by checking for missing columns
+        let mut has_file_path = false;
+        let mut has_chunk_index = false;
+        let mut has_total_chunks = false;
+        
+        // Query the table schema to see what columns exist
+        let mut stmt = conn.prepare("PRAGMA table_info(vectors)")?;
+        let column_iter = stmt.query_map([], |row| {
+            let column_name: String = row.get(1)?;
+            Ok(column_name)
+        })?;
+        
+        for column_result in column_iter {
+            let column_name = column_result?;
+            match column_name.as_str() {
+                "file_path" => has_file_path = true,
+                "chunk_index" => has_chunk_index = true,
+                "total_chunks" => has_total_chunks = true,
+                _ => {}
+            }
+        }
+        
+        // Add missing columns if they don't exist
+        if !has_file_path {
+            conn.execute("ALTER TABLE vectors ADD COLUMN file_path TEXT", [])?;
+        }
+        if !has_chunk_index {
+            conn.execute("ALTER TABLE vectors ADD COLUMN chunk_index INTEGER", [])?;
+        }
+        if !has_total_chunks {
+            conn.execute("ALTER TABLE vectors ADD COLUMN total_chunks INTEGER", [])?;
+        }
         
         // Create index for faster similarity searches
         conn.execute(
@@ -108,7 +160,7 @@ impl VectorDatabase {
             [],
         )?;
         
-        // Create index for file-based searches
+        // Create index for file-based searches (only after ensuring the column exists)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_file_path ON vectors(file_path)",
             [],
