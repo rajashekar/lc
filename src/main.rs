@@ -26,6 +26,24 @@ struct ChatMessage {
     model: Option<String>,
 }
 
+impl ChatMessage {
+    fn new_user(content: String, model: Option<String>) -> Self {
+        Self {
+            role: "user".to_string(),
+            content,
+            model,
+        }
+    }
+    
+    fn new_assistant(content: String, model: Option<String>) -> Self {
+        Self {
+            role: "assistant".to_string(),
+            content,
+            model,
+        }
+    }
+}
+
 // Helper functions for database operations
 async fn get_current_session() -> Result<Option<String>> {
     let db = Database::new()?;
@@ -36,21 +54,17 @@ async fn get_conversation_history(session_id: &str) -> Result<Vec<ChatMessage>> 
     let db = Database::new()?;
     let entries = db.get_chat_history(session_id)?;
     
-    let mut messages = Vec::new();
+    // Pre-allocate with known capacity to avoid reallocations
+    let mut messages = Vec::with_capacity(entries.len() * 2);
+    
     for entry in entries {
-        // Add user message
-        messages.push(ChatMessage {
-            role: "user".to_string(),
-            content: entry.question,
-            model: Some(entry.model.clone()),
-        });
+        let model_ref = Some(entry.model.clone());
         
-        // Add assistant message
-        messages.push(ChatMessage {
-            role: "assistant".to_string(),
-            content: entry.response,
-            model: Some(entry.model),
-        });
+        // Add user message - avoid cloning model twice
+        messages.push(ChatMessage::new_user(entry.question, model_ref.clone()));
+        
+        // Add assistant message - reuse the cloned model
+        messages.push(ChatMessage::new_assistant(entry.response, model_ref));
     }
     
     Ok(messages)

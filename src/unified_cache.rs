@@ -10,6 +10,32 @@ pub struct CachedProviderData {
     pub last_updated: u64, // Unix timestamp
     pub raw_response: String, // Raw JSON response from provider
     pub models: Vec<ModelMetadata>, // Extracted metadata
+    // Cache the serialized JSON to avoid repeated serialization
+    #[serde(skip)]
+    pub cached_json: Option<String>,
+}
+
+impl CachedProviderData {
+    fn new(raw_response: String, models: Vec<ModelMetadata>) -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or(std::time::Duration::from_secs(0))
+            .as_secs();
+            
+        Self {
+            last_updated: now,
+            raw_response,
+            models,
+            cached_json: None,
+        }
+    }
+    
+    fn get_cached_json(&mut self) -> Result<&str> {
+        if self.cached_json.is_none() {
+            self.cached_json = Some(serde_json::to_string_pretty(self)?);
+        }
+        Ok(self.cached_json.as_ref().unwrap())
+    }
 }
 
 pub struct UnifiedCache;
@@ -169,18 +195,13 @@ impl UnifiedCache {
             fs::create_dir_all(parent)?;
         }
         
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::from_secs(0))
-            .as_secs();
+        // Use the optimized constructor and cached serialization
+        let mut cached_data = CachedProviderData::new(
+            raw_response.to_string(),
+            models.to_vec()
+        );
         
-        let cached_data = CachedProviderData {
-            last_updated: now,
-            raw_response: raw_response.to_string(),
-            models: models.to_vec(),
-        };
-        
-        let content = serde_json::to_string_pretty(&cached_data)?;
+        let content = cached_data.get_cached_json()?;
         crate::debug_log!("Writing {} bytes to cache file for provider '{}'", content.len(), provider);
         fs::write(&cache_path, content)?;
         

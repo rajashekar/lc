@@ -241,18 +241,30 @@ impl VectorDatabase {
     pub fn find_similar(&self, query_vector: &[f64], limit: usize) -> Result<Vec<(VectorEntry, f64)>> {
         let vectors = self.get_all_vectors()?;
         
-        let mut similarities = Vec::new();
+        // Pre-allocate with known capacity to avoid reallocations
+        let mut similarities = Vec::with_capacity(vectors.len());
         
+        // Use iterator to avoid intermediate allocations
         for vector_entry in vectors {
             let similarity = cosine_similarity(query_vector, &vector_entry.vector);
             similarities.push((vector_entry, similarity));
         }
         
-        // Sort by similarity (highest first)
-        similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        
-        // Take top results
-        similarities.truncate(limit);
+        // Use partial_sort to only sort the top `limit` elements instead of full sort
+        // This is more efficient when limit << total_vectors
+        if limit < similarities.len() {
+            similarities.select_nth_unstable_by(limit, |a, b| {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            // Sort only the top `limit` elements
+            similarities[..limit].sort_by(|a, b| {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            similarities.truncate(limit);
+        } else {
+            // If we need all results, do a full sort
+            similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        }
         
         Ok(similarities)
     }

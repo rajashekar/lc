@@ -10,6 +10,9 @@ use crate::{config::Config, provider::OpenAIClient};
 pub struct ModelsCache {
     pub last_updated: u64, // Unix timestamp
     pub models: HashMap<String, Vec<String>>, // provider -> models
+    // Cache the serialized JSON to avoid repeated serialization
+    #[serde(skip)]
+    pub cached_json: Option<String>,
 }
 
 #[derive(Debug)]
@@ -23,7 +26,19 @@ impl ModelsCache {
         Self {
             last_updated: 0,
             models: HashMap::new(),
+            cached_json: None,
         }
+    }
+    
+    fn invalidate_cache(&mut self) {
+        self.cached_json = None;
+    }
+    
+    fn get_cached_json(&mut self) -> Result<&str> {
+        if self.cached_json.is_none() {
+            self.cached_json = Some(serde_json::to_string_pretty(self)?);
+        }
+        Ok(self.cached_json.as_ref().unwrap())
     }
 
     pub fn load() -> Result<Self> {
@@ -38,7 +53,7 @@ impl ModelsCache {
         }
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&mut self) -> Result<()> {
         let cache_path = Self::cache_file_path()?;
         
         // Ensure cache directory exists
@@ -46,7 +61,8 @@ impl ModelsCache {
             fs::create_dir_all(parent)?;
         }
         
-        let content = serde_json::to_string_pretty(self)?;
+        // Use cached JSON if available to avoid re-serialization
+        let content = self.get_cached_json()?;
         fs::write(&cache_path, content)?;
         Ok(())
     }
@@ -109,7 +125,9 @@ impl ModelsCache {
             .duration_since(UNIX_EPOCH)
             .unwrap_or(Duration::from_secs(0))
             .as_secs();
-
+        
+        // Invalidate cached JSON since data changed
+        self.invalidate_cache();
         self.save()?;
         
         println!("\nCache updated: {} providers, {} total models", successful_providers, total_models);
