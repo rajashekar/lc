@@ -97,6 +97,7 @@ impl MetadataExtractor {
             "chutes" => Self::extract_chutes(raw_json),
             "github" => Self::extract_github(raw_json),
             "together" => Self::extract_together(raw_json),
+            "gemini" => Self::extract_gemini(raw_json),
             _ => Self::extract_generic(provider, raw_json),
         }
     }
@@ -974,6 +975,103 @@ impl MetadataExtractor {
                 model_type,
                 is_deprecated,
                 is_fine_tunable: model.pricing.as_ref().map_or(false, |p| p.finetune.unwrap_or(0.0) > 0.0),
+                raw_data,
+                ..Default::default()
+            };
+            
+            models.push(metadata);
+        }
+        
+        Ok(models)
+    }
+    
+    fn extract_gemini(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
+        #[derive(Deserialize)]
+        struct GeminiResponse {
+            models: Vec<GeminiModel>,
+        }
+        
+        #[derive(Deserialize, Serialize)]
+        struct GeminiModel {
+            name: String,
+            #[serde(rename = "displayName")]
+            display_name: String,
+            description: Option<String>,
+            #[serde(rename = "inputTokenLimit")]
+            input_token_limit: Option<u32>,
+            #[serde(rename = "outputTokenLimit")]
+            output_token_limit: Option<u32>,
+            #[serde(rename = "supportedGenerationMethods")]
+            supported_generation_methods: Vec<String>,
+            temperature: Option<f32>,
+            #[serde(rename = "topP")]
+            top_p: Option<f32>,
+            #[serde(rename = "topK")]
+            top_k: Option<u32>,
+            #[serde(rename = "maxTemperature")]
+            max_temperature: Option<f32>,
+        }
+        
+        let response: GeminiResponse = serde_json::from_str(raw_json)?;
+        let mut models = Vec::new();
+        
+        for model in response.models {
+            let raw_data = serde_json::to_value(&model)?;
+            
+            // Extract model ID from name (e.g., "models/gemini-1.5-pro-latest" -> "gemini-1.5-pro-latest")
+            let id = model.name.strip_prefix("models/").unwrap_or(&model.name).to_string();
+            
+            // Determine capabilities based on supported generation methods and model name
+            let supports_tools = model.supported_generation_methods.contains(&"generateContent".to_string());
+            let supports_function_calling = supports_tools; // Same as tools for Gemini
+            
+            // Infer vision support from model name (Gemini Pro Vision, etc.)
+            let model_name_lower = model.display_name.to_lowercase();
+            let supports_vision = model_name_lower.contains("vision") ||
+                                 model_name_lower.contains("pro") || // Most Gemini Pro models support vision
+                                 model_name_lower.contains("1.5"); // Gemini 1.5 models support vision
+            
+            // Infer code support from model name
+            let supports_code = model_name_lower.contains("code") ||
+                               model_name_lower.contains("pro") || // Pro models generally good at code
+                               model_name_lower.contains("1.5"); // 1.5 models are good at code
+            
+            // Infer reasoning support from model name
+            let supports_reasoning = model_name_lower.contains("pro") ||
+                                    model_name_lower.contains("1.5") ||
+                                    model_name_lower.contains("ultra");
+            
+            // Most Gemini models support JSON mode and streaming
+            let supports_json_mode = supports_tools; // Tool-capable models typically support JSON
+            let supports_streaming = true; // Gemini supports streaming
+            
+            // Determine if model is deprecated (basic heuristic)
+            let is_deprecated = model_name_lower.contains("deprecated") ||
+                               model_name_lower.contains("legacy");
+            
+            let metadata = ModelMetadata {
+                id: id.clone(),
+                provider: "gemini".to_string(),
+                display_name: Some(model.display_name),
+                description: model.description,
+                owned_by: Some("Google".to_string()),
+                created: None, // Gemini doesn't provide creation timestamp
+                context_length: model.input_token_limit,
+                max_input_tokens: model.input_token_limit,
+                max_output_tokens: model.output_token_limit,
+                input_price_per_m: None, // Gemini doesn't provide pricing in models API
+                output_price_per_m: None,
+                supports_tools,
+                supports_vision,
+                supports_audio: false, // Gemini doesn't support audio in text models
+                supports_reasoning,
+                supports_code,
+                supports_function_calling,
+                supports_json_mode,
+                supports_streaming,
+                model_type: ModelType::Chat, // All Gemini models are chat models
+                is_deprecated,
+                is_fine_tunable: false, // Gemini doesn't support fine-tuning via API
                 raw_data,
                 ..Default::default()
             };

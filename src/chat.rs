@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crate::provider::{OpenAIClient, ChatRequest, Message};
+use crate::provider::{OpenAIClient, ChatRequest, Message, GeminiClient, GeminiChatRequest, GeminiContent, GeminiPart, GeminiSystemInstruction, GeminiTool, GeminiFunctionDeclaration, GeminiGenerationConfig, GeminiChatResponse, GeminiResponsePart};
 use crate::database::ChatEntry;
 use crate::config::Config;
 use crate::token_utils::TokenCounter;
@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 
 
 pub async fn send_chat_request_with_validation(
-    client: &OpenAIClient,
+    client: &LLMClient,
     model: &str,
     prompt: &str,
     history: &[ChatEntry],
@@ -122,7 +122,7 @@ pub async fn send_chat_request_with_validation(
     
     // Send the request
     crate::debug_log!("Making API call to chat endpoint...");
-    let response = client.chat(&request).await?;
+    let response = client.chat(&request, model).await?;
     
     crate::debug_log!("Received response from chat API ({} characters)", response.len());
     
@@ -209,7 +209,207 @@ pub async fn get_or_refresh_token(config: &mut Config, provider_name: &str, clie
     Ok(token_response.token)
 }
 
-pub async fn create_authenticated_client(config: &mut Config, provider_name: &str) -> Result<OpenAIClient> {
+// Helper function to detect if a provider is Gemini-based
+fn is_gemini_provider(provider_config: &crate::config::ProviderConfig) -> bool {
+    provider_config.endpoint.contains("generativelanguage.googleapis.com") ||
+    provider_config.chat_path.contains(":generateContent")
+}
+
+// Enum to represent different client types
+pub enum LLMClient {
+    OpenAI(OpenAIClient),
+    Gemini(GeminiClient),
+}
+
+impl LLMClient {
+    pub async fn chat(&self, request: &ChatRequest, model: &str) -> Result<String> {
+        match self {
+            LLMClient::OpenAI(client) => client.chat(request).await,
+            LLMClient::Gemini(client) => {
+                // Convert OpenAI format to Gemini format
+                let gemini_request = convert_to_gemini_request(request)?;
+                client.chat(&gemini_request, model).await
+            }
+        }
+    }
+    
+    pub async fn chat_with_tools(&self, request: &ChatRequest, model: &str) -> Result<crate::provider::ChatResponse> {
+        match self {
+            LLMClient::OpenAI(client) => client.chat_with_tools(request).await,
+            LLMClient::Gemini(client) => {
+                let gemini_request = convert_to_gemini_request(request)?;
+                let gemini_response = client.chat_with_tools(&gemini_request, model).await?;
+                convert_from_gemini_response(gemini_response)
+            }
+        }
+    }
+    
+    pub async fn list_models(&self) -> Result<Vec<crate::provider::Model>> {
+        match self {
+            LLMClient::OpenAI(client) => client.list_models().await,
+            LLMClient::Gemini(client) => client.list_models().await,
+        }
+    }
+    
+    pub async fn embeddings(&self, request: &crate::provider::EmbeddingRequest) -> Result<crate::provider::EmbeddingResponse> {
+        match self {
+            LLMClient::OpenAI(client) => client.embeddings(request).await,
+            LLMClient::Gemini(_client) => {
+                // Gemini doesn't support embeddings through the same API
+                // For now, return an error - this could be extended later
+                anyhow::bail!("Embeddings not supported for Gemini provider. Use a dedicated embedding model.")
+            }
+        }
+    }
+}
+
+// Convert OpenAI ChatRequest to Gemini format
+fn convert_to_gemini_request(request: &ChatRequest) -> Result<GeminiChatRequest> {
+    let mut contents = Vec::new();
+    let mut system_instruction = None;
+    
+    for message in &request.messages {
+        match message.role.as_str() {
+            "system" => {
+                if let Some(content) = &message.content {
+                    system_instruction = Some(GeminiSystemInstruction {
+                        parts: GeminiPart::Text { text: content.clone() },
+                    });
+                }
+            }
+            "user" => {
+                if let Some(content) = &message.content {
+                    contents.push(GeminiContent {
+                        role: "user".to_string(),
+                        parts: vec![GeminiPart::Text { text: content.clone() }],
+                    });
+                }
+            }
+            "assistant" => {
+                let mut parts = Vec::new();
+                
+                if let Some(content) = &message.content {
+                    parts.push(GeminiPart::Text { text: content.clone() });
+                }
+                
+                if let Some(tool_calls) = &message.tool_calls {
+                    for tool_call in tool_calls {
+                        let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)?;
+                        parts.push(GeminiPart::FunctionCall {
+                            function_call: crate::provider::GeminiFunctionCall {
+                                name: tool_call.function.name.clone(),
+                                args,
+                            },
+                        });
+                    }
+                }
+                
+                if !parts.is_empty() {
+                    contents.push(GeminiContent {
+                        role: "model".to_string(),
+                        parts,
+                    });
+                }
+            }
+            "tool" => {
+                if let (Some(content), Some(tool_call_id)) = (&message.content, &message.tool_call_id) {
+                    // For Gemini, we need to find the function name from the tool_call_id
+                    // This is a simplified approach - in practice, you might need to track this
+                    let response_value: serde_json::Value = serde_json::from_str(content)
+                        .unwrap_or_else(|_| serde_json::json!({"result": content}));
+                    
+                    contents.push(GeminiContent {
+                        role: "user".to_string(),
+                        parts: vec![GeminiPart::FunctionResponse {
+                            function_response: crate::provider::GeminiFunctionResponse {
+                                name: tool_call_id.clone(), // Simplified - should be function name
+                                response: response_value,
+                            },
+                        }],
+                    });
+                }
+            }
+            _ => {} // Ignore unknown roles
+        }
+    }
+    
+    // Convert tools if present
+    let gemini_tools = if let Some(tools) = &request.tools {
+        let function_declarations: Vec<GeminiFunctionDeclaration> = tools.iter().map(|tool| {
+            GeminiFunctionDeclaration {
+                name: tool.function.name.clone(),
+                description: tool.function.description.clone(),
+                parameters: tool.function.parameters.clone(),
+            }
+        }).collect();
+        
+        if !function_declarations.is_empty() {
+            Some(vec![GeminiTool { function_declarations }])
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    let generation_config = if request.temperature.is_some() || request.max_tokens.is_some() {
+        Some(GeminiGenerationConfig {
+            temperature: request.temperature,
+            max_output_tokens: request.max_tokens,
+        })
+    } else {
+        None
+    };
+    
+    Ok(GeminiChatRequest {
+        system_instruction,
+        contents,
+        tools: gemini_tools,
+        generation_config,
+    })
+}
+
+// Convert Gemini response to OpenAI format
+fn convert_from_gemini_response(gemini_response: GeminiChatResponse) -> Result<crate::provider::ChatResponse> {
+    let mut choices = Vec::new();
+    
+    for candidate in gemini_response.candidates {
+        let mut content = None;
+        let mut tool_calls = Vec::new();
+        
+        for part in candidate.content.parts {
+            match part {
+                GeminiResponsePart::Text { text } => {
+                    content = Some(text);
+                }
+                GeminiResponsePart::FunctionCall { function_call } => {
+                    tool_calls.push(crate::provider::ToolCall {
+                        id: format!("call_{}", uuid::Uuid::new_v4().to_string()[..8].to_string()),
+                        call_type: "function".to_string(),
+                        function: crate::provider::FunctionCall {
+                            name: function_call.name,
+                            arguments: serde_json::to_string(&function_call.args)?,
+                        },
+                    });
+                }
+            }
+        }
+        
+        let choice = crate::provider::Choice {
+            message: crate::provider::ResponseMessage {
+                role: candidate.content.role,
+                content,
+                tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            },
+        };
+        
+        choices.push(choice);
+    }
+    
+    Ok(crate::provider::ChatResponse { choices })
+}
+
+pub async fn create_authenticated_client(config: &mut Config, provider_name: &str) -> Result<LLMClient> {
     crate::debug_log!("Creating authenticated client for provider '{}'", provider_name);
     
     // Clone the provider config to avoid borrowing issues
@@ -219,8 +419,27 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
                       provider_name, provider_config.endpoint, provider_config.models_path, provider_config.chat_path);
     crate::debug_log!("Provider '{}' has {} custom headers", provider_name, provider_config.headers.len());
     
+    // Check if this is a Gemini provider
+    if is_gemini_provider(&provider_config) {
+        crate::debug_log!("Detected Gemini provider, creating GeminiClient");
+        
+        let api_key = provider_config.api_key
+            .ok_or_else(|| anyhow::anyhow!("No API key configured for Gemini provider '{}'", provider_name))?;
+        
+        let client = GeminiClient::new_with_headers(
+            provider_config.endpoint,
+            api_key,
+            provider_config.models_path,
+            provider_config.chat_path,
+            provider_config.headers,
+        );
+        
+        crate::debug_log!("Successfully created Gemini client for provider '{}'", provider_name);
+        return Ok(LLMClient::Gemini(client));
+    }
+    
     // Create a temporary client with the API key for token retrieval
-    crate::debug_log!("Creating temporary client for token retrieval");
+    crate::debug_log!("Creating temporary OpenAI-compatible client for token retrieval");
     let temp_client = OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap_or_default(),
@@ -236,7 +455,7 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
     crate::debug_log!("Successfully obtained auth token for provider '{}' (length: {})", provider_name, auth_token.len());
     
     // Create the final client with the authentication token
-    crate::debug_log!("Creating final authenticated client for provider '{}'", provider_name);
+    crate::debug_log!("Creating final authenticated OpenAI-compatible client for provider '{}'", provider_name);
     let client = OpenAIClient::new_with_headers(
         provider_config.endpoint,
         auth_token,
@@ -245,13 +464,13 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
         provider_config.headers,
     );
     
-    crate::debug_log!("Successfully created authenticated client for provider '{}'", provider_name);
-    Ok(client)
+    crate::debug_log!("Successfully created OpenAI-compatible client for provider '{}'", provider_name);
+    Ok(LLMClient::OpenAI(client))
 }
 
 // New function to handle tool execution loop
 pub async fn send_chat_request_with_tool_execution(
-    client: &OpenAIClient,
+    client: &LLMClient,
     model: &str,
     prompt: &str,
     history: &[ChatEntry],
@@ -310,7 +529,7 @@ pub async fn send_chat_request_with_tool_execution(
         };
         
         // Make the API call
-        let response = client.chat_with_tools(&request).await?;
+        let response = client.chat_with_tools(&request, model).await?;
         
         // Track token usage if we have a counter
         if let Some(ref counter) = token_counter {

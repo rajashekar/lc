@@ -250,7 +250,7 @@ async fn chat_completions(
     };
     
     // Send the request
-    let response_text = client.chat(&chat_request)
+    let response_text = client.chat(&chat_request, &model_name)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     

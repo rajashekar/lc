@@ -259,8 +259,13 @@ impl OpenAIClient {
         
         let mut req = self.client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json");
+        
+        // Add Authorization header only if no custom headers are present
+        // This allows providers like Gemini to use custom authentication headers
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
         
         // Add custom headers
         for (name, value) in &self.custom_headers {
@@ -337,8 +342,12 @@ impl OpenAIClient {
         
         let mut req = self.client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json");
+        
+        // Add Authorization header only if no custom headers are present
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
         
         // Add custom headers
         for (name, value) in &self.custom_headers {
@@ -406,8 +415,12 @@ impl OpenAIClient {
         
         let mut req = self.client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json");
+        
+        // Add Authorization header only if no custom headers are present
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
         
         // Add custom headers
         for (name, value) in &self.custom_headers {
@@ -465,8 +478,12 @@ impl OpenAIClient {
         
         let mut req = self.client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json");
+        
+        // Add Authorization header only if no custom headers are present
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
         
         // Add custom headers
         for (name, value) in &self.custom_headers {
@@ -486,5 +503,306 @@ impl OpenAIClient {
         
         let embedding_response: EmbeddingResponse = response.json().await?;
         Ok(embedding_response)
+    }
+}
+
+// Gemini-specific structures
+#[derive(Debug, Serialize)]
+pub struct GeminiChatRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_instruction: Option<GeminiSystemInstruction>,
+    pub contents: Vec<GeminiContent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<GeminiTool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generation_config: Option<GeminiGenerationConfig>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GeminiSystemInstruction {
+    pub parts: GeminiPart,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GeminiContent {
+    pub role: String,
+    pub parts: Vec<GeminiPart>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum GeminiPart {
+    Text { text: String },
+    FunctionCall { function_call: GeminiFunctionCall },
+    FunctionResponse { function_response: GeminiFunctionResponse },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GeminiFunctionCall {
+    pub name: String,
+    pub args: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GeminiFunctionResponse {
+    pub name: String,
+    pub response: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GeminiTool {
+    pub function_declarations: Vec<GeminiFunctionDeclaration>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GeminiFunctionDeclaration {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GeminiGenerationConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GeminiChatResponse {
+    pub candidates: Vec<GeminiCandidate>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GeminiCandidate {
+    pub content: GeminiResponseContent,
+    #[serde(rename = "finishReason")]
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GeminiResponseContent {
+    pub parts: Vec<GeminiResponsePart>,
+    pub role: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum GeminiResponsePart {
+    Text { text: String },
+    FunctionCall {
+        #[serde(rename = "functionCall")]
+        function_call: GeminiFunctionCall
+    },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GeminiModelsResponse {
+    pub models: Vec<GeminiModel>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GeminiModel {
+    pub name: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+    pub description: Option<String>,
+    #[serde(rename = "inputTokenLimit")]
+    pub input_token_limit: Option<u32>,
+    #[serde(rename = "outputTokenLimit")]
+    pub output_token_limit: Option<u32>,
+    #[serde(rename = "supportedGenerationMethods")]
+    pub supported_generation_methods: Vec<String>,
+    pub temperature: Option<f32>,
+    #[serde(rename = "topP")]
+    pub top_p: Option<f32>,
+    #[serde(rename = "topK")]
+    pub top_k: Option<u32>,
+    #[serde(rename = "maxTemperature")]
+    pub max_temperature: Option<f32>,
+}
+
+pub struct GeminiClient {
+    client: Client,
+    base_url: String,
+    api_key: String,
+    models_path: String,
+    chat_path_template: String, // Template with <model> placeholder
+    custom_headers: std::collections::HashMap<String, String>,
+}
+
+impl GeminiClient {
+    pub fn new(base_url: String, api_key: String, models_path: String, chat_path_template: String) -> Self {
+        let client = Client::builder()
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .tcp_keepalive(Duration::from_secs(60))
+            .timeout(Duration::from_secs(60))
+            .connect_timeout(Duration::from_secs(10))
+            .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("Failed to create optimized HTTP client");
+        
+        Self {
+            client,
+            base_url: base_url.trim_end_matches('/').to_string(),
+            api_key,
+            models_path,
+            chat_path_template,
+            custom_headers: std::collections::HashMap::new(),
+        }
+    }
+    
+    pub fn new_with_headers(base_url: String, api_key: String, models_path: String, chat_path_template: String, custom_headers: std::collections::HashMap<String, String>) -> Self {
+        let client = Client::builder()
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .tcp_keepalive(Duration::from_secs(60))
+            .timeout(Duration::from_secs(60))
+            .connect_timeout(Duration::from_secs(10))
+            .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("Failed to create optimized HTTP client");
+        
+        Self {
+            client,
+            base_url: base_url.trim_end_matches('/').to_string(),
+            api_key,
+            models_path,
+            chat_path_template,
+            custom_headers,
+        }
+    }
+    
+    pub async fn chat(&self, request: &GeminiChatRequest, model: &str) -> Result<String> {
+        // Replace <model> placeholder in chat path
+        let chat_path = self.chat_path_template.replace("<model>", model);
+        let url = format!("{}{}", self.base_url, chat_path);
+        
+        let mut req = self.client
+            .post(&url)
+            .header("Content-Type", "application/json");
+        
+        // Add custom headers (including x-goog-api-key from config)
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
+            .json(request)
+            .send()
+            .await?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Gemini API request failed with status {}: {}", status, text);
+        }
+        
+        let response_text = response.text().await?;
+        let gemini_response: GeminiChatResponse = serde_json::from_str(&response_text)?;
+        
+        if let Some(candidate) = gemini_response.candidates.first() {
+            // Handle tool calls
+            for part in &candidate.content.parts {
+                if let GeminiResponsePart::FunctionCall { function_call } = part {
+                    let mut response = String::new();
+                    response.push_str("🔧 **Tool Calls Made:**\n\n");
+                    response.push_str(&format!("**Function:** `{}`\n", function_call.name));
+                    response.push_str(&format!("**Arguments:** `{}`\n\n", serde_json::to_string(&function_call.args)?));
+                    response.push_str("*Tool calls detected - execution handled by chat module*\n\n");
+                    return Ok(response);
+                }
+            }
+            
+            // Handle text content
+            for part in &candidate.content.parts {
+                if let GeminiResponsePart::Text { text } = part {
+                    return Ok(text.clone());
+                }
+            }
+            
+            anyhow::bail!("No text content in Gemini response");
+        } else {
+            anyhow::bail!("No candidates in Gemini response");
+        }
+    }
+    
+    pub async fn chat_with_tools(&self, request: &GeminiChatRequest, model: &str) -> Result<GeminiChatResponse> {
+        let chat_path = self.chat_path_template.replace("<model>", model);
+        let url = format!("{}{}", self.base_url, chat_path);
+        
+        let mut req = self.client
+            .post(&url)
+            .header("Content-Type", "application/json");
+        
+        // Add custom headers (including x-goog-api-key from config)
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
+            .json(request)
+            .send()
+            .await?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Gemini API request failed with status {}: {}", status, text);
+        }
+        
+        let response_text = response.text().await?;
+        let gemini_response: GeminiChatResponse = serde_json::from_str(&response_text)?;
+        Ok(gemini_response)
+    }
+    
+    pub async fn list_models(&self) -> Result<Vec<Model>> {
+        let url = format!("{}{}", self.base_url, self.models_path);
+        
+        let mut req = self.client
+            .get(&url)
+            .header("Content-Type", "application/json");
+        
+        // Add custom headers (including x-goog-api-key from config)
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
+            .send()
+            .await?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Gemini API request failed with status {}: {}", status, text);
+        }
+        
+        let response_text = response.text().await?;
+        
+        // Use the rich metadata extraction system
+        use crate::model_metadata::MetadataExtractor;
+        let metadata_models = MetadataExtractor::extract_from_provider("gemini", &response_text)
+            .map_err(|e| anyhow::anyhow!("Failed to extract Gemini model metadata: {}", e))?;
+        
+        // Convert ModelMetadata back to Model format for compatibility
+        let models = metadata_models.into_iter().map(|metadata| {
+            let provider = Provider {
+                provider: "gemini".to_string(),
+                status: "active".to_string(),
+                supports_tools: metadata.supports_tools,
+                supports_structured_output: metadata.supports_json_mode,
+            };
+            
+            Model {
+                id: format!("{}:{}", metadata.id, "gemini"), // Format as model:provider for consistency
+                object: "model".to_string(),
+                providers: vec![provider],
+            }
+        }).collect();
+        
+        Ok(models)
     }
 }

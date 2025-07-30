@@ -2611,7 +2611,7 @@ fn display_enhanced_models(models: &[crate::model_metadata::ModelMetadata], quer
     Ok(())
 }
 
-pub async fn fetch_raw_models_response(_client: &crate::provider::OpenAIClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
+pub async fn fetch_raw_models_response(_client: &crate::chat::LLMClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
     use serde_json::Value;
     
     // Use the shared optimized HTTP client
@@ -2631,16 +2631,24 @@ pub async fn fetch_raw_models_response(_client: &crate::provider::OpenAIClient, 
     
     let mut req = http_client
         .get(&url)
-        .header("Authorization", format!("Bearer {}", provider_config.api_key.as_ref().unwrap()))
         .header("Content-Type", "application/json");
     
-    debug_log!("Added Authorization header with API key");
     debug_log!("Added Content-Type: application/json header");
     
-    // Add custom headers
+    // Add custom headers first
+    let mut has_custom_headers = false;
     for (name, value) in &provider_config.headers {
         debug_log!("Adding custom header: {}: {}", name, value);
         req = req.header(name, value);
+        has_custom_headers = true;
+    }
+    
+    // Only add Authorization header if no custom headers are present
+    if !has_custom_headers {
+        req = req.header("Authorization", format!("Bearer {}", provider_config.api_key.as_ref().unwrap()));
+        debug_log!("Added Authorization header with API key");
+    } else {
+        debug_log!("Skipping Authorization header due to custom headers present");
     }
     
     debug_log!("Sending HTTP GET request...");
@@ -3567,7 +3575,7 @@ pub async fn handle_vectors_command(command: crate::cli::VectorCommands) -> Resu
 pub async fn retrieve_rag_context(
     db_name: &str,
     query: &str,
-    _client: &crate::provider::OpenAIClient,
+    _client: &crate::chat::LLMClient,
     _model: &str,
     _provider: &str
 ) -> Result<String> {
