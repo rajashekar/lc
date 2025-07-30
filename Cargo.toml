@@ -51,3 +51,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 [[bench]]
 name = "database_benchmark"
 harness = false
+
+[[bench]]
+name = "http_client_benchmark"
+harness = false

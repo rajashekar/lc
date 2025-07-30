@@ -233,10 +233,16 @@ pub struct OpenAIClient {
 impl OpenAIClient {
     
     pub fn new_with_headers(base_url: String, api_key: String, models_path: String, chat_path: String, custom_headers: std::collections::HashMap<String, String>) -> Self {
+        // Create optimized HTTP client with connection pooling and keep-alive settings
         let client = Client::builder()
-            .timeout(Duration::from_secs(60))
+            .pool_max_idle_per_host(10) // Keep up to 10 idle connections per host
+            .pool_idle_timeout(Duration::from_secs(90)) // Keep connections alive for 90 seconds
+            .tcp_keepalive(Duration::from_secs(60)) // TCP keep-alive every 60 seconds
+            .timeout(Duration::from_secs(60)) // Total request timeout
+            .connect_timeout(Duration::from_secs(10)) // Connection establishment timeout
+            .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
             .build()
-            .expect("Failed to create HTTP client");
+            .expect("Failed to create optimized HTTP client");
         
         Self {
             client,

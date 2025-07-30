@@ -9,6 +9,7 @@ pub mod database;
 pub mod provider;
 pub mod chat;
 pub mod error;
+pub mod http_client;
 pub mod models_cache;
 pub mod model_metadata;
 pub mod proxy;

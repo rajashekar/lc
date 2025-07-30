@@ -432,8 +432,15 @@ async fn handle_kagi_request(
         },
     };
     
-    // Make request to Kagi
-    let client = reqwest::Client::new();
+    // Make request to Kagi using optimized client with connection pooling
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(std::time::Duration::from_secs(90))
+        .tcp_keepalive(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(60))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let response = client
         .post("https://kagi.com/assistant/prompt")
         .header("Content-Type", "application/json")
@@ -763,8 +770,14 @@ pub async fn fetch_kagi_models() -> Result<Vec<KagiModelProfile>> {
     let auth_token = config.get_provider_auth("kagi")
         .ok_or_else(|| anyhow::anyhow!("No Kagi authentication token configured. Set one with 'lc w p kagi auth'"))?;
     
-    // Make request to Kagi profile_list endpoint
-    let client = reqwest::Client::new();
+    // Make request to Kagi profile_list endpoint using optimized client with connection pooling
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(std::time::Duration::from_secs(90))
+        .tcp_keepalive(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(60))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()?;
     let response = client
         .post("https://kagi.com/assistant/profile_list")
         .header("Content-Type", "application/json")

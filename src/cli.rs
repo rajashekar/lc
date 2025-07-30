@@ -2612,12 +2612,16 @@ fn display_enhanced_models(models: &[crate::model_metadata::ModelMetadata], quer
 }
 
 pub async fn fetch_raw_models_response(_client: &crate::provider::OpenAIClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
-    use reqwest::Client;
     use serde_json::Value;
-    use std::time::Duration;
     
-    let http_client = Client::builder()
-        .timeout(Duration::from_secs(60))
+    // Use the shared optimized HTTP client
+    // Create optimized HTTP client with connection pooling and keep-alive settings
+    let http_client = reqwest::Client::builder()
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(std::time::Duration::from_secs(90))
+        .tcp_keepalive(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(60))
+        .connect_timeout(std::time::Duration::from_secs(10))
         .build()?;
     
     let url = format!("{}{}", provider_config.endpoint.trim_end_matches('/'), provider_config.models_path);
