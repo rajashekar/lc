@@ -91,121 +91,7 @@ impl McpConfig {
     }
 }
 
-// Legacy process registry for backward compatibility
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessRegistryEntry {
-    pub name: String,
-    pub pid: u32,
-    pub server_type: String,
-    pub command: String,
-    pub session_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessRegistry {
-    pub servers: HashMap<String, ProcessRegistryEntry>,
-}
-
-impl ProcessRegistry {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self {
-            servers: HashMap::new(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn add_server(&mut self, name: String, pid: u32, server_type: String, command: String) -> Result<()> {
-        let entry = ProcessRegistryEntry {
-            name: name.clone(),
-            pid,
-            server_type,
-            command,
-            session_id: None,
-        };
-        self.servers.insert(name, entry);
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub fn add_server_with_session(&mut self, name: String, pid: u32, server_type: String, command: String, session_id: Option<String>) -> Result<()> {
-        let entry = ProcessRegistryEntry {
-            name: name.clone(),
-            pid,
-            server_type,
-            command,
-            session_id,
-        };
-        self.servers.insert(name, entry);
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub fn remove_server(&mut self, name: &str) -> Result<()> {
-        if self.servers.remove(name).is_none() {
-            return Err(anyhow!("Server '{}' not found in registry", name));
-        }
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub fn get_running_servers(&self) -> HashMap<String, &ProcessRegistryEntry> {
-        self.servers.iter()
-            .filter(|(_, entry)| {
-                // Consider streamable servers with session IDs as running
-                if entry.server_type == "Streamable" {
-                    entry.session_id.is_some()
-                } else {
-                    // For other types, check if PID exists (simplified check)
-                    entry.pid > 0
-                }
-            })
-            .map(|(k, v)| (k.clone(), v))
-            .collect()
-    }
-
-    #[allow(dead_code)]
-    pub fn cleanup_dead_processes(&mut self) -> Result<()> {
-        // For simplicity, we'll keep all processes in tests
-        // In a real implementation, this would check if PIDs are still alive
-        Ok(())
-    }
-}
-
-// Legacy manager for backward compatibility
-#[allow(dead_code)]
-pub struct McpManager {
-    // This is kept for backward compatibility but doesn't do much
-}
-
-impl McpManager {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    #[allow(dead_code)]
-    pub async fn list_functions(&mut self, _server_name: &str) -> Result<Vec<McpFunction>> {
-        // Legacy function - returns empty list
-        // Real functionality is now in SdkMcpManager
-        Ok(Vec::new())
-    }
-
-    #[allow(dead_code)]
-    pub async fn invoke_function(&mut self, _server_name: &str, _function_name: &str, _arguments: serde_json::Value) -> Result<serde_json::Value> {
-        // Legacy function - returns empty result
-        // Real functionality is now in SdkMcpManager
-        Ok(serde_json::json!({}))
-    }
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct McpFunction {
-    pub name: String,
-    pub description: String,
-    pub parameters: Option<serde_json::Value>,
-}
+// Legacy structures removed - functionality moved to SdkMcpManager
 
 // Modern SDK-based implementation
 pub struct SdkMcpManager {
@@ -220,13 +106,11 @@ lazy_static::lazy_static! {
     static ref GLOBAL_MCP_MANAGER: Arc<Mutex<SdkMcpManager>> = Arc::new(Mutex::new(SdkMcpManager::new()));
 }
 
-// Helper functions to access the global manager
-#[allow(dead_code)]
+// Global manager access functions - used by mcp_daemon module
 pub async fn get_global_manager() -> Arc<Mutex<SdkMcpManager>> {
     GLOBAL_MCP_MANAGER.clone()
 }
 
-#[allow(dead_code)]
 pub async fn ensure_server_connected(server_name: &str, config: SdkMcpServerConfig) -> Result<()> {
     let manager = get_global_manager().await;
     let mut manager_lock = manager.lock().await;
@@ -243,7 +127,6 @@ pub async fn ensure_server_connected(server_name: &str, config: SdkMcpServerConf
     Ok(())
 }
 
-#[allow(dead_code)]
 pub async fn call_global_tool(server_name: &str, tool_name: &str, arguments: serde_json::Value) -> Result<serde_json::Value> {
     let manager = get_global_manager().await;
     let manager_lock = manager.lock().await;
@@ -262,14 +145,12 @@ pub async fn call_global_tool(server_name: &str, tool_name: &str, arguments: ser
     result
 }
 
-#[allow(dead_code)]
 pub async fn list_global_tools() -> Result<HashMap<String, Vec<Tool>>> {
     let manager = get_global_manager().await;
     let manager_lock = manager.lock().await;
     manager_lock.list_all_tools().await
 }
 
-#[allow(dead_code)]
 pub async fn close_global_server(server_name: &str) -> Result<()> {
     let manager = get_global_manager().await;
     let mut manager_lock = manager.lock().await;
@@ -357,13 +238,6 @@ impl SdkMcpManager {
         Ok(serde_json::to_value(result)?)
     }
 
-    #[allow(dead_code)]
-    pub async fn close_all(&mut self) -> Result<()> {
-        for (_, client) in self.clients.drain() {
-            let _ = client.cancel().await;
-        }
-        Ok(())
-    }
 }
 
 // SDK configuration structures

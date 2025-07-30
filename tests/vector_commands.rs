@@ -5,11 +5,9 @@
 
 mod common;
 
-use lc::vector_db::{VectorDatabase, VectorEntry};
-use lc::config::Config;
-use std::collections::HashMap;
+use lc::vector_db::VectorDatabase;
 use tempfile::TempDir;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 #[cfg(test)]
 mod vector_database_creation_tests {
@@ -21,7 +19,7 @@ mod vector_database_creation_tests {
         let db_name = "test_db";
         
         // Test database creation with temporary directory
-        let result = VectorDatabase::new_with_path(db_name, temp_dir.path());
+        let result = VectorDatabase::new(db_name);
         assert!(result.is_ok());
         
         let db = result.unwrap();
@@ -34,7 +32,7 @@ mod vector_database_creation_tests {
     fn test_vector_database_path_generation() {
         let temp_dir = TempDir::new().unwrap();
         let db_name = "test_database";
-        let result = VectorDatabase::new_with_path(db_name, temp_dir.path());
+        let result = VectorDatabase::new(db_name);
         assert!(result.is_ok());
         
         // Database should be created in the correct location
@@ -60,7 +58,7 @@ mod vector_database_creation_tests {
             // Clean up any existing database first
             let _ = VectorDatabase::delete_database_in_dir(db_name, &embeddings_dir);
             
-            let result = VectorDatabase::new_with_path(db_name, temp_dir.path());
+            let result = VectorDatabase::new(db_name);
             assert!(result.is_ok(), "Failed to create database with name: {}", db_name);
             
             let db = result.unwrap();
@@ -296,7 +294,7 @@ mod vector_retrieval_tests {
     #[test]
     fn test_empty_database_retrieval() {
         let temp_dir = TempDir::new().unwrap();
-        let db = VectorDatabase::new_with_path("test_empty_retrieval", temp_dir.path()).unwrap();
+        let db = VectorDatabase::new("test_empty_retrieval").unwrap();
         
         let result = db.get_all_vectors();
         assert!(result.is_ok());
@@ -428,7 +426,7 @@ mod vector_similarity_tests {
     #[test]
     fn test_similarity_with_empty_database() {
         let temp_dir = TempDir::new().unwrap();
-        let db = VectorDatabase::new_with_path("test_empty_similarity", temp_dir.path()).unwrap();
+        let db = VectorDatabase::new("test_empty_similarity").unwrap();
         
         let query_vector = vec![1.0, 0.0, 0.0];
         let result = db.find_similar(&query_vector, 5);
@@ -561,15 +559,12 @@ mod vector_database_management_tests {
 
     #[test]
     fn test_list_databases() {
-        let temp_dir = TempDir::new().unwrap();
-        let embeddings_dir = temp_dir.path().join("embeddings");
-        
-        // Create a few test databases
-        let _db1 = VectorDatabase::new_with_path("list_test_1", temp_dir.path()).unwrap();
-        let _db2 = VectorDatabase::new_with_path("list_test_2", temp_dir.path()).unwrap();
-        let _db3 = VectorDatabase::new_with_path("list_test_3", temp_dir.path()).unwrap();
+        // Create a few test databases using the default location
+        let _db1 = VectorDatabase::new("list_test_1").unwrap();
+        let _db2 = VectorDatabase::new("list_test_2").unwrap();
+        let _db3 = VectorDatabase::new("list_test_3").unwrap();
 
-        let result = VectorDatabase::list_databases_in_dir(&embeddings_dir);
+        let result = VectorDatabase::list_databases();
         assert!(result.is_ok());
 
         let databases = result.unwrap();
@@ -577,6 +572,11 @@ mod vector_database_management_tests {
         assert!(databases.contains(&"list_test_1".to_string()));
         assert!(databases.contains(&"list_test_2".to_string()));
         assert!(databases.contains(&"list_test_3".to_string()));
+        
+        // Cleanup
+        VectorDatabase::delete_database("list_test_1").ok();
+        VectorDatabase::delete_database("list_test_2").ok();
+        VectorDatabase::delete_database("list_test_3").ok();
     }
 
     #[test]

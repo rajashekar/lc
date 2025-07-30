@@ -37,21 +37,6 @@ impl VectorDatabase {
         Ok(db)
     }
     
-    // Test-friendly constructor that allows custom directory
-    #[allow(dead_code)]
-    pub fn new_with_path(name: &str, base_dir: &std::path::Path) -> Result<Self> {
-        let embeddings_dir = base_dir.join("embeddings");
-        fs::create_dir_all(&embeddings_dir)?;
-        
-        let db_path = embeddings_dir.join(format!("{}.db", name));
-        
-        let db = Self {
-            db_path,
-        };
-        
-        db.initialize()?;
-        Ok(db)
-    }
     
     pub fn embeddings_dir() -> Result<PathBuf> {
         let home_dir = dirs::home_dir()

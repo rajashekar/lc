@@ -63,14 +63,11 @@ mod embed_response_tests {
     fn create_test_embedding_data() -> EmbeddingData {
         EmbeddingData {
             embedding: vec![0.1, 0.2, 0.3, 0.4, 0.5],
-            index: 0,
-            object: "embedding".to_string(),
         }
     }
 
     fn create_test_embedding_usage() -> EmbeddingUsage {
         EmbeddingUsage {
-            prompt_tokens: 10,
             total_tokens: 10,
         }
     }
@@ -82,13 +79,10 @@ mod embed_response_tests {
 
         let response = EmbeddingResponse {
             data: data.clone(),
-            model: "text-embedding-3-small".to_string(),
             usage,
         };
 
         assert_eq!(response.data.len(), 1);
-        assert_eq!(response.model, "text-embedding-3-small");
-        assert_eq!(response.usage.prompt_tokens, 10);
         assert_eq!(response.usage.total_tokens, 10);
     }
 
@@ -99,15 +93,12 @@ mod embed_response_tests {
         assert_eq!(embedding_data.embedding.len(), 5);
         assert_eq!(embedding_data.embedding[0], 0.1);
         assert_eq!(embedding_data.embedding[4], 0.5);
-        assert_eq!(embedding_data.index, 0);
-        assert_eq!(embedding_data.object, "embedding");
     }
 
     #[test]
     fn test_embedding_usage_structure() {
         let usage = create_test_embedding_usage();
 
-        assert_eq!(usage.prompt_tokens, 10);
         assert_eq!(usage.total_tokens, 10);
     }
 
@@ -116,28 +107,20 @@ mod embed_response_tests {
         let data = vec![
             EmbeddingData {
                 embedding: vec![0.1, 0.2, 0.3],
-                index: 0,
-                object: "embedding".to_string(),
             },
             EmbeddingData {
                 embedding: vec![0.4, 0.5, 0.6],
-                index: 1,
-                object: "embedding".to_string(),
             },
         ];
 
         let response = EmbeddingResponse {
             data: data.clone(),
-            model: "text-embedding-3-small".to_string(),
             usage: EmbeddingUsage {
-                prompt_tokens: 20,
                 total_tokens: 20,
             },
         };
 
         assert_eq!(response.data.len(), 2);
-        assert_eq!(response.data[0].index, 0);
-        assert_eq!(response.data[1].index, 1);
         assert_eq!(response.data[0].embedding[0], 0.1);
         assert_eq!(response.data[1].embedding[0], 0.4);
     }
@@ -458,19 +441,15 @@ mod embed_integration_tests {
         let mock_response = EmbeddingResponse {
             data: vec![EmbeddingData {
                 embedding: vec![0.1; 1536], // OpenAI text-embedding-3-small dimension
-                index: 0,
-                object: "embedding".to_string(),
             }],
-            model: model.clone(),
             usage: EmbeddingUsage {
-                prompt_tokens: 12,
                 total_tokens: 12,
             },
         };
 
         assert_eq!(mock_response.data.len(), 1);
         assert_eq!(mock_response.data[0].embedding.len(), 1536);
-        assert_eq!(mock_response.usage.prompt_tokens, 12);
+        assert_eq!(mock_response.usage.total_tokens, 12);
     }
 
     #[test]

@@ -24,24 +24,16 @@ pub struct EmbeddingRequest {
 #[derive(Debug, Deserialize)]
 pub struct EmbeddingResponse {
     pub data: Vec<EmbeddingData>,
-    #[allow(dead_code)]
-    pub model: String,
     pub usage: EmbeddingUsage,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct EmbeddingData {
     pub embedding: Vec<f64>,
-    #[allow(dead_code)]
-    pub index: u32,
-    #[allow(dead_code)]
-    pub object: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct EmbeddingUsage {
-    #[allow(dead_code)]
-    pub prompt_tokens: u32,
     pub total_tokens: u32,
 }
 
@@ -296,8 +288,8 @@ impl OpenAIClient {
                             response.push_str(&format!("**Function:** `{}`\n", tool_call.function.name));
                             response.push_str(&format!("**Arguments:** `{}`\n\n", tool_call.function.arguments));
                             
-                            // TODO: Actually execute the MCP function call here
-                            response.push_str("*Note: Tool execution not yet implemented - this shows the LLM successfully recognized and attempted to use the MCP tools.*\n\n");
+                            // Note: Tool execution is handled by the chat module's tool execution loop
+                            response.push_str("*Tool calls detected - execution handled by chat module*\n\n");
                         }
                         
                         return Ok(response);

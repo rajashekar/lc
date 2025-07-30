@@ -7,7 +7,7 @@ mod common;
 
 use lc::vector_db::VectorDatabase;
 use lc::config::Config;
-use lc::provider::{EmbeddingRequest, EmbeddingResponse, EmbeddingData, EmbeddingUsage};
+use lc::provider::EmbeddingRequest;
 use std::collections::HashMap;
 
 #[cfg(test)]

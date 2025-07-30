@@ -1,7 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, Statement};
-use std::collections::HashMap;
+use rusqlite::{params, Connection};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use crate::config::Config;
@@ -123,29 +122,9 @@ impl Drop for PooledConnection {
     }
 }
 
-// Prepared statement cache
-struct PreparedStatementCache {
-    _statements: HashMap<String, String>, // SQL -> Statement key mapping (placeholder for future enhancement)
-}
-
-impl PreparedStatementCache {
-    fn new() -> Self {
-        Self {
-            _statements: HashMap::new(),
-        }
-    }
-    
-    fn get_or_prepare<'a>(&mut self, conn: &'a Connection, sql: &str) -> Result<Statement<'a>> {
-        // In a real implementation, you'd cache the actual prepared statements
-        // For now, we'll just prepare each time but with optimized SQL
-        conn.prepare(sql).map_err(Into::into)
-    }
-}
-
-// Optimized Database struct with connection pooling and prepared statements
+// Optimized Database struct with connection pooling
 pub struct Database {
     pool: ConnectionPool,
-    statement_cache: Arc<Mutex<PreparedStatementCache>>,
 }
 
 impl Database {
@@ -159,7 +138,6 @@ impl Database {
         
         Ok(Database {
             pool,
-            statement_cache: Arc::new(Mutex::new(PreparedStatementCache::new())),
         })
     }
     
@@ -229,24 +207,18 @@ impl Database {
     ) -> Result<()> {
         let conn = self.pool.get_connection()?;
         
-        // Use prepared statement for better performance
-        let mut cache = self.statement_cache.lock().unwrap();
-        let mut stmt = cache.get_or_prepare(
-            conn.conn.as_ref().unwrap(),
+        conn.execute(
             "INSERT INTO chat_logs (chat_id, model, question, response, timestamp, input_tokens, output_tokens)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![chat_id, model, question, response, Utc::now(), input_tokens, output_tokens]
         )?;
-        
-        stmt.execute(params![chat_id, model, question, response, Utc::now(), input_tokens, output_tokens])?;
         Ok(())
     }
     
     pub fn get_chat_history(&self, chat_id: &str) -> Result<Vec<ChatEntry>> {
         let conn = self.pool.get_connection()?;
         
-        let mut cache = self.statement_cache.lock().unwrap();
-        let mut stmt = cache.get_or_prepare(
-            conn.conn.as_ref().unwrap(),
+        let mut stmt = conn.conn.as_ref().unwrap().prepare(
             "SELECT id, chat_id, model, question, response, timestamp, input_tokens, output_tokens
              FROM chat_logs
              WHERE chat_id = ?1
@@ -295,8 +267,7 @@ impl Database {
              ORDER BY timestamp DESC".to_string()
         };
         
-        let mut cache = self.statement_cache.lock().unwrap();
-        let mut stmt = cache.get_or_prepare(conn.conn.as_ref().unwrap(), &sql)?;
+        let mut stmt = conn.conn.as_ref().unwrap().prepare(&sql)?;
         
         let rows = stmt.query_map([], |row| {
             Ok(ChatEntry {
@@ -321,22 +292,17 @@ impl Database {
     pub fn set_current_session_id(&self, session_id: &str) -> Result<()> {
         let conn = self.pool.get_connection()?;
         
-        let mut cache = self.statement_cache.lock().unwrap();
-        let mut stmt = cache.get_or_prepare(
-            conn.conn.as_ref().unwrap(),
-            "INSERT OR REPLACE INTO session_state (key, value) VALUES ('current_session', ?1)"
+        conn.execute(
+            "INSERT OR REPLACE INTO session_state (key, value) VALUES ('current_session', ?1)",
+            [session_id]
         )?;
-        
-        stmt.execute([session_id])?;
         Ok(())
     }
     
     pub fn get_current_session_id(&self) -> Result<Option<String>> {
         let conn = self.pool.get_connection()?;
         
-        let mut cache = self.statement_cache.lock().unwrap();
-        let mut stmt = cache.get_or_prepare(
-            conn.conn.as_ref().unwrap(),
+        let mut stmt = conn.conn.as_ref().unwrap().prepare(
             "SELECT value FROM session_state WHERE key = 'current_session'"
         )?;
         
@@ -376,13 +342,10 @@ impl Database {
     pub fn clear_session(&self, session_id: &str) -> Result<()> {
         let conn = self.pool.get_connection()?;
         
-        let mut cache = self.statement_cache.lock().unwrap();
-        let mut stmt = cache.get_or_prepare(
-            conn.conn.as_ref().unwrap(),
-            "DELETE FROM chat_logs WHERE chat_id = ?1"
+        conn.execute(
+            "DELETE FROM chat_logs WHERE chat_id = ?1",
+            [session_id]
         )?;
-        
-        stmt.execute([session_id])?;
         Ok(())
     }
     
@@ -424,10 +387,8 @@ impl Database {
             None
         };
         
-        // Get model usage statistics with prepared statement
-        let mut cache = self.statement_cache.lock().unwrap();
-        let mut stmt = cache.get_or_prepare(
-            conn.conn.as_ref().unwrap(),
+        // Get model usage statistics
+        let mut stmt = conn.conn.as_ref().unwrap().prepare(
             "SELECT model, COUNT(*) as count FROM chat_logs GROUP BY model ORDER BY count DESC"
         )?;
         
@@ -453,19 +414,6 @@ impl Database {
 
 // Thread-safe singleton for global database access
 
-impl Database {
-    #[allow(dead_code)]
-    pub fn global() -> Result<Arc<Database>> {
-        use std::sync::OnceLock;
-        static INSTANCE: OnceLock<Result<Arc<Database>, String>> = OnceLock::new();
-        
-        INSTANCE.get_or_init(|| {
-            Database::new()
-                .map(Arc::new)
-                .map_err(|e| e.to_string())
-        }).clone().map_err(|e| anyhow::anyhow!("Failed to initialize database: {}", e))
-    }
-}
 
 #[cfg(test)]
 mod tests {

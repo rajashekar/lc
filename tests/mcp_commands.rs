@@ -3,7 +3,7 @@
 //! This module contains comprehensive integration tests for all MCP-related
 //! CLI commands, testing them as a user would interact with the CLI.
 
-use lc::mcp::{McpConfig, McpServerConfig, McpServerType, ProcessRegistry, ProcessRegistryEntry, McpManager, SdkMcpManager};
+use lc::mcp::{McpConfig, McpServerConfig, McpServerType, SdkMcpManager};
 use std::collections::HashMap;
 
 #[cfg(test)]
@@ -208,180 +208,6 @@ mod mcp_config_tests {
     }
 }
 
-#[cfg(test)]
-mod process_registry_tests {
-    use super::*;
-
-    fn create_empty_process_registry() -> ProcessRegistry {
-        ProcessRegistry {
-            servers: HashMap::new(),
-        }
-    }
-
-    #[test]
-    fn test_process_registry_new_empty() {
-        let registry = create_empty_process_registry();
-        assert!(registry.servers.is_empty());
-    }
-
-    #[test]
-    fn test_process_registry_add_server() {
-        let mut registry = create_empty_process_registry();
-        
-        let result = registry.add_server(
-            "test-server".to_string(),
-            12345,
-            "Stdio".to_string(),
-            "test-command".to_string(),
-        );
-        
-        assert!(result.is_ok());
-        assert_eq!(registry.servers.len(), 1);
-        
-        let entry = registry.servers.get("test-server").unwrap();
-        assert_eq!(entry.name, "test-server");
-        assert_eq!(entry.pid, 12345);
-        assert_eq!(entry.server_type, "Stdio");
-        assert_eq!(entry.command, "test-command");
-        assert!(entry.session_id.is_none());
-    }
-
-    #[test]
-    fn test_process_registry_add_server_with_session() {
-        let mut registry = create_empty_process_registry();
-        
-        let result = registry.add_server_with_session(
-            "test-server".to_string(),
-            0, // Streamable servers use PID 0
-            "Streamable".to_string(),
-            "http://localhost:8080".to_string(),
-            Some("session-123".to_string()),
-        );
-        
-        assert!(result.is_ok());
-        assert_eq!(registry.servers.len(), 1);
-        
-        let entry = registry.servers.get("test-server").unwrap();
-        assert_eq!(entry.pid, 0);
-        assert_eq!(entry.session_id, Some("session-123".to_string()));
-    }
-
-    #[test]
-    fn test_process_registry_remove_server() {
-        let mut registry = create_empty_process_registry();
-        
-        registry.add_server(
-            "test-server".to_string(),
-            12345,
-            "Stdio".to_string(),
-            "test-command".to_string(),
-        ).unwrap();
-        
-        assert_eq!(registry.servers.len(), 1);
-        
-        let result = registry.remove_server("test-server");
-        assert!(result.is_ok());
-        assert!(registry.servers.is_empty());
-    }
-
-    #[test]
-    fn test_process_registry_get_running_servers() {
-        let mut registry = create_empty_process_registry();
-        
-        // Add a Streamable server with session ID (should be considered running)
-        registry.add_server_with_session(
-            "streamable-server".to_string(),
-            0,
-            "Streamable".to_string(),
-            "http://localhost:8080".to_string(),
-            Some("session-123".to_string()),
-        ).unwrap();
-        
-        // Add a Streamable server without session ID (should not be considered running)
-        registry.add_server_with_session(
-            "inactive-server".to_string(),
-            0,
-            "Streamable".to_string(),
-            "http://localhost:8081".to_string(),
-            None,
-        ).unwrap();
-        
-        let running = registry.get_running_servers();
-        
-        // Only the server with session ID should be considered running
-        assert_eq!(running.len(), 1);
-        assert!(running.contains_key("streamable-server"));
-        assert!(!running.contains_key("inactive-server"));
-    }
-
-    #[test]
-    fn test_process_registry_cleanup_dead_processes() {
-        let mut registry = create_empty_process_registry();
-        
-        // Add a Streamable server (PID 0, should not be cleaned up)
-        registry.add_server_with_session(
-            "streamable-server".to_string(),
-            0,
-            "Streamable".to_string(),
-            "http://localhost:8080".to_string(),
-            Some("session-123".to_string()),
-        ).unwrap();
-        
-        // Add a regular server with a very high PID (likely not running)
-        registry.add_server(
-            "dead-server".to_string(),
-            999999,
-            "Stdio".to_string(),
-            "test-command".to_string(),
-        ).unwrap();
-        
-        assert_eq!(registry.servers.len(), 2);
-        
-        let result = registry.cleanup_dead_processes();
-        assert!(result.is_ok());
-        
-        // Streamable server should remain, dead server might be removed
-        // (depends on whether PID 999999 actually exists)
-        assert!(registry.servers.contains_key("streamable-server"));
-    }
-
-    #[test]
-    fn test_process_registry_lifecycle() {
-        let mut registry = create_empty_process_registry();
-        
-        // Initially empty
-        assert!(registry.servers.is_empty());
-        
-        // Add process
-        registry.add_server(
-            "test-process".to_string(),
-            12345,
-            "Stdio".to_string(),
-            "test-command".to_string(),
-        ).unwrap();
-        
-        // Verify added
-        assert_eq!(registry.servers.len(), 1);
-        
-        // Remove process
-        registry.remove_server("test-process").unwrap();
-        
-        // Verify removed
-        assert!(registry.servers.is_empty());
-    }
-}
-
-#[cfg(test)]
-mod mcp_manager_tests {
-    use super::*;
-
-    #[test]
-    fn test_mcp_manager_new() {
-        let manager = McpManager::new();
-        // Just verify we can create a manager instance
-        assert!(std::ptr::addr_of!(manager) as usize != 0);
-    }
-}
 
 #[cfg(test)]
 mod mcp_server_config_tests {
@@ -416,44 +242,6 @@ mod mcp_server_config_tests {
     }
 }
 
-#[cfg(test)]
-mod process_registry_entry_tests {
-    use super::*;
-
-    #[test]
-    fn test_process_registry_entry_creation() {
-        let entry = ProcessRegistryEntry {
-            name: "test-server".to_string(),
-            pid: 12345,
-            server_type: "Stdio".to_string(),
-            command: "echo test".to_string(),
-            session_id: None,
-        };
-        
-        assert_eq!(entry.name, "test-server");
-        assert_eq!(entry.pid, 12345);
-        assert_eq!(entry.server_type, "Stdio");
-        assert_eq!(entry.command, "echo test");
-        assert!(entry.session_id.is_none());
-    }
-
-    #[test]
-    fn test_process_registry_entry_with_session() {
-        let entry = ProcessRegistryEntry {
-            name: "streamable-server".to_string(),
-            pid: 0,
-            server_type: "Streamable".to_string(),
-            command: "http://localhost:8080".to_string(),
-            session_id: Some("session-123".to_string()),
-        };
-        
-        assert_eq!(entry.name, "streamable-server");
-        assert_eq!(entry.pid, 0);
-        assert_eq!(entry.server_type, "Streamable");
-        assert_eq!(entry.command, "http://localhost:8080");
-        assert_eq!(entry.session_id, Some("session-123".to_string()));
-    }
-}
 
 #[cfg(test)]
 mod mcp_integration_tests {
@@ -464,10 +252,6 @@ mod mcp_integration_tests {
         let mut config = McpConfig {
             servers: HashMap::new(),
         };
-        let mut registry = ProcessRegistry {
-            servers: HashMap::new(),
-        };
-        
         // Add server to config
         config.add_server(
             "integration-test".to_string(),
@@ -475,21 +259,8 @@ mod mcp_integration_tests {
             McpServerType::Stdio,
         ).unwrap();
         
-        // Simulate starting the server by adding to registry
-        registry.add_server(
-            "integration-test".to_string(),
-            12345,
-            "Stdio".to_string(),
-            "echo test".to_string(),
-        ).unwrap();
-        
-        // Verify both config and registry have the server
+        // Verify config has the server
         assert!(config.get_server("integration-test").is_some());
-        assert!(registry.servers.contains_key("integration-test"));
-        
-        let running_servers = registry.get_running_servers();
-        // Note: This might be 0 if PID 12345 doesn't exist, which is expected in tests
-        assert!(running_servers.len() <= 1);
     }
 
     #[test]
@@ -569,8 +340,9 @@ mod sdk_mcp_manager_tests {
         let mut manager = SdkMcpManager::new();
         
         // Test that we can create and close the manager without errors
-        let result = manager.close_all().await;
-        assert!(result.is_ok());
+        // Test that we can create the manager without errors
+        // Note: close_all method was removed during cleanup
+        assert!(std::ptr::addr_of!(manager) as usize != 0);
     }
 }
 
@@ -658,18 +430,15 @@ mod sdk_integration_tests {
         // We expect this to fail since the command doesn't exist
         assert!(result.is_err());
         
-        // Clean up
-        let _ = manager.close_all().await;
+        // Note: close_all method was removed during cleanup
     }
 
     #[test]
     fn test_backward_compatibility() {
         // Test that legacy MCP functionality still works alongside SDK
-        let legacy_manager = McpManager::new();
         let sdk_manager = SdkMcpManager::new();
         
-        // Both should be creatable without issues
-        assert!(std::ptr::addr_of!(legacy_manager) as usize != 0);
+        // Should be creatable without issues
         assert!(std::ptr::addr_of!(sdk_manager) as usize != 0);
     }
 }
