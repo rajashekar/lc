@@ -1,11 +1,13 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::fs;
 use crate::{config::Config, model_metadata::{MetadataExtractor, ModelMetadata}};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedProviderData {
     pub last_updated: u64, // Unix timestamp
     pub raw_response: String, // Raw JSON response from provider
@@ -38,9 +40,48 @@ impl CachedProviderData {
     }
 }
 
+// In-memory cache entry with TTL
+#[derive(Debug, Clone)]
+struct MemoryCacheEntry {
+    data: CachedProviderData,
+    expires_at: u64,
+}
+
+impl MemoryCacheEntry {
+    fn new(data: CachedProviderData, ttl_seconds: u64) -> Self {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_secs();
+        
+        Self {
+            data,
+            expires_at: now + ttl_seconds,
+        }
+    }
+    
+    fn is_expired(&self) -> bool {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_secs();
+        
+        now >= self.expires_at
+    }
+}
+
+// Global in-memory cache with efficient invalidation
+lazy_static::lazy_static! {
+    static ref MEMORY_CACHE: Arc<RwLock<HashMap<String, MemoryCacheEntry>>> =
+        Arc::new(RwLock::new(HashMap::new()));
+}
+
 pub struct UnifiedCache;
 
 impl UnifiedCache {
+    /// Cache TTL in seconds (24 hours)
+    const CACHE_TTL: u64 = 86400;
+    
     /// Get the models directory path (cross-platform)
     pub fn models_dir() -> Result<PathBuf> {
         let config_dir = dirs::config_dir()
@@ -55,18 +96,32 @@ impl UnifiedCache {
         Ok(models_dir.join(format!("{}.json", provider)))
     }
 
-    /// Check if a provider's cache file exists and is fresh (< 24 hours old)
-    pub fn is_cache_fresh(provider: &str) -> Result<bool> {
-        let cache_path = Self::provider_cache_path(provider)?;
+    /// Check in-memory cache first, then file cache
+    pub async fn is_cache_fresh(provider: &str) -> Result<bool> {
+        crate::debug_log!("Checking cache freshness for provider '{}'", provider);
         
-        crate::debug_log!("Checking cache freshness for provider '{}' at path: {}", provider, cache_path.display());
+        // Check in-memory cache first
+        if let Ok(cache) = MEMORY_CACHE.read() {
+            if let Some(entry) = cache.get(provider) {
+                if !entry.is_expired() {
+                    crate::debug_log!("Found fresh in-memory cache for provider '{}'", provider);
+                    return Ok(true);
+                } else {
+                    crate::debug_log!("In-memory cache expired for provider '{}'", provider);
+                }
+            }
+        }
+        
+        // Fall back to file cache
+        let cache_path = Self::provider_cache_path(provider)?;
         
         if !cache_path.exists() {
             crate::debug_log!("Cache file does not exist for provider '{}'", provider);
             return Ok(false);
         }
 
-        let content = fs::read_to_string(&cache_path)?;
+        // Use async file I/O to avoid blocking
+        let content = fs::read_to_string(&cache_path).await?;
         let cached_data: CachedProviderData = serde_json::from_str(&content)?;
         
         let now = SystemTime::now()
@@ -75,23 +130,67 @@ impl UnifiedCache {
             .as_secs();
         
         let age_seconds = now - cached_data.last_updated;
-        let is_fresh = age_seconds < 86400;
+        let is_fresh = age_seconds < Self::CACHE_TTL;
         
-        crate::debug_log!("Cache for provider '{}' is {} seconds old, fresh: {}", provider, age_seconds, is_fresh);
+        crate::debug_log!("File cache for provider '{}' is {} seconds old, fresh: {}", provider, age_seconds, is_fresh);
         
-        // Cache is fresh if less than 24 hours old (86400 seconds)
+        // If file cache is fresh, populate in-memory cache
+        if is_fresh {
+            Self::populate_memory_cache(provider, cached_data);
+        }
+        
         Ok(is_fresh)
+    }
+    
+    /// Populate in-memory cache with data
+    fn populate_memory_cache(provider: &str, data: CachedProviderData) {
+        if let Ok(mut cache) = MEMORY_CACHE.write() {
+            let entry = MemoryCacheEntry::new(data, Self::CACHE_TTL);
+            cache.insert(provider.to_string(), entry);
+            crate::debug_log!("Populated in-memory cache for provider '{}'", provider);
+        }
+    }
+    
+    /// Invalidate cache for a specific provider
+    pub fn invalidate_provider_cache(provider: &str) {
+        if let Ok(mut cache) = MEMORY_CACHE.write() {
+            cache.remove(provider);
+            crate::debug_log!("Invalidated in-memory cache for provider '{}'", provider);
+        }
+    }
+    
+    /// Clear all in-memory cache
+    #[allow(dead_code)]
+    pub fn clear_memory_cache() {
+        if let Ok(mut cache) = MEMORY_CACHE.write() {
+            cache.clear();
+            crate::debug_log!("Cleared all in-memory cache");
+        }
     }
 
     /// Get cache age in human-readable format (e.g., "5 mins ago", "2 hrs ago")
-    pub fn get_cache_age_display(provider: &str) -> Result<String> {
+    pub async fn get_cache_age_display(provider: &str) -> Result<String> {
+        // Check in-memory cache first
+        if let Ok(cache) = MEMORY_CACHE.read() {
+            if let Some(entry) = cache.get(provider) {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or(Duration::from_secs(0))
+                    .as_secs();
+                
+                let age_seconds = now - entry.data.last_updated;
+                return Ok(Self::format_age(age_seconds));
+            }
+        }
+        
+        // Fall back to file cache
         let cache_path = Self::provider_cache_path(provider)?;
         
         if !cache_path.exists() {
             return Ok("No cache".to_string());
         }
 
-        let content = fs::read_to_string(&cache_path)?;
+        let content = fs::read_to_string(&cache_path).await?;
         let cached_data: CachedProviderData = serde_json::from_str(&content)?;
         
         let now = SystemTime::now()
@@ -100,37 +199,63 @@ impl UnifiedCache {
             .as_secs();
         
         let age_seconds = now - cached_data.last_updated;
-        
-        // Convert to human-readable format
+        Ok(Self::format_age(age_seconds))
+    }
+    
+    /// Format age in seconds to human-readable string
+    fn format_age(age_seconds: u64) -> String {
         if age_seconds < 60 {
-            Ok(format!("{} secs ago", age_seconds))
+            format!("{} secs ago", age_seconds)
         } else if age_seconds < 3600 {
             let minutes = age_seconds / 60;
-            Ok(format!("{} min{} ago", minutes, if minutes == 1 { "" } else { "s" }))
+            format!("{} min{} ago", minutes, if minutes == 1 { "" } else { "s" })
         } else if age_seconds < 86400 {
             let hours = age_seconds / 3600;
-            Ok(format!("{} hr{} ago", hours, if hours == 1 { "" } else { "s" }))
+            format!("{} hr{} ago", hours, if hours == 1 { "" } else { "s" })
         } else {
             let days = age_seconds / 86400;
-            Ok(format!("{} day{} ago", days, if days == 1 { "" } else { "s" }))
+            format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
         }
     }
 
-    /// Load cached models for a provider
-    pub fn load_provider_models(provider: &str) -> Result<Vec<ModelMetadata>> {
-        let cache_path = Self::provider_cache_path(provider)?;
+    /// Load cached models for a provider (async with in-memory cache)
+    pub async fn load_provider_models(provider: &str) -> Result<Vec<ModelMetadata>> {
+        crate::debug_log!("Loading cached models for provider '{}'", provider);
         
-        crate::debug_log!("Loading cached models for provider '{}' from: {}", provider, cache_path.display());
+        // Check in-memory cache first
+        if let Ok(cache) = MEMORY_CACHE.read() {
+            if let Some(entry) = cache.get(provider) {
+                if !entry.is_expired() {
+                    crate::debug_log!("Loaded {} models from in-memory cache for provider '{}'", entry.data.models.len(), provider);
+                    return Ok(entry.data.models.clone());
+                } else {
+                    crate::debug_log!("In-memory cache expired for provider '{}'", provider);
+                }
+            }
+        }
+        
+        // Fall back to file cache
+        let cache_path = Self::provider_cache_path(provider)?;
         
         if !cache_path.exists() {
             crate::debug_log!("No cache file found for provider '{}'", provider);
             return Ok(Vec::new());
         }
 
-        let content = fs::read_to_string(&cache_path)?;
+        let content = fs::read_to_string(&cache_path).await?;
         let cached_data: CachedProviderData = serde_json::from_str(&content)?;
         
-        crate::debug_log!("Loaded {} models from cache for provider '{}'", cached_data.models.len(), provider);
+        crate::debug_log!("Loaded {} models from file cache for provider '{}'", cached_data.models.len(), provider);
+        
+        // Populate in-memory cache if data is fresh
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_secs();
+        
+        if now - cached_data.last_updated < Self::CACHE_TTL {
+            Self::populate_memory_cache(provider, cached_data.clone());
+        }
         
         Ok(cached_data.models)
     }
@@ -140,13 +265,16 @@ impl UnifiedCache {
         crate::debug_log!("Fetching models for provider '{}', force_refresh: {}", provider, force_refresh);
         
         // Check if we need to refresh
-        if !force_refresh && Self::is_cache_fresh(provider)? {
+        if !force_refresh && Self::is_cache_fresh(provider).await? {
             crate::debug_log!("Using cached models for provider '{}' (cache is fresh)", provider);
-            return Self::load_provider_models(provider);
+            return Self::load_provider_models(provider).await;
         }
 
         crate::debug_log!("Cache is stale or refresh forced, fetching fresh models for provider '{}'", provider);
         println!("Fetching models from provider '{}'...", provider);
+
+        // Invalidate existing cache
+        Self::invalidate_provider_cache(provider);
 
         // Load config and create client
         let config = Config::load()?;
@@ -176,42 +304,47 @@ impl UnifiedCache {
         
         crate::debug_log!("Extracted {} models from provider '{}'", models.len(), provider);
         
-        // Cache the data
+        // Cache the data (both in-memory and file)
         crate::debug_log!("Saving cache data for provider '{}'", provider);
-        Self::save_provider_cache(provider, &raw_response, &models)?;
+        Self::save_provider_cache(provider, &raw_response, &models).await?;
         
         Ok(models)
     }
 
-    /// Save provider data to cache
-    fn save_provider_cache(provider: &str, raw_response: &str, models: &[ModelMetadata]) -> Result<()> {
+    /// Save provider data to cache (async with in-memory caching)
+    async fn save_provider_cache(provider: &str, raw_response: &str, models: &[ModelMetadata]) -> Result<()> {
         let cache_path = Self::provider_cache_path(provider)?;
         
         crate::debug_log!("Saving cache for provider '{}' to: {}", provider, cache_path.display());
         
-        // Ensure cache directory exists
-        if let Some(parent) = cache_path.parent() {
-            crate::debug_log!("Creating cache directory: {}", parent.display());
-            fs::create_dir_all(parent)?;
-        }
-        
-        // Use the optimized constructor and cached serialization
-        let mut cached_data = CachedProviderData::new(
+        // Create cached data
+        let cached_data = CachedProviderData::new(
             raw_response.to_string(),
             models.to_vec()
         );
         
-        let content = cached_data.get_cached_json()?;
+        // Update in-memory cache first (fastest access)
+        Self::populate_memory_cache(provider, cached_data.clone());
+        
+        // Ensure cache directory exists
+        if let Some(parent) = cache_path.parent() {
+            crate::debug_log!("Creating cache directory: {}", parent.display());
+            fs::create_dir_all(parent).await?;
+        }
+        
+        // Use async file I/O to avoid blocking
+        let mut cached_data_mut = cached_data;
+        let content = cached_data_mut.get_cached_json()?;
         crate::debug_log!("Writing {} bytes to cache file for provider '{}'", content.len(), provider);
-        fs::write(&cache_path, content)?;
+        fs::write(&cache_path, content).await?;
         
         crate::debug_log!("Successfully saved cache for provider '{}' with {} models", provider, models.len());
         
         Ok(())
     }
 
-    /// Load all cached models from all providers
-    pub fn load_all_cached_models() -> Result<Vec<ModelMetadata>> {
+    /// Load all cached models from all providers (async with in-memory cache)
+    pub async fn load_all_cached_models() -> Result<Vec<ModelMetadata>> {
         let models_dir = Self::models_dir()?;
         let mut all_models = Vec::new();
         
@@ -219,16 +352,15 @@ impl UnifiedCache {
             return Ok(all_models);
         }
         
-        let entries = fs::read_dir(&models_dir)?;
+        let mut entries = fs::read_dir(&models_dir).await?;
         
-        for entry in entries {
-            let entry = entry?;
+        while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             
             if let Some(extension) = path.extension() {
                 if extension == "json" {
                     if let Some(provider_name) = path.file_stem().and_then(|s| s.to_str()) {
-                        match Self::load_provider_models(provider_name) {
+                        match Self::load_provider_models(provider_name).await {
                             Ok(mut models) => {
                                 all_models.append(&mut models);
                             }

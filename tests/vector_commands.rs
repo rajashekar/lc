@@ -15,7 +15,7 @@ mod vector_database_creation_tests {
 
     #[test]
     fn test_vector_database_creation() {
-        let temp_dir = TempDir::new().unwrap();
+        let _temp_dir = TempDir::new().unwrap();
         let db_name = "test_db";
         
         // Test database creation with temporary directory
@@ -30,7 +30,7 @@ mod vector_database_creation_tests {
 
     #[test]
     fn test_vector_database_path_generation() {
-        let temp_dir = TempDir::new().unwrap();
+        let _temp_dir = TempDir::new().unwrap();
         let db_name = "test_database";
         let result = VectorDatabase::new(db_name);
         assert!(result.is_ok());
@@ -293,7 +293,7 @@ mod vector_retrieval_tests {
 
     #[test]
     fn test_empty_database_retrieval() {
-        let temp_dir = TempDir::new().unwrap();
+        let _temp_dir = TempDir::new().unwrap();
         let db = VectorDatabase::new("test_empty_retrieval").unwrap();
         
         let result = db.get_all_vectors();
@@ -308,6 +308,7 @@ mod vector_retrieval_tests {
 mod vector_similarity_tests {
     use super::*;
 
+    #[allow(dead_code)]
     fn create_normalized_vector(values: Vec<f64>) -> Vec<f64> {
         let magnitude = values.iter().map(|x| x * x).sum::<f64>().sqrt();
         if magnitude == 0.0 {
@@ -425,7 +426,7 @@ mod vector_similarity_tests {
 
     #[test]
     fn test_similarity_with_empty_database() {
-        let temp_dir = TempDir::new().unwrap();
+        let _temp_dir = TempDir::new().unwrap();
         let db = VectorDatabase::new("test_empty_similarity").unwrap();
         
         let query_vector = vec![1.0, 0.0, 0.0];

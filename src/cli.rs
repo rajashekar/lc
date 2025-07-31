@@ -2083,15 +2083,15 @@ pub async fn handle_models_command(
                         if let Some(provider_name) = path.file_stem().and_then(|s| s.to_str()) {
                             debug_log!("Processing cache file for provider: {}", provider_name);
                             provider_count += 1;
-                            match crate::unified_cache::UnifiedCache::load_provider_models(provider_name) {
+                            match crate::unified_cache::UnifiedCache::load_provider_models(provider_name).await {
                                 Ok(models) => {
                                     let count = models.len();
                                     total_models += count;
                                     debug_log!("Provider '{}' has {} cached models", provider_name, count);
                                     
-                                    let age_display = crate::unified_cache::UnifiedCache::get_cache_age_display(provider_name)
+                                    let age_display = crate::unified_cache::UnifiedCache::get_cache_age_display(provider_name).await
                                         .unwrap_or_else(|_| "Unknown".to_string());
-                                    let is_fresh = crate::unified_cache::UnifiedCache::is_cache_fresh(provider_name).unwrap_or(false);
+                                    let is_fresh = crate::unified_cache::UnifiedCache::is_cache_fresh(provider_name).await.unwrap_or(false);
                                     debug_log!("Provider '{}' cache age: {}, fresh: {}", provider_name, age_display, is_fresh);
                                     
                                     let status = if is_fresh {
@@ -2139,7 +2139,7 @@ pub async fn handle_models_command(
             
             // Use unified cache for embedding models command
             debug_log!("Loading all cached models from unified cache");
-            let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models()?;
+            let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
             
             debug_log!("Loaded {} models from cache", enhanced_models.len());
             
@@ -2148,7 +2148,7 @@ pub async fn handle_models_command(
                 debug_log!("No cached models found, refreshing all providers");
                 println!("No cached models found. Refreshing all providers...");
                 crate::unified_cache::UnifiedCache::refresh_all_providers().await?;
-                let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models()?;
+                let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
                 
                 debug_log!("After refresh, loaded {} models", enhanced_models.len());
                 
@@ -2182,7 +2182,7 @@ pub async fn handle_models_command(
             
             // Use unified cache for global models command
             debug_log!("Loading all cached models from unified cache");
-            let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models()?;
+            let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
             
             debug_log!("Loaded {} models from cache", enhanced_models.len());
             
@@ -2191,7 +2191,7 @@ pub async fn handle_models_command(
                 debug_log!("No cached models found, refreshing all providers");
                 println!("No cached models found. Refreshing all providers...");
                 crate::unified_cache::UnifiedCache::refresh_all_providers().await?;
-                let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models()?;
+                let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
                 
                 debug_log!("After refresh, loaded {} models", enhanced_models.len());
                 

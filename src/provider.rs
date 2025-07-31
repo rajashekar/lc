@@ -578,6 +578,7 @@ pub struct GeminiChatResponse {
 pub struct GeminiCandidate {
     pub content: GeminiResponseContent,
     #[serde(rename = "finishReason")]
+    #[allow(dead_code)]
     pub finish_reason: Option<String>,
 }
 
@@ -599,33 +600,45 @@ pub enum GeminiResponsePart {
 
 #[derive(Debug, Deserialize)]
 pub struct GeminiModelsResponse {
+    #[allow(dead_code)]
     pub models: Vec<GeminiModel>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GeminiModel {
+    #[allow(dead_code)]
     pub name: String,
     #[serde(rename = "displayName")]
+    #[allow(dead_code)]
     pub display_name: String,
+    #[allow(dead_code)]
     pub description: Option<String>,
     #[serde(rename = "inputTokenLimit")]
+    #[allow(dead_code)]
     pub input_token_limit: Option<u32>,
     #[serde(rename = "outputTokenLimit")]
+    #[allow(dead_code)]
     pub output_token_limit: Option<u32>,
     #[serde(rename = "supportedGenerationMethods")]
+    #[allow(dead_code)]
     pub supported_generation_methods: Vec<String>,
+    #[allow(dead_code)]
     pub temperature: Option<f32>,
     #[serde(rename = "topP")]
+    #[allow(dead_code)]
     pub top_p: Option<f32>,
     #[serde(rename = "topK")]
+    #[allow(dead_code)]
     pub top_k: Option<u32>,
     #[serde(rename = "maxTemperature")]
+    #[allow(dead_code)]
     pub max_temperature: Option<f32>,
 }
 
 pub struct GeminiClient {
     client: Client,
     base_url: String,
+    #[allow(dead_code)]
     api_key: String,
     models_path: String,
     chat_path_template: String, // Template with <model> placeholder
@@ -633,6 +646,7 @@ pub struct GeminiClient {
 }
 
 impl GeminiClient {
+    #[allow(dead_code)]
     pub fn new(base_url: String, api_key: String, models_path: String, chat_path_template: String) -> Self {
         let client = Client::builder()
             .pool_max_idle_per_host(10)

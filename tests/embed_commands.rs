@@ -5,7 +5,6 @@
 
 mod common;
 
-use lc::vector_db::VectorDatabase;
 use lc::provider::{EmbeddingRequest, EmbeddingResponse, EmbeddingData, EmbeddingUsage};
 use lc::config::Config;
 use std::collections::HashMap;
@@ -238,7 +237,6 @@ mod embed_model_resolution_tests {
 
 #[cfg(test)]
 mod embed_validation_tests {
-    use super::*;
 
     #[test]
     fn test_embedding_text_validation() {
@@ -535,7 +533,7 @@ mod embed_integration_tests {
 mod embed_file_tests {
     use super::*;
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use lc::vector_db::FileProcessor;
 
     fn create_test_files(temp_dir: &TempDir) -> Vec<String> {

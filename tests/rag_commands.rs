@@ -303,8 +303,8 @@ mod rag_integration_tests {
         let db_name = "rag_workflow_test";
         let embedding_model = "text-embedding-3-small";
         let embedding_provider = "openai";
-        let chat_model = "gpt-4o-mini";
-        let chat_provider = "openai";
+        let _chat_model = "gpt-4o-mini";
+        let _chat_provider = "openai";
 
         // 1. Setup: Create database with knowledge
         let db = VectorDatabase::new(db_name).unwrap();

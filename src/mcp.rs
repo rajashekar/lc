@@ -107,10 +107,12 @@ lazy_static::lazy_static! {
 }
 
 // Global manager access functions - used by mcp_daemon module
+#[allow(dead_code)]
 pub async fn get_global_manager() -> Arc<Mutex<SdkMcpManager>> {
     GLOBAL_MCP_MANAGER.clone()
 }
 
+#[allow(dead_code)]
 pub async fn ensure_server_connected(server_name: &str, config: SdkMcpServerConfig) -> Result<()> {
     let manager = get_global_manager().await;
     let mut manager_lock = manager.lock().await;
@@ -127,6 +129,7 @@ pub async fn ensure_server_connected(server_name: &str, config: SdkMcpServerConf
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn call_global_tool(server_name: &str, tool_name: &str, arguments: serde_json::Value) -> Result<serde_json::Value> {
     let manager = get_global_manager().await;
     let manager_lock = manager.lock().await;
@@ -145,12 +148,14 @@ pub async fn call_global_tool(server_name: &str, tool_name: &str, arguments: ser
     result
 }
 
+#[allow(dead_code)]
 pub async fn list_global_tools() -> Result<HashMap<String, Vec<Tool>>> {
     let manager = get_global_manager().await;
     let manager_lock = manager.lock().await;
     manager_lock.list_all_tools().await
 }
 
+#[allow(dead_code)]
 pub async fn close_global_server(server_name: &str) -> Result<()> {
     let manager = get_global_manager().await;
     let mut manager_lock = manager.lock().await;

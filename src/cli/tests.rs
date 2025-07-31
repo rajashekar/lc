@@ -3,18 +3,15 @@
 //! This module contains comprehensive tests for all CLI commands,
 //! with a focus on the providers command and its various options.
 
-use super::*;
-use crate::config::{Config, ProviderConfig, CachedToken};
-use anyhow::Result;
+use crate::config::{Config, ProviderConfig};
 use std::collections::HashMap;
 use tempfile::TempDir;
-use std::fs;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 /// Helper function to create a temporary config for testing
 fn create_test_config() -> (Config, TempDir) {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let config_path = temp_dir.path().join("config.toml");
+    let _config_path = temp_dir.path().join("config.toml");
     
     let config = Config {
         providers: HashMap::new(),
@@ -360,7 +357,6 @@ mod provider_tests {
 
 #[cfg(test)]
 mod provider_command_tests {
-    use super::*;
     use crate::cli::{ProviderCommands, HeaderCommands};
 
     /// Mock test for provider add command

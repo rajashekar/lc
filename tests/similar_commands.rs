@@ -549,7 +549,7 @@ mod similar_integration_tests {
 
     #[test]
     fn test_complete_similarity_workflow() {
-        let config = Config {
+        let _config = Config {
             providers: HashMap::new(),
             default_provider: Some("openai".to_string()),
             default_model: Some("text-embedding-3-small".to_string()),

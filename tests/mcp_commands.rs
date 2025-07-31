@@ -337,7 +337,7 @@ mod sdk_mcp_manager_tests {
 
     #[tokio::test]
     async fn test_sdk_mcp_manager_lifecycle() {
-        let mut manager = SdkMcpManager::new();
+        let manager = SdkMcpManager::new();
         
         // Test that we can create and close the manager without errors
         // Test that we can create the manager without errors

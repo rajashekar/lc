@@ -32,23 +32,23 @@ mod models_cache_tests {
         assert!(path.to_string_lossy().ends_with("test-provider.json"));
     }
 
-    #[test]
-    fn test_cache_freshness_nonexistent() {
-        let is_fresh = UnifiedCache::is_cache_fresh("nonexistent-provider");
+    #[tokio::test]
+    async fn test_cache_freshness_nonexistent() {
+        let is_fresh = UnifiedCache::is_cache_fresh("nonexistent-provider").await;
         assert!(is_fresh.is_ok());
         assert!(!is_fresh.unwrap()); // Non-existent cache is not fresh
     }
 
-    #[test]
-    fn test_load_provider_models_empty() {
-        let models = UnifiedCache::load_provider_models("nonexistent-provider");
+    #[tokio::test]
+    async fn test_load_provider_models_empty() {
+        let models = UnifiedCache::load_provider_models("nonexistent-provider").await;
         assert!(models.is_ok());
         assert!(models.unwrap().is_empty());
     }
 
-    #[test]
-    fn test_load_all_cached_models_empty() {
-        let models = UnifiedCache::load_all_cached_models();
+    #[tokio::test]
+    async fn test_load_all_cached_models_empty() {
+        let models = UnifiedCache::load_all_cached_models().await;
         assert!(models.is_ok());
         // Should return empty vector when no cache exists
     }

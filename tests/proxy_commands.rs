@@ -13,7 +13,6 @@ use lc::proxy::{
 };
 use lc::provider::Message;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 #[cfg(test)]
 mod proxy_state_tests {
@@ -923,7 +922,6 @@ mod proxy_authentication_tests {
 
 #[cfg(test)]
 mod proxy_endpoint_tests {
-    use super::*;
 
     #[test]
     fn test_models_endpoint_paths() {
@@ -969,7 +967,6 @@ mod proxy_endpoint_tests {
 
 #[cfg(test)]
 mod proxy_server_configuration_tests {
-    use super::*;
 
     #[test]
     fn test_server_address_formatting() {
@@ -990,12 +987,12 @@ mod proxy_server_configuration_tests {
         
         for port in valid_ports {
             assert!(port > 0);
-            assert!(port <= 65535);
+            assert!(port > 0); // Remove useless comparison
         }
         
         for port in edge_case_ports {
             assert!(port > 0);
-            assert!(port <= 65535);
+            assert!(port > 0); // Remove useless comparison
         }
     }
 
@@ -1083,7 +1080,7 @@ mod proxy_error_handling_tests {
 
     #[test]
     fn test_provider_filter_errors() {
-        let config = Config {
+        let _config = Config {
             providers: HashMap::new(),
             default_provider: Some("openai".to_string()),
             default_model: None,

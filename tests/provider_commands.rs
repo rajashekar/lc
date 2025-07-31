@@ -5,7 +5,7 @@
 
 mod common;
 
-use common::{create_test_config, create_config_with_providers, test_data, assertions};
+use common::{create_config_with_providers, test_data, assertions};
 use lc::config::Config;
 use std::collections::HashMap;
 use chrono::Utc;
