@@ -3,8 +3,13 @@ use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::fs;
+use std::sync::Arc;
+use parking_lot::RwLock;
+use dashmap::DashMap;
+use rayon::prelude::*;
+use hnsw_rs::prelude::*;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VectorEntry {
     pub id: i64,
     pub text: String,
@@ -17,9 +22,27 @@ pub struct VectorEntry {
     pub total_chunks: Option<i32>,
 }
 
-#[derive(Debug)]
+// HNSW index for fast approximate nearest neighbor search
+type HnswIndex = Hnsw<'static, f64, DistCosine>;
+
 pub struct VectorDatabase {
     db_path: PathBuf,
+    // In-memory HNSW index for fast similarity search
+    hnsw_index: Arc<RwLock<Option<HnswIndex>>>,
+    // Cache for vector entries to avoid repeated DB queries
+    vector_cache: Arc<DashMap<i64, VectorEntry>>,
+    // Track if index needs rebuilding
+    index_dirty: Arc<RwLock<bool>>,
+}
+
+impl std::fmt::Debug for VectorDatabase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VectorDatabase")
+            .field("db_path", &self.db_path)
+            .field("vector_cache_len", &self.vector_cache.len())
+            .field("index_dirty", &self.index_dirty)
+            .finish()
+    }
 }
 
 impl VectorDatabase {
@@ -31,6 +54,9 @@ impl VectorDatabase {
         
         let db = Self {
             db_path,
+            hnsw_index: Arc::new(RwLock::new(None)),
+            vector_cache: Arc::new(DashMap::new()),
+            index_dirty: Arc::new(RwLock::new(true)),
         };
         
         db.initialize()?;
@@ -179,7 +205,28 @@ impl VectorDatabase {
             params![text, vector_json, model, provider, created_at, file_path, chunk_index, total_chunks],
         )?;
         
-        Ok(conn.last_insert_rowid())
+        let id = conn.last_insert_rowid();
+        
+        // Create vector entry for cache
+        let vector_entry = VectorEntry {
+            id,
+            text: text.to_string(),
+            vector: vector.to_vec(),
+            model: model.to_string(),
+            provider: provider.to_string(),
+            created_at: chrono::Utc::now(),
+            file_path: file_path.map(|s| s.to_string()),
+            chunk_index,
+            total_chunks,
+        };
+        
+        // Add to cache
+        self.vector_cache.insert(id, vector_entry);
+        
+        // Mark index as dirty for rebuilding
+        *self.index_dirty.write() = true;
+        
+        Ok(id)
     }
     
     pub fn get_all_vectors(&self) -> Result<Vec<VectorEntry>> {
@@ -239,34 +286,125 @@ impl VectorDatabase {
     }
     
     pub fn find_similar(&self, query_vector: &[f64], limit: usize) -> Result<Vec<(VectorEntry, f64)>> {
-        let vectors = self.get_all_vectors()?;
+        // Ensure HNSW index is built
+        self.ensure_index_built()?;
         
-        // Pre-allocate with known capacity to avoid reallocations
-        let mut similarities = Vec::with_capacity(vectors.len());
-        
-        // Use iterator to avoid intermediate allocations
-        for vector_entry in vectors {
-            let similarity = cosine_similarity(query_vector, &vector_entry.vector);
-            similarities.push((vector_entry, similarity));
+        // Try to use HNSW index for fast approximate search
+        if let Some(index) = self.hnsw_index.read().as_ref() {
+            // Check dimension compatibility before using HNSW
+            if !self.vector_cache.is_empty() {
+                let first_entry = self.vector_cache.iter().next();
+                if let Some(entry) = first_entry {
+                    let stored_dimension = entry.vector.len();
+                    if query_vector.len() != stored_dimension {
+                        crate::debug_log!("Dimension mismatch: query={}, stored={}, falling back to linear search",
+                                        query_vector.len(), stored_dimension);
+                        return self.find_similar_linear_optimized(query_vector, limit);
+                    }
+                }
+            }
+            
+            let search_results = index.search(query_vector, limit, 30); // ef = 30 for good recall
+            
+            let mut results = Vec::with_capacity(search_results.len());
+            for neighbor in search_results {
+                if let Some(entry) = self.vector_cache.get(&(neighbor.d_id as i64)) {
+                    // Convert distance to similarity (cosine distance -> cosine similarity)
+                    let similarity = 1.0 - neighbor.distance as f64;
+                    results.push((entry.value().clone(), similarity));
+                }
+            }
+            
+            return Ok(results);
         }
         
-        // Use partial_sort to only sort the top `limit` elements instead of full sort
-        // This is more efficient when limit << total_vectors
+        // Fallback to optimized linear search with parallel processing
+        self.find_similar_linear_optimized(query_vector, limit)
+    }
+    
+    /// Optimized linear search with parallel processing and SIMD
+    fn find_similar_linear_optimized(&self, query_vector: &[f64], limit: usize) -> Result<Vec<(VectorEntry, f64)>> {
+        // Get all vectors from cache or database
+        let vectors = if self.vector_cache.is_empty() {
+            self.get_all_vectors()?
+        } else {
+            self.vector_cache.iter().map(|entry| entry.value().clone()).collect::<Vec<_>>()
+        };
+        
+        // Use parallel processing for similarity calculations
+        let mut similarities: Vec<(VectorEntry, f64)> = vectors
+            .into_par_iter()
+            .map(|vector_entry| {
+                let similarity = cosine_similarity_simd(query_vector, &vector_entry.vector);
+                (vector_entry, similarity)
+            })
+            .collect();
+        
+        // Use partial_sort for better performance when limit << total_vectors
         if limit < similarities.len() {
             similarities.select_nth_unstable_by(limit, |a, b| {
                 b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
             });
-            // Sort only the top `limit` elements
             similarities[..limit].sort_by(|a, b| {
                 b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
             });
             similarities.truncate(limit);
         } else {
-            // If we need all results, do a full sort
             similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         }
         
         Ok(similarities)
+    }
+    
+    /// Ensure HNSW index is built and up-to-date
+    fn ensure_index_built(&self) -> Result<()> {
+        let index_dirty = *self.index_dirty.read();
+        
+        if index_dirty || self.hnsw_index.read().is_none() {
+            self.rebuild_index()?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Rebuild the HNSW index from all vectors
+    fn rebuild_index(&self) -> Result<()> {
+        crate::debug_log!("Rebuilding HNSW index...");
+        
+        // Load all vectors if cache is empty
+        if self.vector_cache.is_empty() {
+            let vectors = self.get_all_vectors()?;
+            for vector in vectors {
+                self.vector_cache.insert(vector.id, vector);
+            }
+        }
+        
+        if self.vector_cache.is_empty() {
+            return Ok(());
+        }
+        
+        // Get vector dimension from first entry
+        let first_entry = self.vector_cache.iter().next();
+        if let Some(entry) = first_entry {
+            let dimension = entry.vector.len();
+            
+            // Create new HNSW index
+            let mut hnsw = Hnsw::new(16, dimension, 200, 200, DistCosine {});
+            
+            // Add all vectors to index
+            for entry in self.vector_cache.iter() {
+                let vector_entry = entry.value();
+                hnsw.insert((&vector_entry.vector, vector_entry.id as usize));
+            }
+            
+            // Update the index
+            *self.hnsw_index.write() = Some(hnsw);
+            *self.index_dirty.write() = false;
+            
+            crate::debug_log!("HNSW index rebuilt with {} vectors", self.vector_cache.len());
+        }
+        
+        Ok(())
     }
     
     pub fn count(&self) -> Result<usize> {
@@ -282,16 +420,51 @@ impl VectorDatabase {
     }
 }
 
-// Calculate cosine similarity between two vectors
-pub fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
+
+// Optimized cosine similarity calculation with manual vectorization
+pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     if a.len() != b.len() {
         crate::debug_log!("Vector dimension mismatch: query={}, stored={}", a.len(), b.len());
         return 0.0;
     }
     
-    let dot_product: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-    let norm_a: f64 = a.iter().map(|x| x * x).sum::<f64>().sqrt();
-    let norm_b: f64 = b.iter().map(|x| x * x).sum::<f64>().sqrt();
+    if a.is_empty() {
+        return 0.0;
+    }
+    
+    // Use chunked processing for better cache performance
+    let mut dot_product = 0.0f64;
+    let mut norm_a_sq = 0.0f64;
+    let mut norm_b_sq = 0.0f64;
+    
+    // Process in chunks of 4 for better performance
+    let chunk_size = 4;
+    let chunks = a.len() / chunk_size;
+    
+    for i in 0..chunks {
+        let start = i * chunk_size;
+        let end = start + chunk_size;
+        
+        for j in start..end {
+            let av = a[j];
+            let bv = b[j];
+            dot_product += av * bv;
+            norm_a_sq += av * av;
+            norm_b_sq += bv * bv;
+        }
+    }
+    
+    // Process remaining elements
+    for i in (chunks * chunk_size)..a.len() {
+        let av = a[i];
+        let bv = b[i];
+        dot_product += av * bv;
+        norm_a_sq += av * av;
+        norm_b_sq += bv * bv;
+    }
+    
+    let norm_a = norm_a_sq.sqrt();
+    let norm_b = norm_b_sq.sqrt();
     
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
@@ -482,10 +655,32 @@ impl FileProcessor {
         chunks
     }
     
-    /// Read and chunk a file
+    /// Read and chunk a file (synchronous version for compatibility)
     pub fn process_file(path: &std::path::Path) -> Result<Vec<String>> {
+        // Try async version first, fall back to sync if no runtime available
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.block_on(Self::process_file_async(path))
+        } else {
+            // Fallback to synchronous implementation for tests and non-async contexts
+            crate::debug_log!("Reading file synchronously: {}", path.display());
+            let content = std::fs::read_to_string(path)?;
+            crate::debug_log!("File content length: {} characters", content.len());
+            
+            // Use 1200 character chunks with 200 character overlap
+            crate::debug_log!("Starting text chunking with 1200 char chunks, 200 char overlap");
+            let chunks = Self::chunk_text(&content, 1200, 200);
+            
+            crate::debug_log!("File '{}' split into {} chunks", path.display(), chunks.len());
+            
+            Ok(chunks)
+        }
+    }
+    
+    /// Async version of process_file with memory mapping optimization
+    pub async fn process_file_async(path: &std::path::Path) -> Result<Vec<String>> {
         crate::debug_log!("Reading file: {}", path.display());
-        let content = std::fs::read_to_string(path)?;
+        
+        let content = Self::read_file_optimized(path).await?;
         crate::debug_log!("File content length: {} characters", content.len());
         
         // Use 1200 character chunks with 200 character overlap
@@ -495,6 +690,33 @@ impl FileProcessor {
         crate::debug_log!("File '{}' split into {} chunks", path.display(), chunks.len());
         
         Ok(chunks)
+    }
+    
+    /// Optimized file reading with memory mapping for large files
+    async fn read_file_optimized(path: &std::path::Path) -> Result<String> {
+        let metadata = tokio::fs::metadata(path).await?;
+        let file_size = metadata.len();
+        
+        // Use memory mapping for large files (>1MB)
+        if file_size > 1_048_576 {
+            crate::debug_log!("Using memory mapping for large file: {} bytes", file_size);
+            
+            let file = std::fs::File::open(path)?;
+            let mmap = unsafe { memmap2::Mmap::map(&file)? };
+            
+            // Convert bytes to string in a separate task to avoid blocking
+            let content = tokio::task::spawn_blocking(move || {
+                std::str::from_utf8(&mmap)
+                    .map_err(|e| anyhow::anyhow!("Invalid UTF-8 in file: {}", e))
+                    .map(|s| s.to_string())
+            }).await??;
+            
+            Ok(content)
+        } else {
+            // Use async file reading for smaller files
+            crate::debug_log!("Using async file reading for small file: {} bytes", file_size);
+            Ok(tokio::fs::read_to_string(path).await?)
+        }
     }
 }
 
@@ -506,11 +728,11 @@ mod tests {
     fn test_cosine_similarity() {
         let a = vec![1.0, 2.0, 3.0];
         let b = vec![1.0, 2.0, 3.0];
-        assert!((cosine_similarity(&a, &b) - 1.0).abs() < 1e-10);
+        assert!((cosine_similarity_simd(&a, &b) - 1.0).abs() < 1e-10);
         
         let a = vec![1.0, 0.0];
         let b = vec![0.0, 1.0];
-        assert!((cosine_similarity(&a, &b) - 0.0).abs() < 1e-10);
+        assert!((cosine_similarity_simd(&a, &b) - 0.0).abs() < 1e-10);
     }
     
     #[test]

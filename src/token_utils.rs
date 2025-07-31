@@ -1,26 +1,71 @@
 use anyhow::Result;
 use tiktoken_rs::{get_bpe_from_model, CoreBPE};
+use lru::LruCache;
+use std::sync::Arc;
+use parking_lot::Mutex;
+use std::num::NonZeroUsize;
 
-/// Token counter for various models
+/// Token counter for various models with caching
 pub struct TokenCounter {
     encoder: CoreBPE,
+    // LRU cache for token counts to avoid repeated tokenization
+    token_cache: Arc<Mutex<LruCache<String, usize>>>,
+    // Cache for truncated text to avoid repeated truncation
+    truncation_cache: Arc<Mutex<LruCache<(String, usize), String>>>,
+}
+
+// Global cache for encoder instances to avoid repeated creation
+lazy_static::lazy_static! {
+    static ref ENCODER_CACHE: Arc<Mutex<LruCache<String, CoreBPE>>> =
+        Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(10).unwrap())));
 }
 
 impl TokenCounter {
-    /// Create a new token counter for the given model
+    /// Create a new token counter for the given model with caching
     pub fn new(model_name: &str) -> Result<Self> {
         // Map model names to tiktoken model names
         let tiktoken_model = map_model_to_tiktoken(model_name);
         
-        let encoder = get_bpe_from_model(&tiktoken_model)
-            .map_err(|e| anyhow::anyhow!("Failed to create token encoder for model '{}': {}", model_name, e))?;
+        // Try to get encoder from cache first
+        let encoder = {
+            let mut cache = ENCODER_CACHE.lock();
+            if let Some(cached_encoder) = cache.get(&tiktoken_model) {
+                cached_encoder.clone()
+            } else {
+                let new_encoder = get_bpe_from_model(&tiktoken_model)
+                    .map_err(|e| anyhow::anyhow!("Failed to create token encoder for model '{}': {}", model_name, e))?;
+                cache.put(tiktoken_model, new_encoder.clone());
+                new_encoder
+            }
+        };
         
-        Ok(Self { encoder })
+        Ok(Self {
+            encoder,
+            token_cache: Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap()))),
+            truncation_cache: Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(100).unwrap()))),
+        })
     }
     
-    /// Count tokens in the given text
+    /// Count tokens in the given text with caching
     pub fn count_tokens(&self, text: &str) -> usize {
-        self.encoder.encode_with_special_tokens(text).len()
+        // Check cache first
+        {
+            let mut cache = self.token_cache.lock();
+            if let Some(&cached_count) = cache.get(text) {
+                return cached_count;
+            }
+        }
+        
+        // Calculate token count
+        let count = self.encoder.encode_with_special_tokens(text).len();
+        
+        // Store in cache
+        {
+            let mut cache = self.token_cache.lock();
+            cache.put(text.to_string(), count);
+        }
+        
+        count
     }
     
     /// Estimate tokens for a chat request including system prompt and history
@@ -93,27 +138,47 @@ impl TokenCounter {
         (prompt.to_string(), truncated_history)
     }
     
-    /// Truncate text to fit within token limit
+    /// Truncate text to fit within token limit with caching
     fn truncate_text(&self, text: &str, max_tokens: usize) -> String {
+        let cache_key = (text.to_string(), max_tokens);
+        
+        // Check cache first
+        {
+            let mut cache = self.truncation_cache.lock();
+            if let Some(cached_result) = cache.get(&cache_key) {
+                return cached_result.clone();
+            }
+        }
+        
         let tokens = self.encoder.encode_with_special_tokens(text);
         if tokens.len() <= max_tokens {
             return text.to_string();
         }
         
-        let truncated_tokens = &tokens[..max_tokens];
-        match self.encoder.decode(truncated_tokens.to_vec()) {
-            Ok(decoded) => decoded,
-            Err(_) => {
-                // Fallback: truncate by characters (rough approximation)
-                let chars: Vec<char> = text.chars().collect();
-                let estimated_chars = max_tokens * 3; // Rough estimate: 1 token ≈ 3-4 chars
-                if chars.len() > estimated_chars {
-                    chars[..estimated_chars].iter().collect()
-                } else {
-                    text.to_string()
+        let result = {
+            let truncated_tokens = &tokens[..max_tokens];
+            match self.encoder.decode(truncated_tokens.to_vec()) {
+                Ok(decoded) => decoded,
+                Err(_) => {
+                    // Fallback: truncate by characters (rough approximation)
+                    let chars: Vec<char> = text.chars().collect();
+                    let estimated_chars = max_tokens * 3; // Rough estimate: 1 token ≈ 3-4 chars
+                    if chars.len() > estimated_chars {
+                        chars[..estimated_chars].iter().collect()
+                    } else {
+                        text.to_string()
+                    }
                 }
             }
+        };
+        
+        // Store in cache
+        {
+            let mut cache = self.truncation_cache.lock();
+            cache.put(cache_key, result.clone());
         }
+        
+        result
     }
 }
 

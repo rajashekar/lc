@@ -64,9 +64,17 @@ impl McpDaemon {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    if let Err(e) = self.handle_client(stream).await {
-                        crate::debug_log!("Error handling client: {}", e);
-                    }
+                    // Handle each client in a separate task for parallel processing
+                    let mut daemon_clone = McpDaemon {
+                        manager: SdkMcpManager::new(), // Each task gets its own manager
+                        socket_path: self.socket_path.clone(),
+                    };
+                    
+                    tokio::spawn(async move {
+                        if let Err(e) = daemon_clone.handle_client(stream).await {
+                            crate::debug_log!("Error handling client: {}", e);
+                        }
+                    });
                 }
                 Err(e) => {
                     crate::debug_log!("Error accepting connection: {}", e);
@@ -76,25 +84,44 @@ impl McpDaemon {
     }
 
     async fn handle_client(&mut self, mut stream: UnixStream) -> Result<()> {
-        // Read request with larger buffer
-        let mut buffer = vec![0; 32768]; // Increased from 8192 to 32768
-        let n = stream.read(&mut buffer).await?;
+        // Read request with timeout and larger buffer
+        let mut buffer = vec![0; 32768];
+        
+        // Add timeout for read operation
+        let n = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            stream.read(&mut buffer)
+        ).await??;
         
         if n == 0 {
             return Ok(());
         }
 
-        let request: DaemonRequest = serde_json::from_slice(&buffer[..n])?;
+        // Deserialize in a separate task to avoid blocking
+        let request_data = buffer[..n].to_vec();
+        let request: DaemonRequest = tokio::task::spawn_blocking(move || {
+            serde_json::from_slice(&request_data)
+        }).await??;
+        
         crate::debug_log!("Daemon received request: {:?}", request);
 
         let response = self.process_request(request).await;
-        let response_data = serde_json::to_vec(&response)?;
         
-        // Write response length first, then response data
+        // Serialize response in a separate task to avoid blocking
+        let response_data = tokio::task::spawn_blocking(move || {
+            serde_json::to_vec(&response)
+        }).await??;
+        
+        // Write response with timeout
         let response_len = response_data.len() as u32;
-        stream.write_all(&response_len.to_le_bytes()).await?;
-        stream.write_all(&response_data).await?;
-        stream.flush().await?;
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            async {
+                stream.write_all(&response_len.to_le_bytes()).await?;
+                stream.write_all(&response_data).await?;
+                stream.flush().await
+            }
+        ).await??;
 
         Ok(())
     }
