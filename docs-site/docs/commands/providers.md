@@ -288,4 +288,4 @@ lc --provider hf -m "Qwen/Qwen3-32B:groq" "Hello"
 
 - [API Key Management](/commands/keys) - Secure key storage
 - [Models Command](/commands/models) - Advanced model filtering
-- [Provider Examples](/providers/openai) - Detailed provider guides
+- [Advanced Features](/advanced/vector-database) - Vector database and more
