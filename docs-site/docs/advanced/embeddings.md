@@ -11,6 +11,7 @@ Generate and store text embeddings for semantic search and RAG applications.
 ## Overview
 
 Embeddings are numerical representations of text that capture semantic meaning. LLM Client can:
+
 - Generate embeddings using any compatible model
 - Store embeddings in vector databases
 - Process files with intelligent chunking
@@ -48,6 +49,7 @@ lc m e
 ```
 
 Common models:
+
 - `text-embedding-3-small` (OpenAI) - Fast, efficient
 - `text-embedding-3-large` (OpenAI) - Higher quality
 - `embed-english-v3.0` (Cohere) - English-optimized
@@ -109,6 +111,7 @@ lc embed -m text-embedding-3-small -v docs -f "file1.md,file2.txt,file3.py"
 4. **Metadata**: Stores file path and chunk info
 
 Example output:
+
 ```
 Processing file: README.md
   ✓ Chunk 1/5 embedded
@@ -122,25 +125,30 @@ Successfully embedded 5 chunks from README.md
 ## Supported File Types
 
 ### Text Documents
+
 - `.txt`, `.md`, `.markdown`
 - `.rst`, `.org`, `.tex`
 - `.rtf`
 
 ### Code Files
+
 - `.py`, `.js`, `.ts`, `.java`
 - `.cpp`, `.c`, `.h`, `.hpp`
 - `.go`, `.rs`, `.rb`, `.php`
 - `.swift`, `.kt`, `.scala`
 
 ### Web Files
+
 - `.html`, `.css`, `.scss`
 - `.xml`, `.json`, `.yaml`, `.yml`
 
 ### Configuration
+
 - `.toml`, `.ini`, `.cfg`, `.conf`
 - `.env`, `.properties`
 
 ### Other
+
 - `.sql`, `.graphql`
 - `.dockerfile`, `.makefile`
 - `.sh`, `.bash`, `.zsh`
@@ -175,6 +183,7 @@ lc embed -p ollama -m nomic-embed-text -v local "content"
 ### 1. Model Selection
 
 Choose based on your needs:
+
 - **Speed**: `text-embedding-3-small`
 - **Quality**: `text-embedding-3-large`
 - **Multilingual**: `embed-multilingual-v3.0`
@@ -183,6 +192,7 @@ Choose based on your needs:
 ### 2. Chunk Size Optimization
 
 Default chunking works well, but consider:
+
 - **Technical docs**: Smaller chunks (better precision)
 - **Narrative text**: Larger chunks (better context)
 - **Code**: Respect function boundaries
@@ -219,6 +229,7 @@ lc vectors info docs
 ```
 
 Shows:
+
 - Total entries
 - Model used
 - Recent additions
@@ -248,6 +259,7 @@ lc embed -m text-embedding-3-small -v docs -f "file2.md"
 ### Large Files
 
 For very large files:
+
 1. Consider splitting beforehand
 2. Monitor memory usage
 3. Use streaming processing (automatic)

@@ -23,14 +23,17 @@ lc mcp add <name> <command> --type <type> [-e KEY=VALUE]...
 ```
 
 **Arguments:**
+
 - `<name>` - Unique identifier for the server
 - `<command>` - Command to start the server or URL for remote servers
 - `--type` - Server type: `stdio`, `sse`, or `streamable`
 
 **Options:**
+
 - `-e, --env KEY=VALUE` - Set environment variables (can be used multiple times)
 
 **Examples:**
+
 ```bash
 # Add fetch server for internet access
 lc mcp add fetch "uvx mcp-server-fetch" --type stdio
@@ -57,6 +60,7 @@ lc mcp delete <name>
 ```
 
 **Example:**
+
 ```bash
 lc mcp delete fetch
 ```
@@ -70,6 +74,7 @@ lc mcp list
 ```
 
 **Example output:**
+
 ```
 Servers: Configured MCP servers:
   • fetch - Stdio (uvx mcp-server-fetch)
@@ -85,6 +90,7 @@ lc mcp functions <name>
 ```
 
 **Example:**
+
 ```bash
 lc mcp functions fetch
 # Output:
@@ -104,6 +110,7 @@ lc mcp invoke <server> <function> [parameters...]
 **Parameters format:** `key=value`
 
 **Examples:**
+
 ```bash
 # Fetch a URL
 lc mcp invoke fetch fetch url=http://example.com
@@ -124,6 +131,7 @@ lc mcp stop <name>
 ```
 
 **Example:**
+
 ```bash
 lc mcp stop fetch
 ```
@@ -135,6 +143,7 @@ lc mcp stop fetch
 Once MCP servers are configured, use them in your prompts with the `-t` or `--tools` flag:
 
 ### Direct Prompts
+
 ```bash
 # Single tool
 lc -t fetch "What's the weather in Paris?"
@@ -144,6 +153,7 @@ lc -t fetch,playwright "Go to weather.com and get the forecast"
 ```
 
 ### Interactive Chat
+
 ```bash
 # Start chat with tools
 lc chat -m gpt-4 -t fetch
@@ -155,6 +165,7 @@ lc chat -m claude-3-opus -t fetch,playwright
 ## Common MCP Servers
 
 ### mcp-server-fetch
+
 Provides internet access to fetch web content.
 
 ```bash
@@ -169,6 +180,7 @@ lc -t fetch "Summarize the latest tech news"
 ```
 
 ### Playwright MCP
+
 Browser automation and web scraping.
 
 ```bash
@@ -183,6 +195,7 @@ lc -t playwright "Take a screenshot of google.com"
 ```
 
 ### Context7 MCP
+
 Access library documentation and code examples.
 
 ```bash
@@ -198,6 +211,7 @@ lc -t context7 "How to use Express.js routing"
 ```
 
 ### File System MCP
+
 Read and write local files.
 
 ```bash
@@ -209,6 +223,7 @@ lc -t fs "Read the contents of config.json"
 ```
 
 ### Kagi MCP
+
 Access Kagi search and summarization capabilities.
 
 ```bash
@@ -228,10 +243,12 @@ lc -t kagi "Summarize this article: https://example.com/article"
 ## Configuration
 
 MCP configurations are stored in:
+
 - **macOS/Linux**: `~/.config/lc/mcp.toml` or `~/Library/Application Support/lc/mcp.toml`
 - **Windows**: `%APPDATA%\lc\mcp.toml`
 
 Example configuration:
+
 ```toml
 [servers.fetch]
 name = "fetch"
@@ -259,17 +276,20 @@ KAGI_API_KEY = "your_api_key_here"
 ## Troubleshooting
 
 ### Server Won't Start
+
 - Ensure the command is installed (`uvx`, `npx`, etc.)
 - Check if the command works when run directly
 - Check environment variables are set correctly if required
 - The server starts automatically when you use it with `-t` flag or invoke a function
 
 ### Connection Issues
+
 - For HTTPS issues, try HTTP URLs when possible
 - Check firewall/proxy settings
 - Verify network connectivity
 
 ### Function Invocation Fails
+
 - Check parameter names and types with `lc mcp functions <name>`
 - Ensure boolean parameters are not quoted
 - The server will be started automatically when needed
@@ -277,6 +297,7 @@ KAGI_API_KEY = "your_api_key_here"
 ## Examples
 
 ### Web Research
+
 ```bash
 # Add fetch server
 lc mcp add fetch "uvx mcp-server-fetch" --type stdio
@@ -286,6 +307,7 @@ lc -t fetch "Research the latest developments in quantum computing"
 ```
 
 ### Automated Testing
+
 ```bash
 # Add browser automation
 lc mcp add playwright "npx @playwright/mcp@latest" --type stdio
@@ -295,6 +317,7 @@ lc -t playwright "Navigate to my website at example.com and check if the login b
 ```
 
 ### Multi-Tool Workflows
+
 ```bash
 # Use multiple tools together
 lc -t fetch,fs "Fetch the latest documentation from https://docs.example.com and save it to docs.md"

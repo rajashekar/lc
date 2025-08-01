@@ -9,6 +9,7 @@ The Model Context Protocol (MCP) enables LLMs to interact with external tools an
 ## Overview
 
 MCP servers are external processes that provide tools (functions) that LLMs can call during conversations. These tools can:
+
 - Fetch content from the internet
 - Interact with local files
 - Execute system commands
@@ -26,12 +27,14 @@ lc mcp add <name> <command> --type <type> [-e KEY=VALUE]...
 ```
 
 **Parameters:**
+
 - `<name>`: A unique identifier for the server
 - `<command>`: The command to start the server or URL for remote servers
 - `--type`: The server type (`stdio`, `sse`, or `streamable`)
 - `-e, --env KEY=VALUE`: Set environment variables (can be used multiple times)
 
 **Example:**
+
 ```bash
 # Add the fetch server for internet access
 lc mcp add fetch "uvx mcp-server-fetch" --type stdio
@@ -73,6 +76,7 @@ lc mcp functions <server-name>
 ```
 
 **Example:**
+
 ```bash
 lc mcp functions fetch
 # Output:
@@ -90,6 +94,7 @@ lc mcp invoke <server-name> <function-name> [parameters...]
 ```
 
 **Example:**
+
 ```bash
 # Fetch content from a URL
 lc mcp invoke fetch fetch url=http://httpbin.org/json
@@ -136,36 +141,46 @@ lc chat -m gpt-4 -t fetch,playwright
 ## Popular MCP Servers
 
 ### 1. mcp-server-fetch
+
 Provides internet access to fetch web content.
 
 **Installation:**
+
 ```bash
 lc mcp add fetch "uvx mcp-server-fetch" --type stdio
 ```
 
 **Usage Example:**
+
 ```bash
 lc -t fetch "Get the latest news headlines from a news website"
 ```
 
 ### 2. Playwright MCP
+
 Enables browser automation and web scraping.
 
 **Installation:**
 STDIO version
+
 ```bash
 lc mcp add playwright "npx @playwright/mcp@latest" --type stdio
 ```
+
 sse version
+
 ```bash
 lc mcp a playwright-sse http://localhost:8931/sse --type sse
 ```
+
 streamable version
+
 ```bash
 lc mcp add playwright-mcp http://localhost:8931/mcp --type streamable
 ```
 
 **Usage Example:**
+
 ```bash
 lc -t playwright "Go to https://news.ycombinator.com/ and get me the first post"
 
@@ -182,35 +197,44 @@ If you need more information or details about other posts, feel free to ask!
 ```
 
 ### 3. Context7 MCP
+
 Provides access to library documentation and code examples.
 
 **Installation:**
+
 ```bash
 lc mcp add context7 "npx -y @upstash/context7-mcp" --type stdio
 ```
 
 **Usage Example:**
+
 ```bash
 lc -t context7 "Show me React hooks documentation"
 lc -t context7 "How to use Express.js middleware"
 ```
 
 ### 4. File System MCP
+
 Allows reading and writing local files.
 
 **Installation:**
+
 ```bash
 lc mcp add fs "uvx mcp-server-fs" --type stdio
 ```
 
 ### 5. Exa search MCP
+
 Access Exa search capabilities for advanced web searches.
 
 **Installation:**
+
 ```bash
 lc mcp add exa "npx -y exa-mcp-server" --type stdio -e "EXA_API_KEY=your_exa_api_key"
 ```
+
 **Usage Example:**
+
 ```bash
 lc -t exa "Search for the latest AI research papers"
 
@@ -245,6 +269,7 @@ Feel free to explore these links for more detailed insights into the latest adva
 MCP server configurations are stored in `~/Library/Application Support/lc/mcp.toml` (macOS) or the equivalent directory on other platforms.
 
 **Example configuration:**
+
 ```toml
 [servers.fetch]
 name = "fetch"
@@ -285,20 +310,26 @@ MCP servers can require environment variables for configuration, such as API key
 ## Troubleshooting
 
 ### Connection Issues
+
 If an MCP server fails to connect:
+
 1. Check if the command is installed (`uvx`, `npx`, etc.)
 2. Verify network connectivity for remote servers
 3. Check environment variables are set correctly if required
 4. Check server logs in `~/Library/Application Support/lc/`
 
 ### HTTPS/SSL Issues
+
 Some MCP servers may have issues with HTTPS connections. Try:
+
 - Using HTTP URLs when possible
 - Checking proxy settings
 - Updating the MCP server to the latest version
 
 ### Server Not Responding
+
 If a server stops responding:
+
 ```bash
 # Stop the server connection
 lc mcp stop <server-name>
@@ -310,16 +341,19 @@ lc mcp invoke <server-name> <function-name> <args>
 ## Examples
 
 ### Fetching and Analyzing Web Content
+
 ```bash
 lc -t fetch "Analyze the content structure of https://example.com and summarize the main sections"
 ```
 
 ### Research Assistant
+
 ```bash
 lc -t fetch "Research the latest developments in quantum computing and provide a summary with sources"
 ```
 
 ### Multi-Tool Automation
+
 ```bash
 lc -t fetch,fs "Fetch the latest documentation from https://docs.example.com and save it to a local file"
 ```
@@ -327,10 +361,13 @@ lc -t fetch,fs "Fetch the latest documentation from https://docs.example.com and
 ## Advanced Usage
 
 ### Custom MCP Servers
+
 You can create your own MCP servers. See the [MCP SDK documentation](https://github.com/modelcontextprotocol/sdk) for details.
 
 ### Remote MCP Servers
+
 MCP supports Server-Sent Events (SSE) for remote servers:
+
 ```bash
 lc mcp add remote-server "http://localhost:8080/sse" --type sse
 ```

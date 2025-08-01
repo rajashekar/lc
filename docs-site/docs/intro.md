@@ -26,6 +26,7 @@ LLM Client was created to solve common pain points when working with LLMs:
 ## Key Features
 
 ### Core Capabilities
+
 - 🚀 **Fast startup** - ~3ms cold start vs ~150ms for Python alternatives
 - 💬 **Direct prompts** - Send one-off prompts with simple commands
 - 💾 **Session management** - Continue conversations with full history
@@ -33,6 +34,7 @@ LLM Client was created to solve common pain points when working with LLMs:
 - 🔐 **Secure key storage** - API keys stored safely in user config
 
 ### Advanced Features
+
 - 🧠 **Vector Database & RAG** - Built-in embeddings and similarity search
 - 📚 **Smart File Processing** - Embed entire documents with intelligent chunking
 - ☁️ **Configuration Sync** - Sync settings across machines with encryption

@@ -11,6 +11,7 @@ Synchronize your LLM Client configuration across multiple machines using cloud s
 ## Overview
 
 The sync feature allows you to:
+
 - Back up configuration to cloud storage
 - Share settings across machines
 - Encrypt sensitive data with AES256-GCM
@@ -34,6 +35,7 @@ lc sync from s3 --encrypted
 ### Subcommands
 
 #### List Providers
+
 ```bash
 lc sync providers
 lc sy p
@@ -42,6 +44,7 @@ lc sy p
 Shows supported cloud storage providers.
 
 #### Configure Provider
+
 ```bash
 # Interactive setup
 lc sync configure <provider> setup
@@ -57,6 +60,7 @@ lc sy c <provider> r
 ```
 
 #### Sync Operations
+
 ```bash
 # Sync to cloud
 lc sync to <provider>
@@ -82,11 +86,13 @@ lc sy from <provider> -e
 Full S3 support with multiple configuration methods:
 
 #### 1. Interactive Setup (Recommended)
+
 ```bash
 lc sync configure s3 setup
 ```
 
 You'll be prompted for:
+
 - Bucket name
 - AWS region
 - Access key ID
@@ -94,6 +100,7 @@ You'll be prompted for:
 - Custom endpoint (optional)
 
 #### 2. Environment Variables
+
 ```bash
 export LC_S3_BUCKET=your-bucket-name
 export LC_S3_REGION=us-east-1
@@ -103,6 +110,7 @@ export LC_S3_ENDPOINT=https://s3.amazonaws.com  # Optional
 ```
 
 #### 3. Configuration File
+
 Stored automatically after setup in `sync.toml`.
 
 ### S3-Compatible Services
@@ -110,24 +118,28 @@ Stored automatically after setup in `sync.toml`.
 Configure custom endpoints for S3-compatible services:
 
 #### Backblaze B2
+
 ```bash
 lc sync configure s3 setup
 # Endpoint: https://s3.us-west-004.backblazeb2.com
 ```
 
 #### Cloudflare R2
+
 ```bash
 lc sync configure s3 setup
 # Endpoint: https://your-account-id.r2.cloudflarestorage.com
 ```
 
 #### MinIO
+
 ```bash
 lc sync configure s3 setup
 # Endpoint: https://your-minio-server.com:9000
 ```
 
 #### DigitalOcean Spaces
+
 ```bash
 lc sync configure s3 setup
 # Endpoint: https://your-region.digitaloceanspaces.com
@@ -149,6 +161,7 @@ All `.toml` configuration files in your config directory:
 ### How It Works
 
 When using `--encrypted`:
+
 1. You're prompted for a password
 2. Files are encrypted with AES256-GCM
 3. Each file gets unique salt and nonce
@@ -186,6 +199,7 @@ Enter decryption password: ********
 ### 1. Regular Backups
 
 Set up a routine:
+
 ```bash
 # Weekly backup
 lc sync to s3 --encrypted
@@ -200,6 +214,7 @@ lc sync to s3 --encrypted
 ### 3. Version Control
 
 Consider versioning in S3:
+
 - Enable bucket versioning
 - Allows rollback if needed
 - Track configuration history
@@ -226,6 +241,7 @@ aws s3api put-bucket-versioning \
 ### 2. Create IAM User
 
 Create user with minimal permissions:
+
 ```json
 {
   "Version": "2012-10-17",
@@ -275,6 +291,7 @@ lc sync from s3 --encrypted
 ### "Access Denied"
 
 1. Check AWS credentials:
+
    ```bash
    lc sync configure s3 show
    ```
@@ -306,6 +323,7 @@ lc sync from s3 --encrypted
 ### Selective Sync
 
 Currently syncs all `.toml` files. For selective sync:
+
 1. Move files to temporary location
 2. Sync desired files
 3. Restore other files
@@ -313,6 +331,7 @@ Currently syncs all `.toml` files. For selective sync:
 ### Multiple Profiles
 
 Use different buckets for different setups:
+
 ```bash
 # Personal config
 LC_S3_BUCKET=personal-lc lc sync to s3 -e
@@ -324,6 +343,7 @@ LC_S3_BUCKET=work-lc lc sync to s3 -e
 ### Automation
 
 Create backup script:
+
 ```bash
 #!/bin/bash
 # backup-lc.sh
@@ -333,6 +353,7 @@ echo "Backup complete!"
 ```
 
 Add to crontab for automatic backups:
+
 ```bash
 # Daily at 2 AM
 0 2 * * * /path/to/backup-lc.sh

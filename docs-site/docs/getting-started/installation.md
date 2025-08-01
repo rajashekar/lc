@@ -20,6 +20,7 @@ source ~/.cargo/env
 ```
 
 Verify the installation:
+
 ```bash
 rustc --version
 cargo --version
@@ -30,12 +31,14 @@ cargo --version
 ### From Source (Recommended)
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
 cd lc
 ```
 
 2. Build the release binary:
+
 ```bash
 cargo build --release
 ```
@@ -47,6 +50,7 @@ cargo build --release
 To use `lc` from anywhere on your system, add it to your PATH:
 
 #### Linux/macOS
+
 ```bash
 # Option 1: Copy to system bin directory
 sudo cp target/release/lc /usr/local/bin/
@@ -60,6 +64,7 @@ source ~/.bashrc
 ```
 
 #### Windows
+
 ```powershell
 # Copy to a directory in your PATH
 copy target\release\lc.exe C:\Windows\System32\
@@ -126,6 +131,7 @@ Now that you have `lc` installed, proceed to the [Quick Start Guide](/getting-st
 ### Rust Installation Issues
 
 If you encounter issues installing Rust:
+
 - Ensure you have a C compiler installed (gcc, clang, or MSVC)
 - On Windows, you may need Visual Studio Build Tools
 - Check the [Rust installation guide](https://www.rust-lang.org/tools/install) for platform-specific help
@@ -133,6 +139,7 @@ If you encounter issues installing Rust:
 ### Build Errors
 
 Common solutions:
+
 - Update Rust: `rustup update`
 - Clean build: `cargo clean && cargo build --release`
 - Check for missing system dependencies
@@ -140,6 +147,7 @@ Common solutions:
 ### Permission Denied
 
 If you get permission errors when copying to system directories:
+
 - Use `sudo` on Linux/macOS
 - Run as Administrator on Windows
 - Or choose a user-writable directory instead

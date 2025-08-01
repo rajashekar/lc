@@ -11,6 +11,7 @@ LLM Client includes a powerful built-in vector database system that enables you 
 ## Overview
 
 The vector database allows you to:
+
 - Store text content with embeddings
 - Perform similarity searches
 - Build knowledge bases
@@ -41,12 +42,14 @@ lc embed -m text-embedding-3-small -v docs "Your first document"
 ## Managing Databases
 
 ### List All Databases
+
 ```bash
 lc vectors list
 lc v l
 ```
 
 Output:
+
 ```
 Vector databases:
   • knowledge (1,234 entries, model: text-embedding-3-small, provider: openai)
@@ -55,18 +58,21 @@ Vector databases:
 ```
 
 ### View Database Information
+
 ```bash
 lc vectors info <database>
 lc v i <database>
 ```
 
 Output shows:
+
 - Total number of entries
 - Embedding model used
 - Provider used
 - Recent entries with timestamps
 
 Example:
+
 ```bash
 lc vectors info knowledge
 # Output:
@@ -82,6 +88,7 @@ lc vectors info knowledge
 ```
 
 ### Delete a Database
+
 ```bash
 lc vectors delete <database>
 lc v d <database>
@@ -92,11 +99,13 @@ lc v d <database>
 One of the most powerful features is the ability to embed entire files or directories:
 
 ### Single File
+
 ```bash
 lc embed -m text-embedding-3-small -v docs -f README.md
 ```
 
 ### Multiple Files
+
 ```bash
 # Using glob patterns
 lc embed -m text-embedding-3-small -v docs -f "*.md"
@@ -140,6 +149,7 @@ Vector databases are stored in platform-specific directories:
 ### Database Structure
 
 Each database is a SQLite file containing:
+
 - `vectors` table: Text content, embeddings, and metadata
 - `model_info` table: Embedding model and provider information
 - Optimized indexes for fast similarity search
@@ -147,6 +157,7 @@ Each database is a SQLite file containing:
 ## Model Consistency
 
 The vector database ensures consistency by:
+
 - Storing the model and provider used for embeddings
 - Automatically using the same model for similarity searches
 - Validating vector dimensions match the stored model
@@ -154,12 +165,15 @@ The vector database ensures consistency by:
 ## Best Practices
 
 ### 1. Choose the Right Model
+
 - Smaller models (e.g., `text-embedding-3-small`) are faster and cheaper
 - Larger models (e.g., `text-embedding-3-large`) provide better accuracy
 - Use the same model consistently within a database
 
 ### 2. Organize by Purpose
+
 Create separate databases for different types of content:
+
 ```bash
 lc embed -v technical-docs -f "docs/technical/*.md"
 lc embed -v user-guides -f "docs/guides/*.md"
@@ -167,20 +181,25 @@ lc embed -v api-reference -f "docs/api/*.md"
 ```
 
 ### 3. Regular Updates
+
 Keep your databases current:
+
 ```bash
 # Re-embed updated files
 lc embed -v docs -f "updated-file.md"
 ```
 
 ### 4. Chunk Size Considerations
+
 The default chunk size (1200 chars) works well for most content. For specialized needs:
+
 - Smaller chunks: Better for precise retrieval
 - Larger chunks: Better for maintaining context
 
 ## Performance
 
 The vector database is optimized for:
+
 - **Fast Retrieval**: Indexed similarity searches
 - **Efficient Storage**: Compressed embeddings
 - **Scalability**: Handles thousands of documents
@@ -199,6 +218,7 @@ lc chat -v knowledge -m gpt-4
 ```
 
 The system automatically:
+
 1. Generates embeddings for your query
 2. Finds similar content (similarity > 0.3)
 3. Includes relevant context in the prompt
@@ -207,15 +227,18 @@ The system automatically:
 ## Troubleshooting
 
 ### "Database not found"
+
 - Check spelling: `lc vectors list`
 - Ensure you've stored at least one embedding
 
 ### "Dimension mismatch"
+
 - The database uses a specific embedding model
 - Check model info: `lc vectors info <database>`
 - Use the same model for all operations
 
 ### "No similar content found"
+
 - Verify database has content: `lc vectors info <database>`
 - Try different search terms
 - Check if content is relevant to your query

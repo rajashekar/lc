@@ -52,6 +52,7 @@ lc chat -v <database> -m <model>
 ```
 
 In this mode:
+
 - Every message is automatically enhanced with relevant context
 - The system maintains conversation history
 - Context is refreshed for each new message
@@ -85,6 +86,7 @@ lc embed -v examples -f "examples/**/*.py"
 ### 2. Chunking Strategy
 
 Files are automatically chunked for optimal retrieval:
+
 - **Chunk Size**: ~1200 characters
 - **Overlap**: 200 characters
 - **Boundaries**: Respects sentences and paragraphs
