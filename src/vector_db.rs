@@ -304,15 +304,28 @@ impl VectorDatabase {
                 }
             }
             
-            let search_results = index.search(query_vector, limit, 30); // ef = 30 for good recall
+            // Request more results from HNSW to account for potential cache misses
+            let hnsw_limit = std::cmp::min(limit * 2, self.vector_cache.len());
+            let search_results = index.search(query_vector, hnsw_limit, 50); // Higher ef for better recall
             
-            let mut results = Vec::with_capacity(search_results.len());
+            let mut results = Vec::with_capacity(limit);
             for neighbor in search_results {
                 if let Some(entry) = self.vector_cache.get(&(neighbor.d_id as i64)) {
                     // Convert distance to similarity (cosine distance -> cosine similarity)
                     let similarity = 1.0 - neighbor.distance as f64;
                     results.push((entry.value().clone(), similarity));
+                    
+                    // Stop once we have enough results
+                    if results.len() >= limit {
+                        break;
+                    }
                 }
+            }
+            
+            // If HNSW didn't return enough results, fall back to linear search
+            if results.len() < limit && results.len() < self.vector_cache.len() {
+                crate::debug_log!("HNSW returned only {} results, falling back to linear search", results.len());
+                return self.find_similar_linear_optimized(query_vector, limit);
             }
             
             return Ok(results);
@@ -389,7 +402,7 @@ impl VectorDatabase {
             let dimension = entry.vector.len();
             
             // Create new HNSW index
-            let mut hnsw = Hnsw::new(16, dimension, 200, 200, DistCosine {});
+            let hnsw = Hnsw::new(16, dimension, 200, 200, DistCosine {});
             
             // Add all vectors to index
             for entry in self.vector_cache.iter() {

@@ -31,6 +31,7 @@ const sidebars = {
         'commands/overview',
         'commands/providers',
         'commands/models',
+        'commands/mcp',
       ],
     },
     {
@@ -41,6 +42,7 @@ const sidebars = {
         'advanced/embeddings',
         'advanced/rag',
         'advanced/sync',
+        'advanced/mcp',
       ],
     },
     'troubleshooting',

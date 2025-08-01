@@ -5,6 +5,7 @@ use colored::Colorize;
 use rpassword::read_password;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashMap;
 
 // Global debug flag
 pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
@@ -600,6 +601,9 @@ pub enum McpCommands {
         /// MCP server type
         #[arg(long = "type", value_enum)]
         server_type: McpServerType,
+        /// Environment variables (can be specified multiple times as KEY=VALUE)
+        #[arg(short = 'e', long = "env", value_parser = parse_env_var)]
+        env: Vec<(String, String)>,
     },
     /// Delete an MCP server configuration (alias: d)
     #[command(alias = "d")]
@@ -610,24 +614,12 @@ pub enum McpCommands {
     /// List all configured MCP servers (alias: l)
     #[command(alias = "l")]
     List,
-    /// Start an MCP server (alias: s)
-    #[command(alias = "s")]
-    Start {
-        /// Server name
-        name: String,
-        /// Enable debug output
-        #[arg(short, long)]
-        debug: bool,
-    },
-    /// Stop an MCP server (alias: st)
+    /// Stop an MCP server connection (alias: st)
     #[command(alias = "st")]
     Stop {
         /// Server name
         name: String,
     },
-    /// List running MCP servers (alias: running)
-    #[command(alias = "running")]
-    Ps,
     /// List functions exposed by a running MCP server (alias: f)
     #[command(alias = "f")]
     Functions {
@@ -780,6 +772,15 @@ pub enum McpServerType {
     Sse,
     /// Streamable HTTP MCP server
     Streamable,
+}
+
+// Helper function to parse environment variable KEY=VALUE pairs
+fn parse_env_var(s: &str) -> Result<(String, String), String> {
+    let parts: Vec<&str> = s.splitn(2, '=').collect();
+    if parts.len() != 2 {
+        return Err(format!("Invalid environment variable format: '{}'. Expected 'KEY=VALUE'", s));
+    }
+    Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
 // Helper function to extract code blocks from markdown text
@@ -2875,7 +2876,7 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
     use colored::Colorize;
     
     match command {
-        crate::cli::McpCommands::Add { name, command_or_url, server_type } => {
+        crate::cli::McpCommands::Add { name, command_or_url, server_type, env } => {
             let mut config = McpConfig::load()?;
             
             // Convert CLI enum to config enum
@@ -2885,12 +2886,28 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 crate::cli::McpServerType::Streamable => ConfigMcpServerType::Streamable,
             };
             
-            config.add_server(name.clone(), command_or_url.clone(), config_server_type)?;
+            // Convert env vec to HashMap
+            let env_map: HashMap<String, String> = env.into_iter().collect();
+            
+            // For npx commands without -y, add it to ensure package download
+            let final_command_or_url = if command_or_url.starts_with("npx ") && !command_or_url.contains(" -y ") {
+                command_or_url.replacen("npx ", "npx -y ", 1)
+            } else {
+                command_or_url.clone()
+            };
+            
+            config.add_server_with_env(name.clone(), final_command_or_url.clone(), config_server_type, env_map.clone())?;
             config.save()?;
             
             println!("{} MCP server '{}' added successfully", "✓".green(), name);
             println!("  Type: {:?}", server_type);
-            println!("  Command/URL: {}", command_or_url);
+            println!("  Command/URL: {}", final_command_or_url);
+            if !env_map.is_empty() {
+                println!("  Environment variables:");
+                for (key, _) in env_map {
+                    println!("    - {}", key);
+                }
+            }
         }
         crate::cli::McpCommands::Delete { name } => {
             let mut config = McpConfig::load()?;
@@ -2922,19 +2939,8 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 }
             }
         }
-        crate::cli::McpCommands::Start { name, debug: _ } => {
-            let config = McpConfig::load()?;
-            
-            if let Some(_server_config) = config.get_server(&name) {
-                println!("{} Starting MCP server '{}'...", "🚀".blue(), name);
-                println!("{} Note: With the new SDK implementation, servers are started automatically when needed", "ℹ️".blue());
-                println!("{} MCP server '{}' will be available for use", "✓".green(), name);
-            } else {
-                anyhow::bail!("MCP server '{}' not found", name);
-            }
-        }
         crate::cli::McpCommands::Stop { name } => {
-            println!("{} Stopping MCP server '{}'...", "🛑".red(), name);
+            println!("{} Closing MCP server connection '{}'...", "🛑".red(), name);
             
             let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
             match daemon_client.close_server(&name).await {
@@ -2943,24 +2949,6 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 }
                 Err(e) => {
                     println!("{} Failed to close MCP server '{}': {}", "⚠️".yellow(), name, e);
-                }
-            }
-        }
-        crate::cli::McpCommands::Ps => {
-            let config = McpConfig::load()?;
-            let servers = config.list_servers();
-            
-            if servers.is_empty() {
-                println!("No MCP servers configured.");
-            } else {
-                println!("\n{} Configured MCP servers (SDK managed):", "Servers:".bold().blue());
-                for (name, server_config) in servers {
-                    println!("  {} {} - {:?} ({})",
-                        "•".blue(),
-                        name.bold(),
-                        server_config.server_type,
-                        server_config.command_or_url
-                    );
                 }
             }
         }

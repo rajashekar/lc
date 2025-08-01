@@ -193,7 +193,17 @@ impl McpDaemon {
                         .map(|s| s.to_string())
                         .collect();
                     crate::debug_log!("DAEMON: Creating STDIO config with command parts: {:?}", parts);
-                    create_stdio_server_config(server_name.to_string(), parts, None, None)
+                    let env = if server_config.env.is_empty() {
+                        crate::debug_log!("DAEMON: No environment variables to add");
+                        None
+                    } else {
+                        crate::debug_log!("DAEMON: Adding {} environment variables", server_config.env.len());
+                        for (key, value) in &server_config.env {
+                            crate::debug_log!("DAEMON: Env var: {}={}", key, value);
+                        }
+                        Some(server_config.env.clone())
+                    };
+                    create_stdio_server_config(server_name.to_string(), parts, env, None)
                 }
                 McpServerType::Sse => {
                     crate::debug_log!("DAEMON: Creating SSE config with URL: {}", server_config.command_or_url);

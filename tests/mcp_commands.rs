@@ -219,6 +219,7 @@ mod mcp_server_config_tests {
             name: "test-server".to_string(),
             server_type: McpServerType::Stdio,
             command_or_url: "echo test".to_string(),
+            env: HashMap::new(),
         };
         
         assert_eq!(config.name, "test-server");

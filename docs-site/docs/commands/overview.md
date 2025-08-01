@@ -57,6 +57,9 @@ lc -p openrouter -m "claude-3.5-sonnet" "Explain quantum computing"
 
 # With vector database context (RAG)
 lc -v knowledge "What do you know about machine learning?"
+
+# With MCP tools
+lc -t fetch "What's the latest news about AI?"
 ```
 
 ## Global Options
@@ -66,6 +69,7 @@ These options work with most commands:
 - `-p, --provider <NAME>` - Specify provider
 - `-m, --model <NAME>` - Specify model
 - `-v, --vector-db <NAME>` - Use vector database for context
+- `-t, --tools <NAMES>` - Include MCP tools (comma-separated)
 - `-h, --help` - Show help information
 - `-V, --version` - Show version
 
@@ -138,6 +142,21 @@ lc s -v docs "related query"
 lc c -v docs -m gpt-4
 ```
 
+### MCP Tools Workflow
+```bash
+# Add MCP server
+lc mcp add fetch "uvx mcp-server-fetch" --type stdio
+
+# List functions
+lc mcp functions fetch
+
+# Use in prompt
+lc -t fetch "Get current weather in Tokyo"
+
+# Use in chat
+lc c -m gpt-4 -t fetch
+```
+
 ## Getting Help
 
 Every command has built-in help:
@@ -160,6 +179,7 @@ lc p a --help
 Explore specific command documentation:
 - [Providers Commands](/commands/providers)
 - [Models Commands](/commands/models)
+- [MCP Commands](/commands/mcp)
 - [Chat Commands](/commands/chat)
 - [Embedding Commands](/commands/embed)
 - [Vector Commands](/commands/vectors)

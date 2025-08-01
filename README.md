@@ -2,8 +2,8 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange)](https://www.rust-lang.org)
 
-# lc (LLM Client)
 <p align="center">
+<h1>LLM Client (lc)</h1>
 <img src="docs-site/static/img/social-card.png" alt="LLM Client" width="450" />
 </p>
 
@@ -39,7 +39,7 @@ lc "What is the capital of France?"
 - 🚀 **Lightning Fast** - ~3ms cold start (50x faster than Python alternatives)
 - 🔧 **Universal** - Works with any OpenAI-compatible API
 - 🧠 **Smart** - Built-in vector database and RAG support
-- 🛠️ **Tools** - Supports Model Context Protocol (MCP)
+- 🛠️ **Tools** - Model Context Protocol (MCP) support for extending LLM capabilities
 - 🔐 **Secure** - Encrypted configuration sync
 - 💬 **Intuitive** - Simple commands with short aliases
 
@@ -54,6 +54,7 @@ For comprehensive documentation, visit **[lc.viwq.dev](https://lc.viwq.dev)**
 - [Command Reference](https://lc.viwq.dev/commands/overview)
 - [Provider Setup](https://lc.viwq.dev/features/providers)
 - [Vector Database & RAG](https://lc.viwq.dev/advanced/vector-database)
+- [Model Context Protocol (MCP)](https://lc.viwq.dev/advanced/mcp)
 
 ## Supported Providers
 Any OpenAI-compatible API can be used with `lc`. Here are some popular providers:
@@ -109,7 +110,33 @@ lc similar -v knowledge "related query"
 
 # RAG-enhanced chat
 lc -v knowledge "What do you know about this topic?"
+
+# Use MCP tools for internet access
+lc -t fetch "What's the latest news about AI?"
+
+# Multiple MCP tools
+lc -t fetch,playwright "Navigate to example.com and analyze its content"
 ```
+
+### Model Context Protocol (MCP)
+
+`lc` supports MCP servers to extend LLM capabilities with external tools:
+
+```bash
+# Add an MCP server
+lc mcp add fetch "uvx mcp-server-fetch" --type stdio
+
+# List available functions
+lc mcp functions fetch
+
+# Use tools in prompts
+lc -t fetch "Get the current weather in Tokyo"
+
+# Interactive chat with tools
+lc chat -m gpt-4 -t fetch
+```
+
+Learn more about MCP in our [documentation](https://lc.viwq.dev/advanced/mcp).
 
 ## Contributing
 

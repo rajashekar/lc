@@ -28,6 +28,8 @@ pub struct McpServerConfig {
     pub name: String,
     pub server_type: McpServerType,
     pub command_or_url: String,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,11 +67,17 @@ impl McpConfig {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn add_server(&mut self, name: String, command_or_url: String, server_type: McpServerType) -> Result<()> {
+        self.add_server_with_env(name, command_or_url, server_type, HashMap::new())
+    }
+
+    pub fn add_server_with_env(&mut self, name: String, command_or_url: String, server_type: McpServerType, env: HashMap<String, String>) -> Result<()> {
         let server_config = McpServerConfig {
             name: name.clone(),
             server_type,
             command_or_url,
+            env,
         };
         self.servers.insert(name, server_config);
         Ok(())
@@ -197,16 +205,25 @@ impl SdkMcpManager {
                     crate::debug_log!("SdkMcpManager: Added args: {:?}", args);
                 }
                 if let Some(env) = env {
+                    let env_count = env.len();
                     for (key, value) in env {
+                        crate::debug_log!("SdkMcpManager: Setting env var {}={}", key, value);
                         cmd.env(key, value);
                     }
-                    crate::debug_log!("SdkMcpManager: Added env vars");
+                    crate::debug_log!("SdkMcpManager: Added {} env vars", env_count);
+                } else {
+                    crate::debug_log!("SdkMcpManager: No env vars to add");
                 }
                 if let Some(cwd) = cwd {
                     cmd.current_dir(cwd);
                     crate::debug_log!("SdkMcpManager: Set working directory");
                 }
 
+                // Configure stdio properly for the child process
+                cmd.stdin(std::process::Stdio::piped());
+                cmd.stdout(std::process::Stdio::piped());
+                cmd.stderr(std::process::Stdio::piped());
+                
                 crate::debug_log!("SdkMcpManager: Creating TokioChildProcess transport");
                 let transport = TokioChildProcess::new(cmd.configure(|_| {}))?;
                 crate::debug_log!("SdkMcpManager: Starting client connection");
