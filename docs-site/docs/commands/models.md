@@ -20,6 +20,7 @@ lc m
 ```
 
 Output shows models with capability indicators:
+
 - 🔧 **tools** - Function calling support
 - 👁 **vision** - Image processing
 - 🧠 **reasoning** - Advanced reasoning
@@ -31,12 +32,14 @@ Output shows models with capability indicators:
 ### Filtering Options
 
 #### Search by Name
+
 ```bash
 lc models -q <query>
 lc m -q claude
 ```
 
 #### Filter by Capabilities
+
 ```bash
 # Models with function calling
 lc models --tools
@@ -55,6 +58,7 @@ lc models --audio
 ```
 
 #### Filter by Context Length
+
 ```bash
 # Minimum 128k context
 lc models --ctx 128k
@@ -64,6 +68,7 @@ lc models --ctx 200k
 ```
 
 #### Filter by Token Limits
+
 ```bash
 # Minimum input tokens
 lc models --input 100k
@@ -73,6 +78,7 @@ lc models --output 32k
 ```
 
 #### Filter by Price
+
 ```bash
 # Max input price per million tokens
 lc models --input-price 10
@@ -102,6 +108,7 @@ lc models --ctx 100k --input-price 5
 ### Subcommands
 
 #### Refresh Cache
+
 Update the models cache:
 
 ```bash
@@ -110,6 +117,7 @@ lc m r
 ```
 
 #### Show Cache Info
+
 Display cache statistics:
 
 ```bash
@@ -118,12 +126,14 @@ lc m i
 ```
 
 Output shows:
+
 - Cache location
 - Last update time
 - Number of providers
 - Total models cached
 
 #### Dump Raw Data
+
 Export raw provider responses:
 
 ```bash
@@ -134,6 +144,7 @@ lc m d
 Outputs JSON data for debugging or analysis.
 
 #### List Embedding Models
+
 Show only embedding models:
 
 ```bash
@@ -163,6 +174,7 @@ openai:
 ### Context Information
 
 Shows maximum context window:
+
 - `(8k ctx)` - 8,000 tokens
 - `(128k ctx)` - 128,000 tokens
 - `(200k ctx)` - 200,000 tokens
@@ -170,6 +182,7 @@ Shows maximum context window:
 ### Display Names
 
 Human-readable names in parentheses:
+
 - `(GPT-4 Turbo)` - Marketing name
 - `(Claude 3.5 Sonnet)` - Version info
 
@@ -228,11 +241,13 @@ The models command uses a local cache to improve performance:
 ### "No models found"
 
 1. Refresh the cache:
+
    ```bash
    lc models refresh
    ```
 
 2. Check provider configuration:
+
    ```bash
    lc providers list
    ```
@@ -242,6 +257,7 @@ The models command uses a local cache to improve performance:
 ### "Cache error"
 
 1. Clear cache and refresh:
+
    ```bash
    rm ~/.config/lc/models_cache.json
    lc models refresh
@@ -252,9 +268,16 @@ The models command uses a local cache to improve performance:
 ### Missing Models
 
 Some providers may not expose all models via API:
+
 - Check provider documentation
 - Use `lc providers models <provider>` for direct query
 - Some models may require special access
+
+## See Also
+
+- [Providers Command](providers.md)
+- [Chat Command](chat.md)
+- [Alias Command](alias.md)
 
 ## Next Steps
 

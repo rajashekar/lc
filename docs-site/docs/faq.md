@@ -44,6 +44,7 @@ Only if you're building from source. Pre-built binaries will be available in fut
 ### Can I install lc without admin privileges?
 
 Yes, you can install lc in your user directory:
+
 ```bash
 cp target/release/lc ~/.local/bin/
 ```
@@ -53,6 +54,7 @@ cp target/release/lc ~/.local/bin/
 ### What providers are supported?
 
 Any OpenAI-compatible API, including:
+
 - OpenAI (GPT-4, GPT-3.5)
 - Anthropic Claude
 - OpenRouter
@@ -65,6 +67,7 @@ Any OpenAI-compatible API, including:
 ### Can I use local models?
 
 Yes! You can use Ollama or any local OpenAI-compatible server:
+
 ```bash
 lc providers add ollama http://localhost:11434/v1
 ```
@@ -72,6 +75,7 @@ lc providers add ollama http://localhost:11434/v1
 ### How do I use multiple providers?
 
 Add as many providers as you want:
+
 ```bash
 lc providers add openai https://api.openai.com/v1
 lc providers add claude https://api.anthropic.com/v1
@@ -85,6 +89,7 @@ lc -p claude "prompt"
 ### What if my provider needs special headers?
 
 Use the headers command:
+
 ```bash
 lc providers headers <provider> add <header> <value>
 ```
@@ -94,6 +99,7 @@ lc providers headers <provider> add <header> <value>
 ### Where are API keys stored?
 
 API keys are stored in your platform's config directory:
+
 - Linux: `~/.config/lc/config.toml`
 - macOS: `~/Library/Application Support/lc/config.toml`
 - Windows: `%APPDATA%\lc\config.toml`
@@ -118,6 +124,7 @@ lc config set model gpt-4
 ### Can I pipe input to lc?
 
 Yes:
+
 ```bash
 echo "Translate to Spanish: Hello" | lc
 cat file.txt | lc "Summarize this"
@@ -134,6 +141,7 @@ lc l r a c
 ### Can I continue previous conversations?
 
 Yes, use the chat command with a session ID:
+
 ```bash
 # Get recent session ID
 lc logs recent session
@@ -147,6 +155,7 @@ lc chat -m gpt-4 --cid <session-id>
 ### What are vector databases used for?
 
 Vector databases store text embeddings for:
+
 - Semantic search
 - RAG (Retrieval-Augmented Generation)
 - Building knowledge bases
@@ -155,6 +164,7 @@ Vector databases store text embeddings for:
 ### How much space do vector databases use?
 
 It depends on content volume:
+
 - Small (100 docs): ~10MB
 - Medium (1,000 docs): ~100MB
 - Large (10,000 docs): ~1GB
@@ -162,6 +172,7 @@ It depends on content volume:
 ### Can I share vector databases?
 
 Yes, vector databases are SQLite files that can be copied and shared. They're stored in:
+
 - Linux: `~/.config/lc/embeddings/`
 - macOS: `~/Library/Application Support/lc/embeddings/`
 - Windows: `%APPDATA%\lc\embeddings\`
@@ -169,6 +180,7 @@ Yes, vector databases are SQLite files that can be copied and shared. They're st
 ### What file types can be embedded?
 
 Text files including:
+
 - Documents: `.txt`, `.md`, `.pdf`, `.docx`
 - Code: `.py`, `.js`, `.rs`, `.java`, etc.
 - Config: `.json`, `.yaml`, `.toml`
@@ -206,6 +218,7 @@ lc "test prompt"
 ### Where are logs stored?
 
 In the SQLite database at:
+
 - Linux: `~/.config/lc/logs.db`
 - macOS: `~/Library/Application Support/lc/logs.db`
 - Windows: `%APPDATA%\lc\logs.db`
@@ -213,6 +226,7 @@ In the SQLite database at:
 ### How do I reset everything?
 
 Remove the config directory:
+
 - Linux: `rm -rf ~/.config/lc`
 - macOS: `rm -rf ~/Library/Application Support/lc`
 - Windows: `rmdir /s %APPDATA%\lc`
@@ -226,6 +240,7 @@ RAG (Retrieval-Augmented Generation) enhances LLM responses by automatically inc
 ### Can I sync settings across machines?
 
 Yes, use the sync feature:
+
 ```bash
 # Setup
 lc sync configure s3 setup
@@ -259,6 +274,7 @@ MCP (Model Context Protocol) servers extend lc's functionality with additional t
 ### Is there a roadmap?
 
 Check the GitHub repository for:
+
 - Current issues
 - Planned features
 - Release notes

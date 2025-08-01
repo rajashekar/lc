@@ -17,6 +17,7 @@ lc providers add openai https://api.openai.com/v1
 ```
 
 Or using the short alias:
+
 ```bash
 lc p a openai https://api.openai.com/v1
 ```
@@ -47,6 +48,7 @@ lc keys add openai
 ```
 
 Or using the alias:
+
 ```bash
 lc k a openai
 ```
@@ -68,6 +70,7 @@ lc providers models openai
 ```
 
 Or use the models command for a richer view:
+
 ```bash
 lc models
 ```
@@ -95,6 +98,7 @@ lc chat -m gpt-4
 ```
 
 In chat mode, you can:
+
 - Type messages naturally
 - Use `/exit` to quit
 - Use `/clear` to start fresh
@@ -119,11 +123,13 @@ lc "Your prompt here"
 ## What's Next?
 
 ### Essential Features
+
 - [Providers Guide](/features/providers) - Managing multiple LLM providers
 - [Chat Sessions](/features/chat) - Interactive conversations
 - [Logging](/features/logging) - View and manage chat history
 
 ### Advanced Features
+
 - [Vector Database](/advanced/vector-database) - Store and search embeddings
 - [RAG](/advanced/rag) - Enhance responses with your own data
 - [Configuration Sync](/advanced/sync) - Sync settings across machines

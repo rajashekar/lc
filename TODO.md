@@ -1,0 +1,11 @@
+- Make sure documentation works
+- Support search
+- Support Amazon, deepseek, alibaba models
+- Support lc serve
+- Check images
+- Check audio
+- Fix tools bug in listing
+- Support other web proxy chats
+- Add support to sync db to cloud
+- provide sample config.toml
+- make sure package works with brew, linux, windows

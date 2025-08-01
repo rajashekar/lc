@@ -5,9 +5,8 @@ sidebar_position: 1
 slug: /
 ---
 
-# LLM Client (lc)
-
 <p align="center">
+<h1>LLM Client (lc)</h1>
 <img src="img/social-card.png" alt="LLM Client" width="450" />
 </p>
 
@@ -21,11 +20,13 @@ LLM Client was created to solve common pain points when working with LLMs:
 - **🎯 Simple & Intuitive**: Clean CLI with short aliases for common operations
 - **🔧 Universal Compatibility**: Works with any OpenAI-compatible API
 - **💾 Built-in Intelligence**: Vector database and RAG support out of the box
+- **🛠️ Extensible**: Model Context Protocol (MCP) support for tools and integrations
 - **🔐 Secure by Design**: Encrypted configuration sync across machines
 
 ## Key Features
 
 ### Core Capabilities
+
 - 🚀 **Fast startup** - ~3ms cold start vs ~150ms for Python alternatives
 - 💬 **Direct prompts** - Send one-off prompts with simple commands
 - 💾 **Session management** - Continue conversations with full history
@@ -33,10 +34,11 @@ LLM Client was created to solve common pain points when working with LLMs:
 - 🔐 **Secure key storage** - API keys stored safely in user config
 
 ### Advanced Features
+
 - 🧠 **Vector Database & RAG** - Built-in embeddings and similarity search
 - 📚 **Smart File Processing** - Embed entire documents with intelligent chunking
 - ☁️ **Configuration Sync** - Sync settings across machines with encryption
-- 🤖 **MCP Server Support** - Extend functionality with Model Context Protocol
+- 🤖 **Model Context Protocol** - Extend LLMs with tools for web access, file operations, and more
 
 ## Quick Example
 
@@ -78,6 +80,9 @@ lc chat
 lc -m openai:gpt-4 "Explain quantum computing in simple terms"
 or
 lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Write a haiku about coding"
+
+# Use MCP tools for internet access
+lc -t fetch "What's the latest news about AI?"
 ```
 
 ## Next Steps

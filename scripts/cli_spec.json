@@ -1,0 +1,554 @@
+{
+  "lc": {
+    "description": "LLM Client - A fast Rust-based LLM CLI tool",
+    "options": [
+      "-p, --provider <PROVIDER>",
+      "-m, --model <MODEL>",
+      "-s, --system <SYSTEM_PROMPT>",
+      "--max-tokens <MAX_TOKENS>",
+      "--temperature <TEMPERATURE>",
+      "-a, --attach <ATTACHMENTS>",
+      "-t, --tools <TOOLS>",
+      "-v, --vectordb <VECTORDB>",
+      "-d, --debug",
+      "-c, --continue",
+      "--cid <CHAT_ID>",
+      "-h, --help",
+      "-V, --version"
+    ],
+    "commands": {
+      "providers": {
+        "description": "Provider management (alias: p)",
+        "commands": {
+          "add": {
+            "description": "Add a new provider (alias: a)",
+            "arguments": [
+              "<NAME>",
+              "<URL>"
+            ],
+            "options": [
+              "-m, --models-path <MODELS_PATH>",
+              "-c, --chat-path <CHAT_PATH>",
+              "-h, --help"
+            ]
+          },
+          "update": {
+            "description": "Update an existing provider (alias: u)",
+            "arguments": [
+              "<NAME>",
+              "<URL>"
+            ],
+            "options": [
+              "-h, --help"
+            ]
+          },
+          "remove": {
+            "description": "Remove a provider (alias: r)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": [
+              "-h, --help"
+            ]
+          },
+          "list": {
+            "description": "List all providers (alias: l)",
+            "options": [
+              "-h, --help"
+            ]
+          },
+          "models": {
+            "description": "List available models for a provider (alias: m)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": [
+              "-r, --refresh",
+              "-h, --help"
+            ]
+          },
+          "headers": {
+            "description": "Manage custom headers for a provider (alias: h)",
+            "commands": {
+              "add": {
+                "description": "Add a custom header (alias: a)",
+                "arguments": [
+                  "<NAME>",
+                  "<VALUE>"
+                ],
+                "options": [
+                  "-h, --help"
+                ]
+              }
+            },
+            "arguments": [
+              "<PROVIDER>"
+            ],
+            "options": ["-h, --help"]
+          },
+          "token-url": {
+            "description": "Set token URL for a provider (alias: t)",
+            "arguments": [
+              "<PROVIDER>",
+              "<URL>"
+            ],
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "keys": {
+        "description": "API key management (alias: k)",
+        "commands": {
+          "add": {
+            "description": "Add API key for a provider (alias: a)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": ["-h, --help"]
+          },
+          "list": {
+            "description": "List providers with API keys (alias: l)",
+            "options": ["-h, --help"]
+          },
+          "get": {
+            "description": "Get API key for a provider (alias: g)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": ["-h, --help"]
+          },
+          "remove": {
+            "description": "Remove API key for a provider (alias: r)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "logs": {
+        "description": "Log management (alias: l)",
+        "commands": {
+          "show": {
+            "description": "Show all logs (alias: sh)",
+            "options": [
+              "--minimal",
+              "-h, --help"
+            ]
+          },
+          "stats": {
+            "description": "Show database statistics (alias: s)",
+            "options": ["-h, --help"]
+          },
+          "purge": {
+            "description": "Purge all logs (alias: p)",
+            "options": [
+              "--yes",
+              "-h, --help"
+            ]
+          },
+          "recent": {
+            "description": "Show recent logs (alias: r)",
+            "commands": {
+              "answer": {
+                "description": "Get last answer from LLM (alias: a)",
+                "options": ["-h, --help"]
+              },
+              "question": {
+                "description": "Get last question/prompt asked to LLM (alias: q)",
+                "options": ["-h, --help"]
+              },
+              "model": {
+                "description": "Get model used in last interaction (alias: m)",
+                "options": ["-h, --help"]
+              },
+              "session": {
+                "description": "Get session ID of last interaction (alias: s)",
+                "options": ["-h, --help"]
+              }
+            },
+            "options": [
+              "-c, --count <COUNT>",
+              "-h, --help"
+            ]
+          },
+          "current": {
+            "description": "Show current session logs (alias: c)",
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "config": {
+        "description": "Configuration management (alias: co)",
+        "commands": {
+          "set": {
+            "description": "Set configuration values (alias: s)",
+            "commands": {
+              "provider": {
+                "description": "Set default provider (alias: p)",
+                "options": ["-h, --help"]
+              },
+              "model": {
+                "description": "Set default model (alias: m)",
+                "options": ["-h, --help"]
+              },
+              "system-prompt": {
+                "description": "Set system prompt (alias: s)",
+                "options": ["-h, --help"]
+              },
+              "max-tokens": {
+                "description": "Set max tokens (alias: mt)",
+                "options": ["-h, --help"]
+              },
+              "temperature": {
+                "description": "Set temperature (alias: te)",
+                "options": ["-h, --help"]
+              }
+            },
+            "options": ["-h, --help"]
+          },
+          "get": {
+            "description": "Get configuration values (alias: g)",
+            "commands": {
+              "provider": {
+                "description": "Get default provider (alias: p)",
+                "options": ["-h, --help"]
+              },
+              "model": {
+                "description": "Get default model (alias: m)",
+                "options": ["-h, --help"]
+              },
+              "system-prompt": {
+                "description": "Get system prompt (alias: s)",
+                "options": ["-h, --help"]
+              },
+              "max-tokens": {
+                "description": "Get max tokens (alias: mt)",
+                "options": ["-h, --help"]
+              },
+              "temperature": {
+                "description": "Get temperature (alias: te)",
+                "options": ["-h, --help"]
+              }
+            },
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "models": {
+        "description": "Global models management (alias: m)",
+        "commands": {
+          "refresh": {
+            "description": "Refresh the models cache (alias: r)",
+            "options": ["-h, --help"]
+          },
+          "info": {
+            "description": "Show cache information (alias: i)",
+            "options": ["-h, --help"]
+          },
+          "dump": {
+            "description": "Dump raw /models responses to JSON files (alias: d)",
+            "options": ["-h, --help"]
+          },
+          "embed": {
+            "description": "List embedding models (alias: e)",
+            "options": ["-h, --help"]
+          }
+        },
+        "options": [
+          "-q, --query <QUERY>",
+          "--tools",
+          "--reasoning",
+          "--vision",
+          "--audio",
+          "--code",
+          "--ctx <CONTEXT_LENGTH>",
+          "--input <INPUT_LENGTH>",
+          "--output <OUTPUT_LENGTH>",
+          "--input-price <INPUT_PRICE>",
+          "--output-price <OUTPUT_PRICE>",
+          "-h, --help"
+        ]
+      },
+      "alias": {
+        "description": "Model alias management (alias: a)",
+        "commands": {
+          "add": {
+            "description": "Add a new alias (alias: a)",
+            "arguments": [
+              "<NAME>",
+              "<TARGET>"
+            ],
+            "options": ["-h, --help"]
+          },
+          "delete": {
+            "description": "Remove an alias (alias: d)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": ["-h, --help"]
+          },
+          "list": {
+            "description": "List all aliases (alias: l)",
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "templates": {
+        "description": "Template management (alias: t)",
+        "commands": {
+          "add": {
+            "description": "Add a new template (alias: a)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": ["-h, --help"]
+          },
+          "delete": {
+            "description": "Remove a template (alias: d)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": ["-h, --help"]
+          },
+          "list": {
+            "description": "List all templates (alias: l)",
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "proxy": {
+        "description": "Proxy server (alias: pr)",
+        "options": [
+          {
+            "name": "-p, --port <PORT>",
+            "description": "Port to listen on",
+            "default": "6789"
+          },
+          {
+            "name": "-h, --host <HOST>",
+            "description": "Host to bind to",
+            "default": "127.0.0.1"
+          },
+          {
+            "name": "--provider <PROVIDER>",
+            "description": "Filter by provider"
+          },
+          {
+            "name": "-m, --model <MODEL>",
+            "description": "Filter by specific model (can be provider:model or alias)"
+          },
+          {
+            "name": "-k, --key <API_KEY>",
+            "description": "API key for authentication"
+          },
+          {
+            "name": "-g, --generate-key",
+            "description": "Generate a random API key"
+          },
+          {
+            "name": "-h, --help",
+            "description": "Print help"
+          }
+        ]
+      },
+      "mcp": {
+        "description": "MCP server management",
+        "commands": {
+          "add": {
+            "description": "Add a new MCP server (alias: a)",
+            "arguments": [
+              "<NAME>",
+              "<COMMAND_OR_URL>"
+            ],
+            "options": [
+              {
+                "name": "--type <SERVER_TYPE>",
+                "description": "MCP server type",
+                "values": ["stdio", "sse", "streamable"]
+              },
+              {
+                "name": "-e, --env <ENV>",
+                "description": "Environment variables (can be specified multiple times as KEY=VALUE)"
+              },
+              "-h, --help"
+            ]
+          },
+          "delete": {
+            "description": "Delete an MCP server configuration (alias: d)",
+            "options": ["-h, --help"]
+          },
+          "list": {
+            "description": "List all configured MCP servers (alias: l)",
+            "options": ["-h, --help"]
+          },
+          "start": {
+            "description": "Start an MCP server (alias: s)",
+            "options": ["-h, --help"]
+          },
+          "stop": {
+            "description": "Stop an MCP server (alias: st)",
+            "options": ["-h, --help"]
+          },
+          "ps": {
+            "description": "List running MCP servers (alias: running)",
+            "options": ["-h, --help"]
+          },
+          "functions": {
+            "description": "List functions exposed by a running MCP server (alias: f)",
+            "options": ["-h, --help"]
+          },
+          "invoke": {
+            "description": "Invoke a function from a running MCP server (alias: i)",
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "embed": {
+        "description": "Generate embeddings for text (alias: e)",
+        "arguments": ["[TEXT]"],
+        "options": [
+          "-m, --model <MODEL>",
+          "-p, --provider <PROVIDER>",
+          "-v, --vectordb <DATABASE>",
+          "-f, --files <FILES>",
+          "-d, --debug",
+          "-h, --help"
+        ]
+      },
+      "similar": {
+        "description": "Find similar text using vector similarity (alias: s)",
+        "arguments": ["<QUERY>"],
+        "options": [
+          {
+            "name": "-m, --model <MODEL>",
+            "description": "Model to use for embeddings (optional if database has existing model)"
+          },
+          {
+            "name": "-p, --provider <PROVIDER>",
+            "description": "Provider to use for embeddings (optional if database has existing model)"
+          },
+          {
+            "name": "-v, --vectordb <DATABASE>",
+            "description": "Vector database name to search"
+          },
+          {
+            "name": "-l, --limit <LIMIT>",
+            "description": "Number of similar results to return",
+            "default": "5"
+          },
+          "-h, --help"
+        ]
+      },
+      "vectors": {
+        "description": "Vector database management (alias: v)",
+        "commands": {
+          "list": {
+            "description": "List all vector databases (alias: l)",
+            "options": ["-h, --help"]
+          },
+          "delete": {
+            "description": "Delete a vector database (alias: d)",
+            "options": ["-h, --help"]
+          },
+          "info": {
+            "description": "Show information about a vector database (alias: i)",
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "web-chat-proxy": {
+        "description": "Web chat proxy for non-OpenAI compatible services (alias: w)",
+        "commands": {
+          "providers": {
+            "description": "List supported providers (alias: p)",
+            "options": ["-h, --help"]
+          },
+          "start": {
+            "description": "Start proxy server for a provider (alias: s)",
+            "arguments": ["<PROVIDER>"],
+            "options": [
+              {
+                "name": "-p, --port <PORT>",
+                "description": "Port to listen on",
+                "default": "8080"
+              },
+              {
+                "name": "--host <HOST>",
+                "description": "Host to bind to",
+                "default": "127.0.0.1"
+              },
+              {
+                "name": "-k, --key <KEY>",
+                "description": "API key for authentication"
+              },
+              {
+                "name": "-g, --generate-key",
+                "description": "Generate a random API key"
+              },
+              {
+                "name": "-d, --daemon",
+                "description": "Run in daemon mode (background)"
+              },
+              "-h, --help"
+            ]
+          },
+          "stop": {
+            "description": "Stop proxy server for a provider",
+            "options": ["-h, --help"]
+          },
+          "list": {
+            "description": "List running proxy servers (alias: ps)",
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      },
+      "sync": {
+        "description": "Sync configuration files to/from cloud providers (alias: sy)",
+        "commands": {
+          "providers": {
+            "description": "List supported cloud providers (alias: p)",
+            "options": ["-h, --help"]
+          },
+          "configure": {
+            "description": "Configure cloud provider settings (alias: c)",
+            "arguments": ["<PROVIDER>"],
+            "commands": {
+              "setup": {
+                "description": "Set up provider configuration (alias: s)",
+                "options": ["-h, --help"]
+              },
+              "show": {
+                "description": "Show current provider configuration (alias: sh)",
+                "options": ["-h, --help"]
+              },
+              "remove": {
+                "description": "Remove provider configuration (alias: r)",
+                "options": ["-h, --help"]
+              }
+            },
+            "options": ["-h, --help"]
+          },
+          "to": {
+            "description": "Sync configuration to cloud provider",
+            "options": ["-h, --help"]
+          },
+          "from": {
+            "description": "Sync configuration from cloud provider",
+            "options": ["-h, --help"]
+          }
+        },
+        "options": ["-h, --help"]
+      }
+    }
+  }
+}

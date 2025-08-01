@@ -1,5 +1,5 @@
 //! LC (LLM Client) Library
-//! 
+//!
 //! This library provides the core functionality for the LC CLI tool,
 //! including configuration management, provider handling, and chat functionality.
 
@@ -20,6 +20,7 @@ pub mod mcp_daemon;
 pub mod vector_db;
 pub mod webchatproxy;
 pub mod sync;
+pub mod search;
 
 // Re-export commonly used types for easier access in tests
 pub use config::{Config, ProviderConfig, CachedToken};

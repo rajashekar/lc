@@ -5,6 +5,7 @@ use colored::Colorize;
 use rpassword::read_password;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashMap;
 
 // Global debug flag
 pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
@@ -78,6 +79,10 @@ pub struct Cli {
     /// Chat ID to use or continue (alternative to --continue)
     #[arg(long = "cid")]
     pub chat_id: Option<String>,
+    
+    /// Use search results as context (format: provider or provider:query)
+    #[arg(long = "use-search")]
+    pub use_search: Option<String>,
     
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -265,6 +270,12 @@ pub enum Commands {
     Sync {
         #[command(subcommand)]
         command: SyncCommands,
+    },
+    /// Search provider management (alias: se)
+    #[command(alias = "se")]
+    Search {
+        #[command(subcommand)]
+        command: SearchCommands,
     },
 }
 
@@ -548,6 +559,12 @@ pub enum SetCommands {
         /// Temperature value (0.0 to 2.0)
         value: String,
     },
+    /// Set default search provider (alias: se)
+    #[command(alias = "se")]
+    Search {
+        /// Search provider name
+        name: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -567,6 +584,9 @@ pub enum GetCommands {
     /// Get temperature (alias: te)
     #[command(alias = "te")]
     Temperature,
+    /// Get default search provider (alias: se)
+    #[command(alias = "se")]
+    Search,
 }
 
 #[derive(Subcommand)]
@@ -586,6 +606,9 @@ pub enum DeleteCommands {
     /// Delete temperature (alias: te)
     #[command(alias = "te")]
     Temperature,
+    /// Delete default search provider (alias: se)
+    #[command(alias = "se")]
+    Search,
 }
 
 #[derive(Subcommand)]
@@ -600,6 +623,9 @@ pub enum McpCommands {
         /// MCP server type
         #[arg(long = "type", value_enum)]
         server_type: McpServerType,
+        /// Environment variables (can be specified multiple times as KEY=VALUE)
+        #[arg(short = 'e', long = "env", value_parser = parse_env_var)]
+        env: Vec<(String, String)>,
     },
     /// Delete an MCP server configuration (alias: d)
     #[command(alias = "d")]
@@ -610,24 +636,12 @@ pub enum McpCommands {
     /// List all configured MCP servers (alias: l)
     #[command(alias = "l")]
     List,
-    /// Start an MCP server (alias: s)
-    #[command(alias = "s")]
-    Start {
-        /// Server name
-        name: String,
-        /// Enable debug output
-        #[arg(short, long)]
-        debug: bool,
-    },
-    /// Stop an MCP server (alias: st)
+    /// Stop an MCP server connection (alias: st)
     #[command(alias = "st")]
     Stop {
         /// Server name
         name: String,
     },
-    /// List running MCP servers (alias: running)
-    #[command(alias = "running")]
-    Ps,
     /// List functions exposed by a running MCP server (alias: f)
     #[command(alias = "f")]
     Functions {
@@ -772,6 +786,60 @@ pub enum ConfigureCommands {
     Remove,
 }
 
+#[derive(Subcommand)]
+pub enum SearchCommands {
+    /// Manage search providers (alias: p)
+    #[command(alias = "p")]
+    Provider {
+        #[command(subcommand)]
+        command: SearchProviderCommands,
+    },
+    /// Perform a search query
+    Query {
+        /// Search provider to use
+        provider: String,
+        /// Search query
+        query: String,
+        /// Output format (json or md/markdown)
+        #[arg(short = 'f', long = "format", default_value = "md")]
+        format: String,
+        /// Number of results to return
+        #[arg(short = 'n', long = "count", default_value = "5")]
+        count: usize,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SearchProviderCommands {
+    /// Add a new search provider (alias: a)
+    #[command(alias = "a")]
+    Add {
+        /// Provider name
+        name: String,
+        /// Provider API endpoint URL
+        url: String,
+    },
+    /// Delete a search provider (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Provider name
+        name: String,
+    },
+    /// Set header for a search provider (alias: s)
+    #[command(alias = "s")]
+    Set {
+        /// Provider name
+        provider: String,
+        /// Header name
+        header_name: String,
+        /// Header value
+        header_value: String,
+    },
+    /// List all search providers (alias: l)
+    #[command(alias = "l")]
+    List,
+}
+
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum McpServerType {
     /// Standard I/O based MCP server
@@ -780,6 +848,15 @@ pub enum McpServerType {
     Sse,
     /// Streamable HTTP MCP server
     Streamable,
+}
+
+// Helper function to parse environment variable KEY=VALUE pairs
+fn parse_env_var(s: &str) -> Result<(String, String), String> {
+    let parts: Vec<&str> = s.splitn(2, '=').collect();
+    if parts.len() != 2 {
+        return Err(format!("Invalid environment variable format: '{}'. Expected 'KEY=VALUE'", s));
+    }
+    Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
 // Helper function to extract code blocks from markdown text
@@ -1329,6 +1406,17 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                     config.save()?;
                     println!("{} Temperature set to {}", "✓".green(), parsed_value);
                 }
+                SetCommands::Search { name } => {
+                    let mut search_config = crate::search::SearchConfig::load()?;
+                    
+                    if !search_config.has_provider(&name) {
+                        anyhow::bail!("Search provider '{}' not found. Add it first with 'lc search provider add'", name);
+                    }
+                    
+                    search_config.set_default_provider(name.clone())?;
+                    search_config.save()?;
+                    println!("{} Default search provider set to '{}'", "✓".green(), name);
+                }
             }
         }
         Some(ConfigCommands::Get { command }) => {
@@ -1367,6 +1455,14 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                         println!("{}", temperature);
                     } else {
                         anyhow::bail!("No temperature configured");
+                    }
+                }
+                GetCommands::Search => {
+                    let search_config = crate::search::SearchConfig::load()?;
+                    if let Some(provider) = search_config.get_default_provider() {
+                        println!("{}", provider);
+                    } else {
+                        anyhow::bail!("No default search provider configured");
                     }
                 }
             }
@@ -1417,6 +1513,16 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                         println!("{} Temperature deleted", "✓".green());
                     } else {
                         anyhow::bail!("No temperature configured to delete");
+                    }
+                }
+                DeleteCommands::Search => {
+                    let mut search_config = crate::search::SearchConfig::load()?;
+                    if search_config.get_default_provider().is_some() {
+                        search_config.set_default_provider(String::new())?;
+                        search_config.save()?;
+                        println!("{} Default search provider deleted", "✓".green());
+                    } else {
+                        anyhow::bail!("No default search provider configured to delete");
                     }
                 }
             }
@@ -1668,7 +1774,7 @@ pub fn is_code_file(extension: &str) -> bool {
 }
 
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>) -> Result<()> {
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -1751,6 +1857,20 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         }
     }
     
+    // Search integration: Add search results as context if --use-search is specified
+    if let Some(search_spec) = use_search {
+        match integrate_search_context(&search_spec, &prompt, &mut enhanced_prompt).await {
+            Ok(search_performed) => {
+                if search_performed {
+                    println!("{} Search results integrated into context", "🔍".blue());
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to integrate search results: {}", e);
+            }
+        }
+    }
+    
     // Send the prompt
     print!("{} ", "Thinking...".dimmed());
     io::stdout().flush()?;
@@ -1784,7 +1904,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
 }
 
 // Direct prompt handler for piped input (treats piped content as attachment)
-pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>) -> Result<()> {
+pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>) -> Result<()> {
     // For piped input, we need to determine if there's a prompt in the arguments
     // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
     // But we should provide a way to specify a prompt when piping content
@@ -1876,6 +1996,20 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
             }
             Err(e) => {
                 eprintln!("Warning: Failed to retrieve RAG context: {}", e);
+            }
+        }
+    }
+    
+    // Search integration: Add search results as context if --use-search is specified
+    if let Some(search_spec) = use_search {
+        match integrate_search_context(&search_spec, &prompt, &mut enhanced_prompt).await {
+            Ok(search_performed) => {
+                if search_performed {
+                    println!("{} Search results integrated into context", "🔍".blue());
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to integrate search results: {}", e);
             }
         }
     }
@@ -2875,7 +3009,7 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
     use colored::Colorize;
     
     match command {
-        crate::cli::McpCommands::Add { name, command_or_url, server_type } => {
+        crate::cli::McpCommands::Add { name, command_or_url, server_type, env } => {
             let mut config = McpConfig::load()?;
             
             // Convert CLI enum to config enum
@@ -2885,12 +3019,28 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 crate::cli::McpServerType::Streamable => ConfigMcpServerType::Streamable,
             };
             
-            config.add_server(name.clone(), command_or_url.clone(), config_server_type)?;
+            // Convert env vec to HashMap
+            let env_map: HashMap<String, String> = env.into_iter().collect();
+            
+            // For npx commands without -y, add it to ensure package download
+            let final_command_or_url = if command_or_url.starts_with("npx ") && !command_or_url.contains(" -y ") {
+                command_or_url.replacen("npx ", "npx -y ", 1)
+            } else {
+                command_or_url.clone()
+            };
+            
+            config.add_server_with_env(name.clone(), final_command_or_url.clone(), config_server_type, env_map.clone())?;
             config.save()?;
             
             println!("{} MCP server '{}' added successfully", "✓".green(), name);
             println!("  Type: {:?}", server_type);
-            println!("  Command/URL: {}", command_or_url);
+            println!("  Command/URL: {}", final_command_or_url);
+            if !env_map.is_empty() {
+                println!("  Environment variables:");
+                for (key, _) in env_map {
+                    println!("    - {}", key);
+                }
+            }
         }
         crate::cli::McpCommands::Delete { name } => {
             let mut config = McpConfig::load()?;
@@ -2922,19 +3072,8 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 }
             }
         }
-        crate::cli::McpCommands::Start { name, debug: _ } => {
-            let config = McpConfig::load()?;
-            
-            if let Some(_server_config) = config.get_server(&name) {
-                println!("{} Starting MCP server '{}'...", "🚀".blue(), name);
-                println!("{} Note: With the new SDK implementation, servers are started automatically when needed", "ℹ️".blue());
-                println!("{} MCP server '{}' will be available for use", "✓".green(), name);
-            } else {
-                anyhow::bail!("MCP server '{}' not found", name);
-            }
-        }
         crate::cli::McpCommands::Stop { name } => {
-            println!("{} Stopping MCP server '{}'...", "🛑".red(), name);
+            println!("{} Closing MCP server connection '{}'...", "🛑".red(), name);
             
             let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
             match daemon_client.close_server(&name).await {
@@ -2943,24 +3082,6 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 }
                 Err(e) => {
                     println!("{} Failed to close MCP server '{}': {}", "⚠️".yellow(), name, e);
-                }
-            }
-        }
-        crate::cli::McpCommands::Ps => {
-            let config = McpConfig::load()?;
-            let servers = config.list_servers();
-            
-            if servers.is_empty() {
-                println!("No MCP servers configured.");
-            } else {
-                println!("\n{} Configured MCP servers (SDK managed):", "Servers:".bold().blue());
-                for (name, server_config) in servers {
-                    println!("  {} {} - {:?} ({})",
-                        "•".blue(),
-                        name.bold(),
-                        server_config.server_type,
-                        server_config.command_or_url
-                    );
                 }
             }
         }
@@ -3951,6 +4072,169 @@ pub async fn handle_sync_command(command: SyncCommands) -> Result<()> {
         }
         SyncCommands::From { provider, encrypted } => {
             crate::sync::handle_sync_from(&provider, encrypted).await
+        }
+    }
+}
+
+// Search command handlers
+pub async fn handle_search_command(command: SearchCommands) -> Result<()> {
+    use colored::Colorize;
+    
+    match command {
+        SearchCommands::Provider { command } => {
+            handle_search_provider_command(command).await
+        }
+        SearchCommands::Query { provider, query, format, count } => {
+            let engine = crate::search::SearchEngine::new()?;
+            
+            println!("{} Searching with {} for: '{}'", "🔍".blue(), provider.bold(), query);
+            
+            match engine.search(&provider, &query, Some(count)).await {
+                Ok(results) => {
+                    match format.as_str() {
+                        "json" => {
+                            println!("{}", engine.format_results_json(&results)?);
+                        }
+                        "md" | "markdown" => {
+                            println!("{}", engine.format_results_markdown(&results));
+                        }
+                        _ => {
+                            anyhow::bail!("Invalid format '{}'. Use 'json' or 'md'", format);
+                        }
+                    }
+                }
+                Err(e) => {
+                    anyhow::bail!("Search failed: {}", e);
+                }
+            }
+            
+            Ok(())
+        }
+    }
+}
+
+async fn handle_search_provider_command(command: SearchProviderCommands) -> Result<()> {
+    use colored::Colorize;
+    
+    match command {
+        SearchProviderCommands::Add { name, url } => {
+            let mut config = crate::search::SearchConfig::load()?;
+            
+            // For now, we only support Brave
+            config.add_provider(name.clone(), url.clone(), crate::search::SearchProviderType::Brave)?;
+            config.save()?;
+            
+            println!("{} Search provider '{}' added successfully", "✓".green(), name);
+            println!("  URL: {}", url);
+            println!("\n{} Don't forget to set the API key:", "💡".yellow());
+            println!("  lc search provider set {} X-Subscription-Token <your-api-key>", name);
+        }
+        SearchProviderCommands::Delete { name } => {
+            let mut config = crate::search::SearchConfig::load()?;
+            config.delete_provider(&name)?;
+            config.save()?;
+            
+            println!("{} Search provider '{}' deleted successfully", "✓".green(), name);
+        }
+        SearchProviderCommands::Set { provider, header_name, header_value } => {
+            let mut config = crate::search::SearchConfig::load()?;
+            config.set_header(&provider, header_name.clone(), header_value)?;
+            config.save()?;
+            
+            println!("{} Header '{}' set for search provider '{}'", "✓".green(), header_name, provider);
+        }
+        SearchProviderCommands::List => {
+            let config = crate::search::SearchConfig::load()?;
+            let providers = config.list_providers();
+            
+            if providers.is_empty() {
+                println!("No search providers configured.");
+                println!("Add one with: {}", "lc search provider add <name> <url>".dimmed());
+            } else {
+                println!("\n{}", "Search Providers:".bold().blue());
+                
+                for (name, provider_config) in providers {
+                    let has_auth = provider_config.headers.contains_key("X-Subscription-Token") ||
+                                  provider_config.headers.contains_key("Authorization");
+                    let auth_status = if has_auth { "✓".green() } else { "✗".red() };
+                    
+                    println!("  {} {} - {} (Auth: {})",
+                        "•".blue(),
+                        name.bold(),
+                        provider_config.url,
+                        auth_status
+                    );
+                    
+                    if !provider_config.headers.is_empty() {
+                        println!("    Headers: {}", provider_config.headers.len());
+                    }
+                }
+                
+                if let Some(default) = config.get_default_provider() {
+                    println!("\n{} {}", "Default provider:".bold(), default.green());
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+// Helper function to integrate search results as context
+async fn integrate_search_context(search_spec: &str, query: &str, enhanced_prompt: &mut String) -> Result<bool> {
+    use colored::Colorize;
+    
+    // Parse search spec: can be "provider" or "provider:query"
+    let (provider, search_query) = if search_spec.contains(':') {
+        let parts: Vec<&str> = search_spec.splitn(2, ':').collect();
+        (parts[0].to_string(), parts[1].to_string())
+    } else {
+        // Use the original prompt as the search query
+        (search_spec.to_string(), query.to_string())
+    };
+    
+    // Check if provider is configured
+    let search_config = crate::search::SearchConfig::load()?;
+    if !search_config.has_provider(&provider) {
+        // Try to use default provider if available
+        if let Some(default_provider) = search_config.get_default_provider() {
+            if provider == "default" || provider.is_empty() {
+                println!("{} Using default search provider: {}", "🔍".blue(), default_provider);
+                return integrate_search_with_provider(default_provider, &search_query, enhanced_prompt).await;
+            }
+        }
+        anyhow::bail!("Search provider '{}' not found. Configure it with 'lc search provider add'", provider);
+    }
+    
+    integrate_search_with_provider(&provider, &search_query, enhanced_prompt).await
+}
+
+async fn integrate_search_with_provider(provider: &str, search_query: &str, enhanced_prompt: &mut String) -> Result<bool> {
+    use colored::Colorize;
+    
+    let engine = crate::search::SearchEngine::new()?;
+    
+    println!("{} Searching for: '{}'", "🔍".blue(), search_query);
+    
+    match engine.search(provider, search_query, Some(5)).await {
+        Ok(results) => {
+            if results.results.is_empty() {
+                println!("{} No search results found", "⚠️".yellow());
+                return Ok(false);
+            }
+            
+            println!("{} Found {} search results", "✅".green(), results.results.len());
+            
+            // Extract context from search results
+            let search_context = engine.extract_context_for_llm(&results, 5);
+            
+            // Prepend search context to the enhanced prompt
+            *enhanced_prompt = format!("{}\n\nUser query: {}", search_context, enhanced_prompt);
+            
+            Ok(true)
+        }
+        Err(e) => {
+            anyhow::bail!("Search failed: {}", e);
         }
     }
 }

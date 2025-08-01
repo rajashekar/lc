@@ -15,17 +15,20 @@ Common issues and their solutions when using LLM Client.
 **Problem**: Can't install Rust or cargo commands not found
 
 **Solutions**:
+
 1. Ensure you have a C compiler installed:
    - Linux: `sudo apt install build-essential`
    - macOS: `xcode-select --install`
    - Windows: Install Visual Studio Build Tools
 
 2. Try the official installer:
+
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    ```
 
 3. Add cargo to PATH:
+
    ```bash
    source $HOME/.cargo/env
    ```
@@ -35,12 +38,15 @@ Common issues and their solutions when using LLM Client.
 **Problem**: `cargo build --release` fails
 
 **Solutions**:
+
 1. Update Rust:
+
    ```bash
    rustup update
    ```
 
 2. Clean and rebuild:
+
    ```bash
    cargo clean
    cargo build --release
@@ -55,6 +61,7 @@ Common issues and their solutions when using LLM Client.
 **Problem**: Getting error when trying to use lc
 
 **Solution**:
+
 ```bash
 # Add a provider first
 lc providers add openai https://api.openai.com/v1
@@ -68,12 +75,15 @@ lc providers list
 **Problem**: Provider name not recognized
 
 **Solutions**:
+
 1. Check exact spelling:
+
    ```bash
    lc providers list
    ```
 
 2. Ensure provider is added:
+
    ```bash
    lc providers add <name> <url>
    ```
@@ -83,6 +93,7 @@ lc providers list
 **Problem**: Provider endpoint rejected
 
 **Solutions**:
+
 1. Include protocol: `https://` or `http://`
 2. Don't include trailing paths unless needed
 3. For custom endpoints, use `-m` and `-c` flags
@@ -94,6 +105,7 @@ lc providers list
 **Problem**: Provider requires API key
 
 **Solution**:
+
 ```bash
 lc keys add <provider>
 # Enter key when prompted
@@ -104,13 +116,16 @@ lc keys add <provider>
 **Problem**: API key rejected
 
 **Solutions**:
+
 1. Verify key is correct:
+
    ```bash
    lc keys remove <provider>
    lc keys add <provider>
    ```
 
 2. Check if provider needs custom headers:
+
    ```bash
    # For Claude
    lc providers headers claude add x-api-key <key>
@@ -126,7 +141,9 @@ lc keys add <provider>
 **Problem**: Specified model doesn't exist
 
 **Solutions**:
+
 1. List available models:
+
    ```bash
    lc providers models <provider>
    # or
@@ -142,7 +159,9 @@ lc keys add <provider>
 **Problem**: Input too long for model
 
 **Solutions**:
+
 1. Use a model with larger context:
+
    ```bash
    lc models --ctx 128k
    ```
@@ -158,12 +177,15 @@ lc keys add <provider>
 **Problem**: Vector database doesn't exist
 
 **Solutions**:
+
 1. Check available databases:
+
    ```bash
    lc vectors list
    ```
 
 2. Create database by adding content:
+
    ```bash
    lc embed -m text-embedding-3-small -v <name> "content"
    ```
@@ -173,7 +195,9 @@ lc keys add <provider>
 **Problem**: Embedding dimensions don't match
 
 **Solutions**:
+
 1. Check database model:
+
    ```bash
    lc vectors info <database>
    ```
@@ -181,6 +205,7 @@ lc keys add <provider>
 2. Use the same model for all operations
 
 3. Delete and recreate with consistent model:
+
    ```bash
    lc vectors delete <database>
    lc embed -m <model> -v <database> "content"
@@ -191,7 +216,9 @@ lc keys add <provider>
 **Problem**: Similarity search returns nothing
 
 **Solutions**:
+
 1. Verify database has content:
+
    ```bash
    lc vectors info <database>
    ```
@@ -207,12 +234,15 @@ lc keys add <provider>
 **Problem**: Can't continue chat session
 
 **Solutions**:
+
 1. List recent sessions:
+
    ```bash
    lc logs recent
    ```
 
 2. Use correct session ID:
+
    ```bash
    lc chat -m <model> --cid <session-id>
    ```
@@ -222,7 +252,9 @@ lc keys add <provider>
 **Problem**: Previous messages not remembered
 
 **Solutions**:
+
 1. Ensure you're in chat mode:
+
    ```bash
    lc chat -m <model>
    ```
@@ -230,6 +262,7 @@ lc keys add <provider>
 2. Don't use `/clear` unless you want to reset
 
 3. Check logs database:
+
    ```bash
    lc logs stats
    ```
@@ -239,7 +272,9 @@ lc keys add <provider>
 ### Slow Response Times
 
 **Solutions**:
+
 1. Use a faster model:
+
    ```bash
    lc -m gpt-3.5-turbo "prompt"
    ```
@@ -251,6 +286,7 @@ lc keys add <provider>
 ### High Token Usage
 
 **Solutions**:
+
 1. Use concise prompts
 2. Set up system prompts for consistency
 3. Use smaller models when appropriate
@@ -262,12 +298,15 @@ lc keys add <provider>
 **Problem**: Can't sync configuration
 
 **Solutions**:
+
 1. Check provider configuration:
+
    ```bash
    lc sync configure s3 show
    ```
 
 2. Verify credentials:
+
    ```bash
    lc sync configure s3 setup
    ```
@@ -279,6 +318,136 @@ lc keys add <provider>
 **Problem**: Can't decrypt synced files
 
 **Solution**: Use the same password used for encryption
+
+## Proxy Issues
+
+### Proxy `-h` Conflict
+
+**Problem**: Using `-h` flag with proxy command doesn't work as expected
+
+**Cause**: The `-h` flag conflicts between `--host` and `--help` options
+
+**Solutions**:
+
+1. Use full flag names to avoid ambiguity:
+
+   ```bash
+   # Instead of: lc proxy -h 0.0.0.0
+   lc proxy --host 0.0.0.0
+   ```
+
+2. Use `--help` instead of `-h` for help:
+
+   ```bash
+   lc proxy --help
+   ```
+
+**Reference**: See [Proxy Command Documentation](/commands/proxy#options) for all available flags
+
+### Web Chat Proxy Port Issues
+
+**Problem**: "Port already in use" or "Address already in use" errors
+
+**Solutions**:
+
+1. Check what's using the port:
+
+   ```bash
+   netstat -tlnp | grep :8080
+   # or on macOS
+   lsof -i :8080
+   ```
+
+2. Use a different port:
+
+   ```bash
+   lc web-chat-proxy start anthropic --port 3000
+   ```
+
+3. Stop existing proxy servers:
+
+   ```bash
+   lc web-chat-proxy list
+   lc web-chat-proxy stop anthropic
+   ```
+
+4. Kill process using the port (if needed):
+
+   ```bash
+   # Replace PID with actual process ID from netstat/lsof
+   kill -9 <PID>
+   ```
+
+**Reference**: See [Web Chat Proxy Documentation](/commands/web-chat-proxy#troubleshooting) for more details
+
+### Sync Provider Authentication Errors
+
+**Problem**: "Authentication failed" when syncing with cloud providers
+
+**Solutions by Provider**:
+
+**AWS**:
+
+1. Check AWS credentials:
+
+   ```bash
+   cat ~/.aws/credentials
+   ```
+
+2. Set environment variables:
+
+   ```bash
+   export AWS_ACCESS_KEY_ID=your-key
+   export AWS_SECRET_ACCESS_KEY=your-secret
+   ```
+
+3. Verify IAM permissions for S3 bucket access
+
+**Azure**:
+
+1. Login to Azure CLI:
+
+   ```bash
+   az login
+   ```
+
+2. Check current account:
+
+   ```bash
+   az account show
+   ```
+
+**GCP**:
+
+1. Authenticate with service account:
+
+   ```bash
+   gcloud auth activate-service-account --key-file=key.json
+   ```
+
+2. Or login interactively:
+
+   ```bash
+   gcloud auth login
+   ```
+
+**General Steps**:
+
+1. Reconfigure the provider:
+
+   ```bash
+   lc sync configure <provider>
+   ```
+
+2. Test connectivity:
+
+   ```bash
+   lc sync providers
+   ```
+
+3. Check network/firewall settings
+
+**Reference**: See [Sync Command Documentation](/commands/sync#troubleshooting) for provider-specific setup
 
 ## Debug Mode
 
