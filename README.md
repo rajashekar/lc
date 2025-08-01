@@ -40,6 +40,7 @@ lc "What is the capital of France?"
 - 🔧 **Universal** - Works with any OpenAI-compatible API
 - 🧠 **Smart** - Built-in vector database and RAG support
 - 🛠️ **Tools** - Model Context Protocol (MCP) support for extending LLM capabilities
+- 🔍 **Web Search** - Integrated web search capabilities for enhanced context
 - 🔐 **Secure** - Encrypted configuration sync
 - 💬 **Intuitive** - Simple commands with short aliases
 
@@ -116,6 +117,34 @@ lc -t fetch "What's the latest news about AI?"
 
 # Multiple MCP tools
 lc -t fetch,playwright "Navigate to example.com and analyze its content"
+
+# Web search integration
+lc --use-search brave "What are the latest developments in quantum computing?"
+
+# Search with specific query
+lc --use-search "brave:quantum computing 2024" "Summarize the findings"
+```
+
+### Web Search Integration
+
+`lc` supports web search integration to enhance prompts with real-time information:
+
+```bash
+# Configure search provider
+lc search provider add brave https://api.search.brave.com/res/v1/web/search
+lc search provider set brave X-Subscription-Token YOUR_API_KEY
+
+# Set default search provider
+lc config set search brave
+
+# Direct search
+lc search query brave "rust programming language" -f json
+
+# Use search results as context
+lc --use-search brave "What are the latest AI breakthroughs?"
+
+# Search with custom query
+lc --use-search "brave:specific search terms" "Analyze these results"
 ```
 
 ### Model Context Protocol (MCP)

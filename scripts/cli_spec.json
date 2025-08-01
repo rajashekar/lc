@@ -138,6 +138,17 @@
               "-h, --help"
             ]
           },
+          "stats": {
+            "description": "Show database statistics (alias: s)",
+            "options": ["-h, --help"]
+          },
+          "purge": {
+            "description": "Purge all logs (alias: p)",
+            "options": [
+              "--yes",
+              "-h, --help"
+            ]
+          },
           "recent": {
             "description": "Show recent logs (alias: r)",
             "commands": {
@@ -234,6 +245,18 @@
           "refresh": {
             "description": "Refresh the models cache (alias: r)",
             "options": ["-h, --help"]
+          },
+          "info": {
+            "description": "Show cache information (alias: i)",
+            "options": ["-h, --help"]
+          },
+          "dump": {
+            "description": "Dump raw /models responses to JSON files (alias: d)",
+            "options": ["-h, --help"]
+          },
+          "embed": {
+            "description": "List embedding models (alias: e)",
+            "options": ["-h, --help"]
           }
         },
         "options": [
@@ -260,6 +283,17 @@
               "<NAME>",
               "<TARGET>"
             ],
+            "options": ["-h, --help"]
+          },
+          "delete": {
+            "description": "Remove an alias (alias: d)",
+            "arguments": [
+              "<NAME>"
+            ],
+            "options": ["-h, --help"]
+          },
+          "list": {
+            "description": "List all aliases (alias: l)",
             "options": ["-h, --help"]
           }
         },

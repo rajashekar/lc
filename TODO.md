@@ -4,7 +4,6 @@
 - Support lc serve
 - Check images
 - Check audio
-- Check all mcp functionalities
 - Fix tools bug in listing
 - Support other web proxy chats
 - Add support to sync db to cloud
