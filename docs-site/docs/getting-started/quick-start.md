@@ -124,9 +124,9 @@ lc "Your prompt here"
 
 ### Essential Features
 
-- [Providers Guide](/features/providers) - Managing multiple LLM providers
-- [Chat Sessions](/features/chat) - Interactive conversations
-- [Logging](/features/logging) - View and manage chat history
+- [Providers Command](/commands/providers) - Managing multiple LLM providers
+- [Chat Command](/commands/chat) - Interactive conversations
+- [FAQ](/faq) - View and manage chat history
 
 ### Advanced Features
 

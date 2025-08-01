@@ -283,4 +283,4 @@ Some providers may not expose all models via API:
 
 - [Providers Command](/commands/providers) - Manage model providers
 - [Chat Command](/commands/chat) - Use models interactively
-- [Direct Prompts](/features/direct-prompts) - Quick model usage
+- [Chat Command](/commands/chat) - Quick model usage
