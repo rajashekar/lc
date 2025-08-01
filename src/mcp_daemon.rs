@@ -64,17 +64,10 @@ impl McpDaemon {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    // Handle each client in a separate task for parallel processing
-                    let mut daemon_clone = McpDaemon {
-                        manager: SdkMcpManager::new(), // Each task gets its own manager
-                        socket_path: self.socket_path.clone(),
-                    };
-                    
-                    tokio::spawn(async move {
-                        if let Err(e) = daemon_clone.handle_client(stream).await {
-                            crate::debug_log!("Error handling client: {}", e);
-                        }
-                    });
+                    // Handle each client sequentially to maintain shared state
+                    if let Err(e) = self.handle_client(stream).await {
+                        crate::debug_log!("Error handling client: {}", e);
+                    }
                 }
                 Err(e) => {
                     crate::debug_log!("Error accepting connection: {}", e);
@@ -135,6 +128,11 @@ impl McpDaemon {
                 }
             }
             DaemonRequest::ListTools { server_name } => {
+                // First ensure the server is connected
+                if let Err(e) = self.ensure_server_connected(&server_name).await {
+                    return DaemonResponse::Error(format!("Failed to connect to server '{}': {}", server_name, e));
+                }
+                
                 match self.manager.list_all_tools().await {
                     Ok(tools) => {
                         if let Some(server_tools) = tools.get(&server_name) {
@@ -182,30 +180,45 @@ impl McpDaemon {
             return Ok(());
         }
 
+        crate::debug_log!("DAEMON: Loading MCP configuration for server '{}'", server_name);
+        
         // Load configuration and connect to server
         let config = McpConfig::load()?;
         if let Some(server_config) = config.get_server(server_name) {
+            crate::debug_log!("DAEMON: Found server config for '{}': {:?} ({})", server_name, server_config.server_type, server_config.command_or_url);
+            
             let sdk_config = match server_config.server_type {
                 McpServerType::Stdio => {
                     let parts: Vec<String> = server_config.command_or_url.split_whitespace()
                         .map(|s| s.to_string())
                         .collect();
+                    crate::debug_log!("DAEMON: Creating STDIO config with command parts: {:?}", parts);
                     create_stdio_server_config(server_name.to_string(), parts, None, None)
                 }
                 McpServerType::Sse => {
+                    crate::debug_log!("DAEMON: Creating SSE config with URL: {}", server_config.command_or_url);
                     create_sse_server_config(server_name.to_string(), server_config.command_or_url.clone())
                 }
                 McpServerType::Streamable => {
+                    crate::debug_log!("DAEMON: Creating Streamable config (treating as SSE) with URL: {}", server_config.command_or_url);
                     // For now, treat as SSE (closest equivalent)
                     create_sse_server_config(server_name.to_string(), server_config.command_or_url.clone())
                 }
             };
 
-            crate::debug_log!("DAEMON: Connecting to MCP server '{}' (not already connected)", server_name);
-            self.manager.add_server(sdk_config).await?;
-            crate::debug_log!("DAEMON: Successfully connected to MCP server '{}'. Total connections: {}", server_name, self.manager.clients.len());
-            Ok(())
+            crate::debug_log!("DAEMON: Attempting to connect to MCP server '{}'", server_name);
+            match self.manager.add_server(sdk_config).await {
+                Ok(_) => {
+                    crate::debug_log!("DAEMON: Successfully connected to MCP server '{}'. Total connections: {}", server_name, self.manager.clients.len());
+                    Ok(())
+                }
+                Err(e) => {
+                    crate::debug_log!("DAEMON: Failed to connect to MCP server '{}': {}", server_name, e);
+                    Err(e)
+                }
+            }
         } else {
+            crate::debug_log!("DAEMON: Server '{}' not found in configuration", server_name);
             Err(anyhow!("MCP server '{}' not found in configuration", server_name))
         }
     }
@@ -301,12 +314,25 @@ impl DaemonClient {
     }
 
     pub async fn list_tools(&self, server_name: &str) -> Result<HashMap<String, Vec<rmcp::model::Tool>>> {
+        crate::debug_log!("DaemonClient: Requesting tools for server '{}'", server_name);
         match self.send_request(DaemonRequest::ListTools {
             server_name: server_name.to_string(),
         }).await? {
-            DaemonResponse::Tools(tools) => Ok(tools),
-            DaemonResponse::Error(e) => Err(anyhow!(e)),
-            _ => Err(anyhow!("Unexpected response from daemon")),
+            DaemonResponse::Tools(tools) => {
+                crate::debug_log!("DaemonClient: Received tools response with {} servers", tools.len());
+                for (name, server_tools) in &tools {
+                    crate::debug_log!("DaemonClient: Server '{}' has {} tools", name, server_tools.len());
+                }
+                Ok(tools)
+            },
+            DaemonResponse::Error(e) => {
+                crate::debug_log!("DaemonClient: Received error response: {}", e);
+                Err(anyhow!(e))
+            },
+            response => {
+                crate::debug_log!("DaemonClient: Received unexpected response: {:?}", response);
+                Err(anyhow!("Unexpected response from daemon"))
+            },
         }
     }
 

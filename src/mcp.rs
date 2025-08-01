@@ -176,6 +176,8 @@ impl SdkMcpManager {
     }
 
     pub async fn add_server(&mut self, config: SdkMcpServerConfig) -> Result<()> {
+        crate::debug_log!("SdkMcpManager: Adding server '{}' with transport: {:?}", config.name, config.transport);
+        
         let client_info = ClientInfo {
             protocol_version: Default::default(),
             capabilities: ClientCapabilities::default(),
@@ -187,28 +189,38 @@ impl SdkMcpManager {
 
         let client = match config.transport {
             SdkMcpTransport::Stdio { command, args, env, cwd } => {
+                crate::debug_log!("SdkMcpManager: Creating STDIO transport with command: {} args: {:?}", command, args);
+                
                 let mut cmd = Command::new(&command);
                 if let Some(args) = args {
-                    cmd.args(args);
+                    cmd.args(&args);
+                    crate::debug_log!("SdkMcpManager: Added args: {:?}", args);
                 }
                 if let Some(env) = env {
                     for (key, value) in env {
                         cmd.env(key, value);
                     }
+                    crate::debug_log!("SdkMcpManager: Added env vars");
                 }
                 if let Some(cwd) = cwd {
                     cmd.current_dir(cwd);
+                    crate::debug_log!("SdkMcpManager: Set working directory");
                 }
 
+                crate::debug_log!("SdkMcpManager: Creating TokioChildProcess transport");
                 let transport = TokioChildProcess::new(cmd.configure(|_| {}))?;
+                crate::debug_log!("SdkMcpManager: Starting client connection");
                 client_info.serve(transport).await?
             }
             SdkMcpTransport::Sse { url } => {
+                crate::debug_log!("SdkMcpManager: Creating SSE transport with URL: {}", url);
                 let transport = SseClientTransport::start(url.as_str()).await?;
+                crate::debug_log!("SdkMcpManager: Starting client connection");
                 client_info.serve(transport).await?
             }
         };
 
+        crate::debug_log!("SdkMcpManager: Successfully connected to server '{}'", config.name);
         self.clients.insert(config.name, client);
         Ok(())
     }
@@ -216,17 +228,23 @@ impl SdkMcpManager {
     pub async fn list_all_tools(&self) -> Result<HashMap<String, Vec<Tool>>> {
         let mut all_tools = HashMap::new();
 
+        crate::debug_log!("SdkMcpManager: Listing tools from {} connected servers", self.clients.len());
+
         for (server_name, client) in &self.clients {
+            crate::debug_log!("SdkMcpManager: Requesting tools from server '{}'", server_name);
             match client.list_tools(Default::default()).await {
                 Ok(tools_result) => {
+                    crate::debug_log!("SdkMcpManager: Server '{}' returned {} tools", server_name, tools_result.tools.len());
                     all_tools.insert(server_name.clone(), tools_result.tools);
                 }
                 Err(e) => {
+                    crate::debug_log!("SdkMcpManager: Failed to list tools from server '{}': {}", server_name, e);
                     eprintln!("Warning: Failed to list tools from server '{}': {}", server_name, e);
                 }
             }
         }
 
+        crate::debug_log!("SdkMcpManager: Total tools collected from {} servers", all_tools.len());
         Ok(all_tools)
     }
 

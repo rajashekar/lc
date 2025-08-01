@@ -2973,12 +2973,17 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 // Use daemon client for persistent connections
                 let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
                 
+                crate::debug_log!("CLI: Starting MCP functions listing for server '{}'", name);
+                
                 // Ensure server is connected via daemon
                 match daemon_client.ensure_server_connected(&name).await {
                     Ok(_) => {
+                        crate::debug_log!("CLI: Server '{}' connected successfully", name);
                         match daemon_client.list_tools(&name).await {
                             Ok(all_tools) => {
+                                crate::debug_log!("CLI: Received tools response with {} servers", all_tools.len());
                                 if let Some(tools) = all_tools.get(&name) {
+                                    crate::debug_log!("CLI: Server '{}' has {} tools", name, tools.len());
                                     if tools.is_empty() {
                                         println!("No functions found for server '{}'", name);
                                     } else {
@@ -3002,15 +3007,18 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                                         }
                                     }
                                 } else {
+                                    crate::debug_log!("CLI: No tools found for server '{}' in response", name);
                                     println!("No functions found for server '{}'", name);
                                 }
                             }
                             Err(e) => {
+                                crate::debug_log!("CLI: Failed to list tools: {}", e);
                                 anyhow::bail!("Failed to list functions from MCP server '{}': {}", name, e);
                             }
                         }
                     }
                     Err(e) => {
+                        crate::debug_log!("CLI: Failed to connect to server '{}': {}", name, e);
                         anyhow::bail!("Failed to connect to MCP server '{}': {}", name, e);
                     }
                 }
