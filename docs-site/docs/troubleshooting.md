@@ -1,0 +1,314 @@
+---
+id: troubleshooting
+title: Troubleshooting
+sidebar_position: 100
+---
+
+# Troubleshooting
+
+Common issues and their solutions when using LLM Client.
+
+## Installation Issues
+
+### Rust Installation Fails
+
+**Problem**: Can't install Rust or cargo commands not found
+
+**Solutions**:
+1. Ensure you have a C compiler installed:
+   - Linux: `sudo apt install build-essential`
+   - macOS: `xcode-select --install`
+   - Windows: Install Visual Studio Build Tools
+
+2. Try the official installer:
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+
+3. Add cargo to PATH:
+   ```bash
+   source $HOME/.cargo/env
+   ```
+
+### Build Errors
+
+**Problem**: `cargo build --release` fails
+
+**Solutions**:
+1. Update Rust:
+   ```bash
+   rustup update
+   ```
+
+2. Clean and rebuild:
+   ```bash
+   cargo clean
+   cargo build --release
+   ```
+
+3. Check for missing dependencies in error messages
+
+## Provider Issues
+
+### "No providers configured"
+
+**Problem**: Getting error when trying to use lc
+
+**Solution**:
+```bash
+# Add a provider first
+lc providers add openai https://api.openai.com/v1
+
+# Verify it's added
+lc providers list
+```
+
+### "Provider not found"
+
+**Problem**: Provider name not recognized
+
+**Solutions**:
+1. Check exact spelling:
+   ```bash
+   lc providers list
+   ```
+
+2. Ensure provider is added:
+   ```bash
+   lc providers add <name> <url>
+   ```
+
+### "Invalid endpoint URL"
+
+**Problem**: Provider endpoint rejected
+
+**Solutions**:
+1. Include protocol: `https://` or `http://`
+2. Don't include trailing paths unless needed
+3. For custom endpoints, use `-m` and `-c` flags
+
+## API Key Issues
+
+### "No API key found"
+
+**Problem**: Provider requires API key
+
+**Solution**:
+```bash
+lc keys add <provider>
+# Enter key when prompted
+```
+
+### "Authentication failed"
+
+**Problem**: API key rejected
+
+**Solutions**:
+1. Verify key is correct:
+   ```bash
+   lc keys remove <provider>
+   lc keys add <provider>
+   ```
+
+2. Check if provider needs custom headers:
+   ```bash
+   # For Claude
+   lc providers headers claude add x-api-key <key>
+   lc providers headers claude add anthropic-version 2023-06-01
+   ```
+
+3. Ensure you have API credits/quota
+
+## Model Issues
+
+### "Model not found"
+
+**Problem**: Specified model doesn't exist
+
+**Solutions**:
+1. List available models:
+   ```bash
+   lc providers models <provider>
+   # or
+   lc models
+   ```
+
+2. Use exact model name from the list
+
+3. For HF router, use format: `model:provider`
+
+### "Context length exceeded"
+
+**Problem**: Input too long for model
+
+**Solutions**:
+1. Use a model with larger context:
+   ```bash
+   lc models --ctx 128k
+   ```
+
+2. Reduce input length
+
+3. Split into multiple prompts
+
+## Vector Database Issues
+
+### "Database not found"
+
+**Problem**: Vector database doesn't exist
+
+**Solutions**:
+1. Check available databases:
+   ```bash
+   lc vectors list
+   ```
+
+2. Create database by adding content:
+   ```bash
+   lc embed -m text-embedding-3-small -v <name> "content"
+   ```
+
+### "Dimension mismatch"
+
+**Problem**: Embedding dimensions don't match
+
+**Solutions**:
+1. Check database model:
+   ```bash
+   lc vectors info <database>
+   ```
+
+2. Use the same model for all operations
+
+3. Delete and recreate with consistent model:
+   ```bash
+   lc vectors delete <database>
+   lc embed -m <model> -v <database> "content"
+   ```
+
+### "No similar content found"
+
+**Problem**: Similarity search returns nothing
+
+**Solutions**:
+1. Verify database has content:
+   ```bash
+   lc vectors info <database>
+   ```
+
+2. Try different search terms
+
+3. Check if content is relevant
+
+## Chat Issues
+
+### "Session not found"
+
+**Problem**: Can't continue chat session
+
+**Solutions**:
+1. List recent sessions:
+   ```bash
+   lc logs recent
+   ```
+
+2. Use correct session ID:
+   ```bash
+   lc chat -m <model> --cid <session-id>
+   ```
+
+### "Chat history lost"
+
+**Problem**: Previous messages not remembered
+
+**Solutions**:
+1. Ensure you're in chat mode:
+   ```bash
+   lc chat -m <model>
+   ```
+
+2. Don't use `/clear` unless you want to reset
+
+3. Check logs database:
+   ```bash
+   lc logs stats
+   ```
+
+## Performance Issues
+
+### Slow Response Times
+
+**Solutions**:
+1. Use a faster model:
+   ```bash
+   lc -m gpt-3.5-turbo "prompt"
+   ```
+
+2. Check network connection
+
+3. Try a different provider
+
+### High Token Usage
+
+**Solutions**:
+1. Use concise prompts
+2. Set up system prompts for consistency
+3. Use smaller models when appropriate
+
+## Sync Issues
+
+### "Sync failed"
+
+**Problem**: Can't sync configuration
+
+**Solutions**:
+1. Check provider configuration:
+   ```bash
+   lc sync configure s3 show
+   ```
+
+2. Verify credentials:
+   ```bash
+   lc sync configure s3 setup
+   ```
+
+3. Check network/firewall settings
+
+### "Decryption failed"
+
+**Problem**: Can't decrypt synced files
+
+**Solution**: Use the same password used for encryption
+
+## Debug Mode
+
+For detailed error information:
+
+```bash
+# Enable debug logging
+export RUST_LOG=debug
+lc -m gpt-4 "test prompt"
+```
+
+## Getting Help
+
+If you're still having issues:
+
+1. Check the [FAQ](/faq)
+2. Search [GitHub Issues](https://github.com/rajashekar/lc/issues)
+3. Create a new issue with:
+   - Error message
+   - Steps to reproduce
+   - System information
+   - Debug logs
+
+## Common Error Messages
+
+| Error | Meaning | Solution |
+|-------|---------|----------|
+| "No providers configured" | No providers added | Add a provider |
+| "API request failed" | Network or API error | Check connection and API key |
+| "Model not found" | Invalid model name | Use exact model name |
+| "Rate limit exceeded" | Too many requests | Wait and retry |
+| "Invalid API key" | Wrong or expired key | Update API key |
+| "Context length exceeded" | Input too long | Use shorter input or larger model |
