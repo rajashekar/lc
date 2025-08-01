@@ -19,6 +19,7 @@ pub mod mcp;
 pub mod mcp_daemon;
 pub mod vector_db;
 pub mod webchatproxy;
+pub mod sync;
 
 // Re-export commonly used types for easier access in tests
 pub use config::{Config, ProviderConfig, CachedToken};

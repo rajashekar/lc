@@ -18,6 +18,9 @@ LLM Client (lc) - A fast, Rust-based command-line tool for interacting with Larg
 - 📚 **Embedding Support** - Generate and store text embeddings from any compatible provider
 - 🔍 **Semantic Search** - Find similar content using cosine similarity across your knowledge base
 - 🤖 **RAG-Enhanced Chat** - Augment conversations with relevant context from vector databases
+- ☁️ **Configuration Sync** - Sync your configuration files to/from cloud providers with optional AES256 encryption
+- 🔐 **Secure Cloud Storage** - Store configurations in S3-compatible services with strong encryption
+- 🔄 **Cross-Platform Sync** - Keep your settings synchronized across multiple machines
 
 ## Installation
 
@@ -362,6 +365,141 @@ Each database is a SQLite file containing:
 - **vectors** table - Text content, embeddings, and metadata
 - **model_info** table - Embedding model and provider information
 - **Indexes** - Optimized for fast similarity search
+
+## Configuration Sync
+
+LLM Client includes a powerful sync feature that allows you to synchronize your configuration files to and from cloud providers with optional AES256 encryption. This enables you to keep your settings synchronized across multiple machines securely.
+
+### Quick Start with Sync
+
+```bash
+# 1. List supported cloud providers
+lc sync providers
+# or using alias
+lc sy p
+
+# 2. Configure S3 provider (interactive setup)
+lc sync configure s3 setup
+# or using aliases
+lc sy c s3 s
+
+# 3. Sync your configuration to cloud with encryption
+lc sync to s3 --encrypted
+# or using aliases
+lc sy to s3 -e
+
+# 4. Later, sync from cloud on another machine
+lc sync from s3 --encrypted
+# or using aliases
+lc sy from s3 -e
+```
+
+### Sync Features
+
+- **🌩️ Cloud Provider Support** - Currently supports Amazon S3 and S3-compatible services (Backblaze B2, Cloudflare R2, MinIO, etc.)
+- **🔐 AES256-GCM Encryption** - Optional strong encryption for secure cloud storage
+- **⚙️ Configuration Management** - Store provider credentials locally for easy reuse
+- **🔄 Cross-Platform** - Works seamlessly on macOS, Linux, and Windows
+- **📁 Automatic Discovery** - Syncs all `.toml` configuration files automatically
+- **🏷️ Multiple Aliases** - Short commands (`sy`, `c`, `p`) for faster usage
+
+### Sync Commands
+
+```bash
+# Provider management
+lc sync providers                        # List supported providers (alias: lc sy p)
+lc sync configure s3 setup               # Set up S3 configuration (alias: lc sy c s3 s)
+lc sync configure s3 show                # Show current configuration (alias: lc sy c s3 sh)
+lc sync configure s3 remove              # Remove configuration (alias: lc sy c s3 r)
+
+# Sync operations
+lc sync to s3                            # Sync to cloud (alias: lc sy to s3)
+lc sync to s3 --encrypted                # Sync with encryption (alias: lc sy to s3 -e)
+lc sync from s3                          # Sync from cloud (alias: lc sy from s3)
+lc sync from s3 --encrypted              # Sync with decryption (alias: lc sy from s3 -e)
+```
+
+### What Gets Synced
+
+The sync feature automatically discovers and syncs all `.toml` configuration files in your lc configuration directory:
+
+- `config.toml` - Main lc configuration (providers, API keys, defaults)
+- `mcp.toml` - MCP server configurations
+- `sync.toml` - Sync provider configurations
+- Any other `.toml` files in the config directory
+
+### Supported Cloud Providers
+
+#### Amazon S3
+Full support with three configuration methods (in priority order):
+
+1. **Stored Configuration** (Recommended):
+   ```bash
+   lc sync configure s3 setup
+   ```
+
+2. **Environment Variables**:
+   ```bash
+   export LC_S3_BUCKET=your-bucket-name
+   export LC_S3_REGION=us-east-1
+   export AWS_ACCESS_KEY_ID=your-access-key
+   export AWS_SECRET_ACCESS_KEY=your-secret-key
+   export LC_S3_ENDPOINT=https://s3.amazonaws.com  # Optional
+   ```
+
+3. **Interactive Prompts** (Fallback when no config/env vars found)
+
+#### S3-Compatible Services
+Supports any S3-compatible service by setting a custom endpoint:
+
+- **Backblaze B2**: `https://s3.us-west-004.backblazeb2.com`
+- **Cloudflare R2**: `https://your-account-id.r2.cloudflarestorage.com`
+- **MinIO**: `https://your-minio-server.com:9000`
+- **DigitalOcean Spaces**: `https://your-region.digitaloceanspaces.com`
+- **Wasabi**: `https://s3.your-region.wasabisys.com`
+
+### Encryption
+
+The sync feature uses **AES256-GCM encryption** for secure storage:
+
+- **Algorithm**: AES256-GCM (Galois/Counter Mode) with authentication
+- **Key Derivation**: PBKDF2 with SHA-256 and random salt
+- **Security**: Each file gets unique salt and nonce for maximum security
+- **Password**: You'll be prompted for a password during encryption/decryption
+- **File Names**: Encrypted files get `.enc` extension in cloud storage
+
+### Sync Configuration Storage
+
+Sync configurations are stored in platform-appropriate locations:
+
+| Platform | Sync Config File |
+|----------|------------------|
+| **Linux** | `~/.config/lc/sync.toml` |
+| **macOS** | `~/Library/Application Support/lc/sync.toml` |
+| **Windows** | `%APPDATA%\lc\sync.toml` |
+
+### Complete Sync Workflow Example
+
+```bash
+# 1. Set up S3 configuration
+lc sync configure s3 setup
+# Enter: bucket name, region, access key, secret key, endpoint (optional)
+
+# 2. Verify configuration
+lc sync configure s3 show
+
+# 3. Sync to cloud with encryption
+lc sync to s3 --encrypted
+# Enter encryption password when prompted
+
+# 4. On another machine, sync from cloud
+lc sync from s3 --encrypted
+# Enter the same decryption password
+
+# 5. Your configurations are now synchronized!
+```
+
+For detailed documentation, see [docs/SYNC_FEATURE.md](docs/SYNC_FEATURE.md).
 
 ## Usage Examples
 
@@ -723,6 +861,19 @@ lc logs current                          # Current session (alias: lc l c)
 lc logs stats                            # Database statistics (alias: lc l s)
 lc logs purge                            # Purge all logs (alias: lc l p)
 ```
+
+### Sync Commands
+```bash
+lc sync providers                        # List supported cloud providers (alias: lc sy p)
+lc sync configure <provider> setup       # Set up provider configuration (alias: lc sy c <provider> s)
+lc sync configure <provider> show        # Show current configuration (alias: lc sy c <provider> sh)
+lc sync configure <provider> remove      # Remove provider configuration (alias: lc sy c <provider> r)
+lc sync to <provider>                    # Sync configuration to cloud (alias: lc sy to <provider>)
+lc sync to <provider> --encrypted        # Sync with encryption (alias: lc sy to <provider> -e)
+lc sync from <provider>                  # Sync configuration from cloud (alias: lc sy from <provider>)
+lc sync from <provider> --encrypted      # Sync with decryption (alias: lc sy from <provider> -e)
+```
+
 ### Interactive Chat Mode
 
 Start an interactive chat session:

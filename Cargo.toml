@@ -47,6 +47,11 @@ simdeez = "2.0.0-dev5"
 hnsw_rs = "0.3"
 dashmap = "5.5"
 parking_lot = "0.12"
+# Sync feature dependencies
+aws-config = "1.1"
+aws-sdk-s3 = "1.15"
+aes-gcm = "0.10"
+base64 = "0.21"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

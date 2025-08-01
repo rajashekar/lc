@@ -260,6 +260,12 @@ pub enum Commands {
         #[command(subcommand)]
         command: WebChatProxyCommands,
     },
+    /// Sync configuration files to/from cloud providers (alias: sy)
+    #[command(alias = "sy")]
+    Sync {
+        #[command(subcommand)]
+        command: SyncCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -720,6 +726,50 @@ pub enum WebChatProxyKagiCommands {
     /// List available Kagi models (alias: m)
     #[command(alias = "m")]
     Models,
+}
+
+#[derive(Subcommand)]
+pub enum SyncCommands {
+    /// List supported cloud providers (alias: p)
+    #[command(alias = "p")]
+    Providers,
+    /// Configure cloud provider settings (alias: c)
+    #[command(alias = "c")]
+    Configure {
+        /// Cloud provider name (e.g., s3)
+        provider: String,
+        #[command(subcommand)]
+        command: Option<ConfigureCommands>,
+    },
+    /// Sync configuration to cloud provider
+    To {
+        /// Cloud provider name (e.g., s3)
+        provider: String,
+        /// Encrypt files before uploading
+        #[arg(short = 'e', long = "encrypted")]
+        encrypted: bool,
+    },
+    /// Sync configuration from cloud provider
+    From {
+        /// Cloud provider name (e.g., s3)
+        provider: String,
+        /// Decrypt files after downloading
+        #[arg(short = 'e', long = "encrypted")]
+        encrypted: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ConfigureCommands {
+    /// Set up provider configuration (alias: s)
+    #[command(alias = "s")]
+    Setup,
+    /// Show current provider configuration (alias: sh)
+    #[command(alias = "sh")]
+    Show,
+    /// Remove provider configuration (alias: r)
+    #[command(alias = "r")]
+    Remove,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -3877,6 +3927,24 @@ async fn handle_webchatproxy_list() -> Result<()> {
     }
     
     Ok(())
+}
+
+// Sync command handlers
+pub async fn handle_sync_command(command: SyncCommands) -> Result<()> {
+    match command {
+        SyncCommands::Providers => {
+            crate::sync::handle_sync_providers().await
+        }
+        SyncCommands::Configure { provider, command } => {
+            crate::sync::handle_sync_configure(&provider, command).await
+        }
+        SyncCommands::To { provider, encrypted } => {
+            crate::sync::handle_sync_to(&provider, encrypted).await
+        }
+        SyncCommands::From { provider, encrypted } => {
+            crate::sync::handle_sync_from(&provider, encrypted).await
+        }
+    }
 }
 
 // Include test module

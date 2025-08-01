@@ -13,6 +13,7 @@ mod mcp;
 mod mcp_daemon;
 mod vector_db;
 mod webchatproxy;
+mod sync;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
@@ -158,6 +159,9 @@ async fn main() -> Result<()> {
         }
         (true, Some(Commands::WebChatProxy { command })) => {
             cli::handle_webchatproxy_command(command).await?;
+        }
+        (true, Some(Commands::Sync { command })) => {
+            cli::handle_sync_command(command).await?;
         }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped
