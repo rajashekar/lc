@@ -7,9 +7,9 @@ pub enum SearchProviderType {
     Brave,
     Exa,
     Serper,
+    SerpApi,
     // Future providers
     // DuckDuckGo,
-    // SerpApi,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -42,13 +42,16 @@ impl SearchProviderType {
             Ok(SearchProviderType::Exa)
         } else if url_lower.contains("google.serper.dev") || url_lower.contains("serper.dev") {
             Ok(SearchProviderType::Serper)
+        } else if url_lower.contains("serpapi.com") {
+            Ok(SearchProviderType::SerpApi)
         } else {
             anyhow::bail!(
                 "Cannot auto-detect provider type from URL '{}'. \
                 Supported providers:\n\
                 - Brave: api.search.brave.com\n\
                 - Exa: api.exa.ai\n\
-                - Serper: google.serper.dev",
+                - Serper: google.serper.dev\n\
+                - SerpApi: serpapi.com",
                 url
             )
         }
@@ -60,6 +63,7 @@ impl SearchProviderType {
             SearchProviderType::Brave => "X-Subscription-Token",
             SearchProviderType::Exa => "x-api-key",
             SearchProviderType::Serper => "X-API-KEY",
+            SearchProviderType::SerpApi => "api_key",
         }
     }
 }

@@ -3,6 +3,7 @@ pub mod providers;
 pub mod brave;
 pub mod exa;
 pub mod serper;
+pub mod serpapi;
 pub mod search_result;
 
 use anyhow::Result;
@@ -39,6 +40,9 @@ impl SearchEngine {
             }
             SearchProviderType::Serper => {
                 serper::search(provider_config, query, count).await
+            }
+            SearchProviderType::SerpApi => {
+                serpapi::search(provider_config, query, count).await
             }
         }
     }
