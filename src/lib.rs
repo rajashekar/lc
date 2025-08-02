@@ -21,6 +21,7 @@ pub mod vector_db;
 pub mod webchatproxy;
 pub mod sync;
 pub mod search;
+pub mod readers;
 
 // Re-export commonly used types for easier access in tests
 pub use config::{Config, ProviderConfig, CachedToken};

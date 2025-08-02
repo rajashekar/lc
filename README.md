@@ -40,7 +40,8 @@ lc "What is the capital of France?"
 - 🔧 **Universal** - Works with any OpenAI-compatible API
 - 🧠 **Smart** - Built-in vector database and RAG support
 - 🛠️ **Tools** - Model Context Protocol (MCP) support for extending LLM capabilities
-- 🔍 **Web Search** - Integrated web search capabilities for enhanced context
+- 🔍 **Web Search** - Integrated web search with multiple providers (Brave, Exa, Serper) for enhanced context
+- 📄 **PDF Support** - Read and process PDF files with optional dependency
 - 🔐 **Secure** - Encrypted configuration sync
 - 💬 **Intuitive** - Simple commands with short aliases
 
@@ -130,21 +131,35 @@ lc --use-search "brave:quantum computing 2024" "Summarize the findings"
 `lc` supports web search integration to enhance prompts with real-time information:
 
 ```bash
-# Configure search provider
-lc search provider add brave https://api.search.brave.com/res/v1/web/search
+# Configure Brave Search
+lc search provider add brave https://api.search.brave.com/res/v1/web/search -t brave
 lc search provider set brave X-Subscription-Token YOUR_API_KEY
+
+# Configure Exa (AI-powered search)
+lc search provider add exa https://api.exa.ai -t exa
+lc search provider set exa x-api-key YOUR_API_KEY
+
+# Configure Serper (Google Search API)
+lc search provider add serper https://google.serper.dev -t serper
+lc search provider set serper X-API-KEY YOUR_API_KEY
 
 # Set default search provider
 lc config set search brave
 
 # Direct search
 lc search query brave "rust programming language" -f json
+lc search query exa "machine learning best practices" -n 10
+lc search query serper "latest AI developments" -f md
 
 # Use search results as context
 lc --use-search brave "What are the latest AI breakthroughs?"
+lc --use-search exa "Explain transformer architecture"
+lc --use-search serper "What are the current trends in quantum computing?"
 
 # Search with custom query
 lc --use-search "brave:specific search terms" "Analyze these results"
+lc --use-search "exa:neural networks 2024" "Summarize recent advances"
+lc --use-search "serper:GPT-4 alternatives 2024" "Compare the latest language models"
 ```
 
 ### Model Context Protocol (MCP)
@@ -166,6 +181,36 @@ lc chat -m gpt-4 -t fetch
 ```
 
 Learn more about MCP in our [documentation](https://lc.viwq.dev/advanced/mcp).
+
+### File Attachments and PDF Support
+
+`lc` can process and analyze various file types, including PDFs:
+
+```bash
+# Attach text files to your prompt
+lc -a document.txt "Summarize this document"
+
+# Process PDF files (requires PDF feature)
+lc -a report.pdf "What are the key findings in this report?"
+
+# Multiple file attachments
+lc -a file1.txt -a data.pdf -a config.json "Analyze these files"
+
+# Combine with other features
+lc -a research.pdf -v knowledge "Compare this with existing knowledge"
+```
+
+**Note:** PDF support requires the `pdf` feature (enabled by default). To build without PDF support:
+
+```bash
+cargo build --release --no-default-features
+```
+
+To explicitly enable PDF support:
+
+```bash
+cargo build --release --features pdf
+```
 
 ## Contributing
 

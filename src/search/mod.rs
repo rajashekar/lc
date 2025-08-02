@@ -1,6 +1,8 @@
 pub mod config;
 pub mod providers;
 pub mod brave;
+pub mod exa;
+pub mod serper;
 pub mod search_result;
 
 use anyhow::Result;
@@ -32,7 +34,12 @@ impl SearchEngine {
             SearchProviderType::Brave => {
                 brave::search(provider_config, query, count).await
             }
-            // Future providers will be added here
+            SearchProviderType::Exa => {
+                exa::search(provider_config, query, count).await
+            }
+            SearchProviderType::Serper => {
+                serper::search(provider_config, query, count).await
+            }
         }
     }
 

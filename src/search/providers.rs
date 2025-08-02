@@ -5,9 +5,10 @@ use std::collections::HashMap;
 #[serde(rename_all = "lowercase")]
 pub enum SearchProviderType {
     Brave,
+    Exa,
+    Serper,
     // Future providers
     // DuckDuckGo,
-    // Serper,
     // SerpApi,
 }
 
@@ -20,6 +21,7 @@ pub struct SearchProviderConfig {
 }
 
 impl SearchProviderConfig {
+    #[allow(dead_code)]
     pub fn new(url: String, provider_type: SearchProviderType) -> Self {
         Self {
             url,
@@ -29,6 +31,40 @@ impl SearchProviderConfig {
     }
 }
 
+impl SearchProviderType {
+    /// Auto-detect provider type from URL
+    pub fn detect_from_url(url: &str) -> anyhow::Result<Self> {
+        let url_lower = url.to_lowercase();
+        
+        if url_lower.contains("api.search.brave.com") {
+            Ok(SearchProviderType::Brave)
+        } else if url_lower.contains("api.exa.ai") || url_lower.contains("exa.ai") {
+            Ok(SearchProviderType::Exa)
+        } else if url_lower.contains("google.serper.dev") || url_lower.contains("serper.dev") {
+            Ok(SearchProviderType::Serper)
+        } else {
+            anyhow::bail!(
+                "Cannot auto-detect provider type from URL '{}'. \
+                Supported providers:\n\
+                - Brave: api.search.brave.com\n\
+                - Exa: api.exa.ai\n\
+                - Serper: google.serper.dev",
+                url
+            )
+        }
+    }
+    
+    /// Get the correct API key header name for this provider type
+    pub fn api_key_header(&self) -> &'static str {
+        match self {
+            SearchProviderType::Brave => "X-Subscription-Token",
+            SearchProviderType::Exa => "x-api-key",
+            SearchProviderType::Serper => "X-API-KEY",
+        }
+    }
+}
+
+#[allow(dead_code)]
 pub trait SearchProvider {
     fn name(&self) -> &str;
     fn search(&self, query: &str, count: Option<usize>) -> impl std::future::Future<Output = anyhow::Result<super::SearchResults>> + Send;

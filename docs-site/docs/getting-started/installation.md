@@ -40,7 +40,11 @@ cd lc
 2. Build the release binary:
 
 ```bash
+# Full build with all features (including PDF support)
 cargo build --release
+
+# Or build without PDF support to reduce dependencies
+cargo build --release --no-default-features
 ```
 
 3. The binary will be available at `target/release/lc`
@@ -121,6 +125,43 @@ LLM Client stores its configuration and data in platform-specific locations:
 | **Windows** | `%APPDATA%\lc\` |
 
 These directories are created automatically on first run.
+
+## Feature Flags
+
+LLM Client supports several optional features that can be enabled or disabled at build time:
+
+### Available Features
+
+- **`pdf`** (enabled by default) - PDF file processing support
+  - Adds the ability to read and analyze PDF files using the `-a` flag
+  - Requires additional dependencies for PDF parsing
+
+### Building with Specific Features
+
+```bash
+# Build with all default features (includes PDF support)
+cargo build --release
+
+# Build without any optional features
+cargo build --release --no-default-features
+
+# Build with specific features only
+cargo build --release --no-default-features --features pdf
+
+# Build for distribution (smaller binary without PDF support)
+cargo build --release --no-default-features
+```
+
+### Binary Distribution Options
+
+When distributing `lc`, you can choose between:
+
+1. **Full binary** (`lc-full`) - Includes PDF support and all features
+2. **Minimal binary** (`lc`) - Excludes optional dependencies for smaller size
+
+This allows users to choose based on their needs:
+- Use the full binary if you need PDF processing capabilities
+- Use the minimal binary for faster downloads and reduced disk usage
 
 ## Next Steps
 

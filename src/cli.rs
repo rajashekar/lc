@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
-use crate::{config, chat, database};
+use crate::{config, chat, database, readers};
 use colored::Colorize;
 use rpassword::read_password;
 use std::io::{self, Write};
@@ -29,7 +29,7 @@ pub fn set_debug_mode(enabled: bool) {
 
 #[derive(Parser)]
 #[command(name = "lc")]
-#[command(about = "LLM Client - A fast Rust-based LLM CLI tool")]
+#[command(about = "LLM Client - A fast Rust-based LLM CLI tool with PDF support and RAG capabilities")]
 #[command(version = "0.1.0")]
 pub struct Cli {
     /// Direct prompt to send to the default model
@@ -56,7 +56,7 @@ pub struct Cli {
     #[arg(long = "temperature")]
     pub temperature: Option<String>,
     
-    /// Attach file(s) to the prompt
+    /// Attach file(s) to the prompt (supports text files, PDFs with 'pdf' feature)
     #[arg(short = 'a', long = "attach")]
     pub attachments: Vec<String>,
     
@@ -226,7 +226,7 @@ pub enum Commands {
         /// Vector database name to store embeddings
         #[arg(short = 'v', long = "vectordb")]
         database: Option<String>,
-        /// Files to embed (supports glob patterns)
+        /// Files to embed (supports glob patterns, including PDFs with 'pdf' feature)
         #[arg(short = 'f', long = "files")]
         files: Vec<String>,
         /// Text to embed (optional if files are provided)
@@ -1731,29 +1731,42 @@ pub fn read_and_format_attachments(attachments: &[String]) -> Result<String> {
     let mut formatted_content = String::new();
     
     for (i, file_path) in attachments.iter().enumerate() {
-        match std::fs::read_to_string(file_path) {
-            Ok(content) => {
-                if i > 0 {
-                    formatted_content.push_str("\n\n");
-                }
-                
-                // Determine file extension for better formatting
-                let extension = std::path::Path::new(file_path)
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .unwrap_or("");
-                
-                formatted_content.push_str(&format!("=== File: {} ===\n", file_path));
-                
-                // Add language hint for code files
-                if !extension.is_empty() && is_code_file(extension) {
-                    formatted_content.push_str(&format!("```{}\n{}\n```", extension, content));
-                } else {
+        if i > 0 {
+            formatted_content.push_str("\n\n");
+        }
+        
+        // Determine file extension for better formatting
+        let extension = std::path::Path::new(file_path)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("");
+        
+        formatted_content.push_str(&format!("=== File: {} ===\n", file_path));
+        
+        // Check if we have a specialized reader for this file type
+        if let Some(reader) = readers::get_reader_for_extension(extension) {
+            match reader.read_as_text(file_path) {
+                Ok(content) => {
                     formatted_content.push_str(&content);
                 }
+                Err(e) => {
+                    anyhow::bail!("Failed to read file '{}' with specialized reader: {}", file_path, e);
+                }
             }
-            Err(e) => {
-                anyhow::bail!("Failed to read file '{}': {}", file_path, e);
+        } else {
+            // Fallback to regular text file reading for unsupported types
+            match std::fs::read_to_string(file_path) {
+                Ok(content) => {
+                    // Add language hint for code files
+                    if !extension.is_empty() && is_code_file(extension) {
+                        formatted_content.push_str(&format!("```{}\n{}\n```", extension, content));
+                    } else {
+                        formatted_content.push_str(&content);
+                    }
+                }
+                Err(e) => {
+                    anyhow::bail!("Failed to read file '{}': {}", file_path, e);
+                }
             }
         }
     }
@@ -4120,14 +4133,28 @@ async fn handle_search_provider_command(command: SearchProviderCommands) -> Resu
         SearchProviderCommands::Add { name, url } => {
             let mut config = crate::search::SearchConfig::load()?;
             
-            // For now, we only support Brave
-            config.add_provider(name.clone(), url.clone(), crate::search::SearchProviderType::Brave)?;
-            config.save()?;
-            
-            println!("{} Search provider '{}' added successfully", "✓".green(), name);
-            println!("  URL: {}", url);
-            println!("\n{} Don't forget to set the API key:", "💡".yellow());
-            println!("  lc search provider set {} X-Subscription-Token <your-api-key>", name);
+            // Auto-detect provider type from URL
+            match config.add_provider_auto(name.clone(), url.clone()) {
+                Ok(_) => {
+                    config.save()?;
+                    
+                    // Get the detected provider type for display
+                    let provider_config = config.get_provider(&name)?;
+                    let provider_type = &provider_config.provider_type;
+                    
+                    println!("{} Search provider '{}' added successfully", "✓".green(), name);
+                    println!("  Type: {} (auto-detected)", format!("{:?}", provider_type).to_lowercase());
+                    println!("  URL: {}", url);
+                    
+                    // Provider-specific instructions using the new API key header method
+                    let api_key_header = provider_type.api_key_header();
+                    println!("\n{} Don't forget to set the API key:", "💡".yellow());
+                    println!("  lc search provider set {} {} <your-api-key>", name, api_key_header);
+                }
+                Err(e) => {
+                    anyhow::bail!("Failed to add search provider: {}", e);
+                }
+            }
         }
         SearchProviderCommands::Delete { name } => {
             let mut config = crate::search::SearchConfig::load()?;
@@ -4155,7 +4182,9 @@ async fn handle_search_provider_command(command: SearchProviderCommands) -> Resu
                 
                 for (name, provider_config) in providers {
                     let has_auth = provider_config.headers.contains_key("X-Subscription-Token") ||
-                                  provider_config.headers.contains_key("Authorization");
+                                  provider_config.headers.contains_key("Authorization") ||
+                                  provider_config.headers.contains_key("x-api-key") ||
+                                  provider_config.headers.contains_key("X-API-KEY");
                     let auth_status = if has_auth { "✓".green() } else { "✗".red() };
                     
                     println!("  {} {} - {} (Auth: {})",

@@ -1,6 +1,6 @@
 - Make sure documentation works
-- Support search
-- Support Amazon, deepseek, alibaba models
+- Support search ✓ (Brave and Exa providers implemented)
+- Support Amazon, alibaba, azure, vertex ai models
 - Support lc serve
 - Check images
 - Check audio
@@ -9,3 +9,4 @@
 - Add support to sync db to cloud
 - provide sample config.toml
 - make sure package works with brew, linux, windows
+- clean up code

@@ -40,7 +40,20 @@ pub async fn search(
         .timeout(std::time::Duration::from_secs(30))
         .build()?;
 
-    let mut url = reqwest::Url::parse(&provider_config.url)?;
+    // The provider_config.url should be the complete search endpoint URL
+    // For Brave, it should be https://api.search.brave.com/res/v1/web/search
+    let base_url = provider_config.url.trim_end_matches('/');
+    let search_url = if base_url.ends_with("/web/search") {
+        // URL already includes the endpoint path
+        base_url.to_string()
+    } else if base_url.ends_with("/res/v1") {
+        // URL is just the base, append the endpoint
+        format!("{}/web/search", base_url)
+    } else {
+        // Assume it's a complete URL or handle as-is
+        base_url.to_string()
+    };
+    let mut url = reqwest::Url::parse(&search_url)?;
     url.query_pairs_mut()
         .append_pair("q", query)
         .append_pair("count", &count.unwrap_or(5).to_string());
@@ -56,13 +69,19 @@ pub async fn search(
     let response = request.send().await?;
     let search_time_ms = start_time.elapsed().as_millis() as u64;
 
+    let status = response.status();
+
     if !response.status().is_success() {
-        let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
         anyhow::bail!("Brave search API error ({}): {}", status, error_text);
     }
 
-    let brave_response: BraveSearchResponse = response.json().await?;
+    // Get the response text first to debug
+    let response_text = response.text().await?;
+    
+    // Try to parse as JSON
+    let brave_response: BraveSearchResponse = serde_json::from_str(&response_text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse JSON response: {}. Response was: '{}'", e, response_text))?;
     
     let mut results = SearchResults::new(query.to_string(), "brave".to_string());
     results.set_search_time(search_time_ms);

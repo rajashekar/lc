@@ -1,0 +1,192 @@
+.TH LC 1 "December 2024" "lc 0.1.0" "User Commands"
+.SH NAME
+lc \- LLM Client - A fast Rust-based LLM CLI tool with PDF support and RAG capabilities
+.SH SYNOPSIS
+.B lc
+[\fIOPTIONS\fR] [\fIPROMPT\fR]
+.PP
+.B lc
+\fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+.B lc
+is a lightning-fast command-line interface for interacting with Large Language Models through OpenAI-compatible APIs. It provides advanced features including PDF file processing, vector database integration for RAG (Retrieval-Augmented Generation), web search integration, and Model Context Protocol (MCP) support for extending LLM capabilities.
+.SH OPTIONS
+.TP
+.BR \-a ", " \-\-attach " " \fIFILE\fR
+Attach file(s) to the prompt. Supports text files and PDFs (when compiled with 'pdf' feature). Can be specified multiple times.
+.TP
+.BR \-m ", " \-\-model " " \fIMODEL\fR
+Specify the model to use. Can be in format "provider:model" or an alias.
+.TP
+.BR \-p ", " \-\-provider " " \fIPROVIDER\fR
+Specify the provider to use for the prompt.
+.TP
+.BR \-s ", " \-\-system " " \fIPROMPT\fR
+Set a system prompt to use with the direct prompt.
+.TP
+.BR \-t ", " \-\-tools " " \fISERVERS\fR
+Include tools from MCP server(s). Comma-separated server names.
+.TP
+.BR \-v ", " \-\-vectordb " " \fIDATABASE\fR
+Vector database name for RAG (Retrieval-Augmented Generation).
+.TP
+.BR \-c ", " \-\-continue
+Continue the current session (use existing session ID).
+.TP
+.BR \-d ", " \-\-debug
+Enable debug/verbose logging.
+.TP
+.BR \-\-cid " " \fIID\fR
+Chat ID to use or continue (alternative to --continue).
+.TP
+.BR \-\-max\-tokens " " \fINUMBER\fR
+Max tokens override (supports 'k' suffix, e.g., '2k' for 2000).
+.TP
+.BR \-\-temperature " " \fINUMBER\fR
+Temperature override (0.0 to 2.0).
+.TP
+.BR \-\-use\-search " " \fISPEC\fR
+Use search results as context. Format: provider or provider:query.
+.TP
+.BR \-h ", " \-\-help
+Print help information.
+.TP
+.BR \-V ", " \-\-version
+Print version information.
+.SH COMMANDS
+.TP
+.BR providers " (alias: " p ")"
+Provider management commands. Add, remove, list, and configure LLM providers.
+.TP
+.BR keys " (alias: " k ")"
+API key management. Add, remove, and list API keys for providers.
+.TP
+.BR config " (alias: " co ")"
+Configuration management. Set default provider, model, system prompt, etc.
+.TP
+.BR chat " (alias: " c ")"
+Interactive chat mode with persistent sessions.
+.TP
+.BR models " (alias: " m ")"
+Global models management with filtering and search capabilities.
+.TP
+.BR embed " (alias: " e ")"
+Generate embeddings for text or files and store in vector databases.
+.TP
+.BR similar " (alias: " s ")"
+Find similar text using vector similarity search.
+.TP
+.BR vectors " (alias: " v ")"
+Vector database management.
+.TP
+.BR mcp
+Model Context Protocol server management for extending LLM capabilities.
+.TP
+.BR search " (alias: " se ")"
+Search provider management and web search functionality.
+.TP
+.BR sync " (alias: " sy ")"
+Configuration sync to/from cloud providers with encryption support.
+.TP
+.BR logs " (alias: " l ")"
+Log management and statistics.
+.TP
+.BR alias " (alias: " a ")"
+Model alias management for easier model references.
+.TP
+.BR templates " (alias: " t ")"
+Template management for reusable prompts.
+.TP
+.BR proxy " (alias: " pr ")"
+Start an OpenAI-compatible proxy server.
+.SH PDF SUPPORT
+.B lc
+includes optional PDF processing capabilities when compiled with the 'pdf' feature (enabled by default). This allows you to:
+.PP
+.RS
+\- Attach PDF files to prompts using the \-a/\-\-attach flag
+.br
+\- Process PDF content for embedding into vector databases
+.br
+\- Use PDFs in RAG workflows for enhanced context
+.RE
+.PP
+If PDF support is not needed, the tool can be compiled without this feature to reduce dependencies:
+.PP
+.RS
+cargo build \-\-release \-\-no\-default\-features
+.RE
+.SH EXAMPLES
+.TP
+Direct prompt with a model:
+.B lc -m openai:gpt-4 "What is the capital of France?"
+.TP
+Attach a PDF file to your prompt:
+.B lc -a report.pdf "Summarize this document"
+.TP
+Interactive chat session:
+.B lc chat -m anthropic:claude-3.5-sonnet
+.TP
+Create embeddings from files:
+.B lc embed -m openai:text-embedding-3-small -v knowledge -f "*.txt"
+.TP
+RAG-enhanced prompt:
+.B lc -v knowledge "What do you know about this topic?"
+.TP
+Use MCP tools:
+.B lc -t fetch "What's the latest news about AI?"
+.TP
+Web search integration:
+.B lc --use-search brave "Latest quantum computing developments"
+.TP
+Multiple file attachments:
+.B lc -a file1.txt -a data.pdf -a config.json "Analyze these files"
+.SH CONFIGURATION
+Configuration files are stored in platform-specific locations:
+.PP
+.RS
+Linux: ~/.config/lc/
+.br
+macOS: ~/Library/Application Support/lc/
+.br
+Windows: %APPDATA%\\lc\\
+.RE
+.PP
+Key files include:
+.PP
+.RS
+config.toml - Main configuration file
+.br
+logs.db - Chat history and logs
+.br
+mcp.toml - MCP server configurations
+.br
+search.toml - Search provider configurations
+.RE
+.SH FEATURES
+.TP
+.B PDF Processing
+Native support for reading and processing PDF files with optional dependencies.
+.TP
+.B Vector Database & RAG
+Built-in vector database with similarity search for Retrieval-Augmented Generation.
+.TP
+.B MCP Integration
+Model Context Protocol support for extending LLM capabilities with external tools.
+.TP
+.B Web Search
+Integrated web search with multiple providers (Brave, Exa) for enhanced context.
+.TP
+.B Provider Agnostic
+Works with any OpenAI-compatible API, including Anthropic, Google Gemini, and more.
+.TP
+.B High Performance
+Lightning-fast ~3ms cold start time, 50x faster than Python alternatives.
+.SH SEE ALSO
+Full documentation is available at https://lc.viwq.dev
+.SH AUTHOR
+Written by Rajashekar Chintalapati.
+.SH REPORTING BUGS
+Report bugs and feature requests at the project repository.
+.SH COPYRIGHT
+Copyright © 2024. Licensed under the MIT License.

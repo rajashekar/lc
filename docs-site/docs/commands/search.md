@@ -12,7 +12,7 @@ The `search` command allows you to integrate web search capabilities into your L
 lc search [SUBCOMMAND]
 ```
 
-The search functionality supports multiple search providers (currently Brave Search) and can be used both as a standalone search tool and integrated into your LLM prompts.
+The search functionality supports multiple search providers (currently Brave Search, Exa, and Serper) and can be used both as a standalone search tool and integrated into your LLM prompts.
 
 ## Subcommands
 
@@ -21,17 +21,27 @@ The search functionality supports multiple search providers (currently Brave Sea
 #### Add a Search Provider
 
 ```bash
-lc search provider add <NAME> <URL>
+lc search provider add <NAME> <URL> [-t <TYPE>]
 # or
-lc search p a <NAME> <URL>
+lc search p a <NAME> <URL> [-t <TYPE>]
 ```
 
 Add a new search provider with the specified API endpoint.
 
-**Example:**
+**Options:**
+- `-t, --type <TYPE>`: Provider type (`brave`, `exa`, or `serper`, default: `brave`)
+
+**Examples:**
 
 ```bash
-lc search provider add brave https://api.search.brave.com/res/v1/web/search
+# Add Brave Search
+lc search provider add brave https://api.search.brave.com/res/v1/web/search -t brave
+
+# Add Exa Search
+lc search provider add exa https://api.exa.ai -t exa
+
+# Add Serper (Google Search API)
+lc search provider add serper https://google.serper.dev -t serper
 ```
 
 #### List Search Providers
@@ -64,10 +74,17 @@ lc search p s <PROVIDER> <HEADER_NAME> <HEADER_VALUE>
 
 Configure authentication headers for a search provider.
 
-**Example:**
+**Examples:**
 
 ```bash
+# For Brave Search
 lc search provider set brave X-Subscription-Token YOUR_API_KEY
+
+# For Exa
+lc search provider set exa x-api-key YOUR_API_KEY
+
+# For Serper
+lc search provider set serper X-API-KEY YOUR_API_KEY
 ```
 
 ### Direct Search
@@ -158,13 +175,13 @@ lc config get search
 lc config delete search
 ```
 
-## Complete Setup Example
+## Complete Setup Examples
 
-Here's a complete example of setting up and using Brave Search:
+### Brave Search Setup
 
 ```bash
 # 1. Add Brave as a search provider
-lc search provider add brave https://api.search.brave.com/res/v1/web/search
+lc search provider add brave https://api.search.brave.com/res/v1/web/search -t brave
 
 # 2. Set your API key
 lc search provider set brave X-Subscription-Token YOUR_BRAVE_API_KEY
@@ -182,6 +199,50 @@ lc --use-search brave "What are the latest AI safety developments?"
 lc --use-search "brave:AI safety research 2024" "Provide a comprehensive summary"
 ```
 
+### Exa Setup
+
+```bash
+# 1. Add Exa as a search provider
+lc search provider add exa https://api.exa.ai -t exa
+
+# 2. Set your API key
+lc search provider set exa x-api-key YOUR_EXA_API_KEY
+
+# 3. Set as default provider (optional)
+lc config set search exa
+
+# 4. Test direct search
+lc search query exa "machine learning best practices" -f json
+
+# 5. Use in LLM prompts
+lc --use-search exa "What are the latest developments in neural networks?"
+
+# 6. Use with custom search query
+lc --use-search "exa:transformer architecture improvements 2024" "Explain the recent advances"
+```
+
+### Serper Setup
+
+```bash
+# 1. Add Serper as a search provider
+lc search provider add serper https://google.serper.dev -t serper
+
+# 2. Set your API key
+lc search provider set serper X-API-KEY YOUR_SERPER_API_KEY
+
+# 3. Set as default provider (optional)
+lc config set search serper
+
+# 4. Test direct search
+lc search query serper "latest AI developments" -f json
+
+# 5. Use in LLM prompts
+lc --use-search serper "What are the current trends in artificial intelligence?"
+
+# 6. Use with custom search query
+lc --use-search "serper:GPT-4 alternatives 2024" "Compare the latest language models"
+```
+
 ## Supported Providers
 
 Currently supported search providers:
@@ -189,11 +250,23 @@ Currently supported search providers:
 - **Brave Search**: Fast, independent search engine with good API support
   - API Documentation: [Brave Search API](https://brave.com/search/api/)
   - Requires API key (subscription required)
+  - Header: `X-Subscription-Token`
+
+- **Exa**: AI-powered search engine optimized for finding high-quality, relevant content
+  - API Documentation: [Exa API](https://exa.ai/)
+  - Requires API key
+  - Header: `x-api-key`
+  - Features: Neural search, content extraction, similarity search
+
+- **Serper**: Google Search API providing comprehensive search results
+  - API Documentation: [Serper API](https://serper.dev/)
+  - Requires API key
+  - Header: `X-API-KEY`
+  - Features: Google search results, rich snippets, comprehensive metadata
 
 Future providers may include:
 
 - DuckDuckGo
-- Serper
 - SerpAPI
 - Google Custom Search
 - Bing Search

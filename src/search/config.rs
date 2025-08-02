@@ -64,6 +64,12 @@ impl SearchConfig {
         Ok(())
     }
 
+    /// Add provider with auto-detected type from URL
+    pub fn add_provider_auto(&mut self, name: String, url: String) -> Result<()> {
+        let provider_type = SearchProviderType::detect_from_url(&url)?;
+        self.add_provider(name, url, provider_type)
+    }
+
     pub fn delete_provider(&mut self, name: &str) -> Result<()> {
         if self.providers.remove(name).is_none() {
             anyhow::bail!("Search provider '{}' not found", name);

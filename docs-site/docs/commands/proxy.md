@@ -16,10 +16,10 @@ The command is essential for setting up and managing network proxies, offering c
 
 ```bash
 # Start the proxy with default settings
-dl lc proxy --provider openai --model gpt-3.5-turbo
+lc proxy --provider openai --model gpt-3.5-turbo
 
 # Specify a different host and port
-dl lc proxy --host 0.0.0.0 --port 8000
+lc proxy --host 0.0.0.0 --port 8000
 
 # Use short flags
 lc proxy --provider openai -m gpt-3.5-turbo

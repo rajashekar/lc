@@ -15,6 +15,7 @@ mod vector_db;
 mod webchatproxy;
 mod sync;
 mod search;
+mod readers;
 
 use anyhow::Result;
 use cli::{Cli, Commands};

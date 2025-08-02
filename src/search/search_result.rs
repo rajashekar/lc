@@ -39,6 +39,7 @@ impl SearchResults {
         self.results.push(result);
     }
 
+    #[allow(dead_code)]
     pub fn set_total_results(&mut self, total: u64) {
         self.total_results = Some(total);
     }
