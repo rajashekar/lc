@@ -185,15 +185,27 @@ lc c -m gpt-4 -t fetch
 ### Search Integration Workflow
 
 ```bash
-# Add search provider
+# Add search providers (auto-detected from URL)
 lc search provider add brave https://api.search.brave.com/res/v1/web/search
+lc search provider add ddg https://api.duckduckgo.com/  # Free option!
+lc search provider add jina https://s.jina.ai/
+
+# Set API keys (DuckDuckGo doesn't need one)
 lc search provider set brave X-Subscription-Token YOUR_API_KEY
+lc search provider set jina Authorization YOUR_API_KEY
 
 # Direct search
 lc search query brave "latest AI news" -f json
+lc search query ddg "free search query" -f json
+
+# Advanced Jina features
+lc search provider set jina X-Engine direct  # Enable full content reading
+lc search query jina "comprehensive topic" -f json
 
 # Use in prompts
 lc --use-search brave "What's happening in AI today?"
+lc --use-search ddg "Free search integration test"
+lc --use-search jina "Research with full content"
 ```
 
 ## Getting Help

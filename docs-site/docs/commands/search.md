@@ -4,7 +4,7 @@ sidebar_position: 17
 
 # Search Commands
 
-The `search` command allows you to integrate web search capabilities into your LLM prompts, providing real-time information and context.
+The `search` command allows you to integrate web search capabilities into your LLM prompts, providing real-time information and context from 6 different search providers.
 
 ## Overview
 
@@ -12,7 +12,18 @@ The `search` command allows you to integrate web search capabilities into your L
 lc search [SUBCOMMAND]
 ```
 
-The search functionality supports multiple search providers (currently Brave Search, Exa, and Serper) and can be used both as a standalone search tool and integrated into your LLM prompts.
+The search functionality supports **6 search providers** with automatic type detection and can be used both as a standalone search tool and integrated into your LLM prompts.
+
+## Supported Search Providers
+
+| Provider | URL Pattern | API Key Required | Special Features |
+|----------|-------------|------------------|------------------|
+| **Brave** | `api.search.brave.com` | ✅ Yes | Fast, independent search |
+| **Exa** | `api.exa.ai` | ✅ Yes | AI-powered neural search |
+| **Serper** | `google.serper.dev` | ✅ Yes | Google search results |
+| **SerpApi** | `serpapi.com` | ✅ Yes | Rich metadata, comprehensive results |
+| **DuckDuckGo** | `api.duckduckgo.com` | ❌ **Free** | No API key needed |
+| **Jina AI** | `s.jina.ai` | ✅ Yes | AI search + full content reading |
 
 ## Subcommands
 
@@ -21,27 +32,33 @@ The search functionality supports multiple search providers (currently Brave Sea
 #### Add a Search Provider
 
 ```bash
-lc search provider add <NAME> <URL> [-t <TYPE>]
+lc search provider add <NAME> <URL>
 # or
-lc search p a <NAME> <URL> [-t <TYPE>]
+lc search p a <NAME> <URL>
 ```
 
-Add a new search provider with the specified API endpoint.
-
-**Options:**
-- `-t, --type <TYPE>`: Provider type (`brave`, `exa`, or `serper`, default: `brave`)
+Add a new search provider with **automatic type detection** from the URL pattern.
 
 **Examples:**
 
 ```bash
-# Add Brave Search
-lc search provider add brave https://api.search.brave.com/res/v1/web/search -t brave
+# Add Brave Search (auto-detected as 'brave')
+lc search provider add brave https://api.search.brave.com/res/v1/web/search
 
-# Add Exa Search
-lc search provider add exa https://api.exa.ai -t exa
+# Add Exa Search (auto-detected as 'exa')
+lc search provider add exa https://api.exa.ai/search
 
-# Add Serper (Google Search API)
-lc search provider add serper https://google.serper.dev -t serper
+# Add Serper (auto-detected as 'serper')
+lc search provider add serper https://google.serper.dev/search
+
+# Add SerpApi (auto-detected as 'serpapi')
+lc search provider add serpapi https://serpapi.com/search
+
+# Add DuckDuckGo (auto-detected as 'duckduckgo')
+lc search provider add ddg https://api.duckduckgo.com/
+
+# Add Jina AI (auto-detected as 'jina')
+lc search provider add jina https://s.jina.ai/
 ```
 
 #### List Search Providers
@@ -72,20 +89,7 @@ lc search provider set <PROVIDER> <HEADER_NAME> <HEADER_VALUE>
 lc search p s <PROVIDER> <HEADER_NAME> <HEADER_VALUE>
 ```
 
-Configure authentication headers for a search provider.
-
-**Examples:**
-
-```bash
-# For Brave Search
-lc search provider set brave X-Subscription-Token YOUR_API_KEY
-
-# For Exa
-lc search provider set exa x-api-key YOUR_API_KEY
-
-# For Serper
-lc search provider set serper X-API-KEY YOUR_API_KEY
-```
+Configure authentication headers and options for a search provider.
 
 ### Direct Search
 
@@ -107,10 +111,10 @@ Perform a direct search using the specified provider.
 lc search query brave "rust programming language"
 
 # JSON output
-lc search query brave "quantum computing" -f json
+lc search query jina "quantum computing" -f json
 
 # Get 10 results
-lc search query brave "AI research papers" -n 10
+lc search query ddg "AI research papers" -n 10
 ```
 
 ## Integration with LLM Prompts
@@ -130,7 +134,7 @@ lc --use-search <PROVIDER> "Your prompt here"
 lc --use-search brave "What are the latest developments in quantum computing?"
 
 # Specify custom search query
-lc --use-search "brave:quantum computing 2024" "Summarize the recent breakthroughs"
+lc --use-search "jina:quantum computing 2024" "Summarize the recent breakthroughs"
 ```
 
 ### Search Query Formats
@@ -180,8 +184,8 @@ lc config delete search
 ### Brave Search Setup
 
 ```bash
-# 1. Add Brave as a search provider
-lc search provider add brave https://api.search.brave.com/res/v1/web/search -t brave
+# 1. Add Brave as a search provider (auto-detected)
+lc search provider add brave https://api.search.brave.com/res/v1/web/search
 
 # 2. Set your API key
 lc search provider set brave X-Subscription-Token YOUR_BRAVE_API_KEY
@@ -194,137 +198,278 @@ lc search query brave "OpenAI GPT-4" -f json
 
 # 5. Use in LLM prompts
 lc --use-search brave "What are the latest AI safety developments?"
-
-# 6. Use with custom search query
-lc --use-search "brave:AI safety research 2024" "Provide a comprehensive summary"
 ```
 
 ### Exa Setup
 
 ```bash
-# 1. Add Exa as a search provider
-lc search provider add exa https://api.exa.ai -t exa
+# 1. Add Exa as a search provider (auto-detected)
+lc search provider add exa https://api.exa.ai/search
 
 # 2. Set your API key
 lc search provider set exa x-api-key YOUR_EXA_API_KEY
 
-# 3. Set as default provider (optional)
-lc config set search exa
-
-# 4. Test direct search
+# 3. Test direct search
 lc search query exa "machine learning best practices" -f json
 
-# 5. Use in LLM prompts
+# 4. Use in LLM prompts
 lc --use-search exa "What are the latest developments in neural networks?"
-
-# 6. Use with custom search query
-lc --use-search "exa:transformer architecture improvements 2024" "Explain the recent advances"
 ```
 
 ### Serper Setup
 
 ```bash
-# 1. Add Serper as a search provider
-lc search provider add serper https://google.serper.dev -t serper
+# 1. Add Serper as a search provider (auto-detected)
+lc search provider add serper https://google.serper.dev/search
 
 # 2. Set your API key
 lc search provider set serper X-API-KEY YOUR_SERPER_API_KEY
 
-# 3. Set as default provider (optional)
-lc config set search serper
-
-# 4. Test direct search
+# 3. Test direct search
 lc search query serper "latest AI developments" -f json
 
-# 5. Use in LLM prompts
+# 4. Use in LLM prompts
 lc --use-search serper "What are the current trends in artificial intelligence?"
-
-# 6. Use with custom search query
-lc --use-search "serper:GPT-4 alternatives 2024" "Compare the latest language models"
 ```
 
-## Supported Providers
+### SerpApi Setup
 
-Currently supported search providers:
+```bash
+# 1. Add SerpApi as a search provider (auto-detected)
+lc search provider add serpapi https://serpapi.com/search
 
-- **Brave Search**: Fast, independent search engine with good API support
-  - API Documentation: [Brave Search API](https://brave.com/search/api/)
-  - Requires API key (subscription required)
-  - Header: `X-Subscription-Token`
+# 2. Set your API key
+lc search provider set serpapi api_key YOUR_SERPAPI_KEY
 
-- **Exa**: AI-powered search engine optimized for finding high-quality, relevant content
-  - API Documentation: [Exa API](https://exa.ai/)
-  - Requires API key
-  - Header: `x-api-key`
-  - Features: Neural search, content extraction, similarity search
+# 3. Test direct search
+lc search query serpapi "machine learning research 2024" -f json
 
-- **Serper**: Google Search API providing comprehensive search results
-  - API Documentation: [Serper API](https://serper.dev/)
-  - Requires API key
-  - Header: `X-API-KEY`
-  - Features: Google search results, rich snippets, comprehensive metadata
+# 4. Use in LLM prompts
+lc --use-search serpapi "Summarize recent ML breakthroughs"
+```
 
-Future providers may include:
+### DuckDuckGo Setup (Free!)
 
-- DuckDuckGo
-- SerpAPI
-- Google Custom Search
-- Bing Search
+```bash
+# 1. Add DuckDuckGo as a search provider (auto-detected)
+lc search provider add ddg https://api.duckduckgo.com/
+
+# 2. No API key required! ✅
+
+# 3. Test direct search
+lc search query ddg "rust programming tutorials" -f json
+
+# 4. Use in LLM prompts
+lc --use-search ddg "What are good resources for learning Rust?"
+```
+
+### Jina AI Setup (Advanced Features)
+
+```bash
+# 1. Add Jina AI as a search provider (auto-detected)
+lc search provider add jina https://s.jina.ai/
+
+# 2. Set your API key
+lc search provider set jina Authorization YOUR_JINA_API_KEY
+
+# 3. Test basic search
+lc search query jina "rust async programming" -f json
+
+# 4. Enable full content reading (X-Engine: direct)
+lc search provider set jina X-Engine direct
+
+# 5. Test with full content (much richer results!)
+lc search query jina "rust async programming" -f json
+
+# 6. Enable JSON format for structured responses
+lc search provider set jina Accept application/json
+
+# 7. Use in LLM prompts with rich content
+lc --use-search jina "Explain Rust async programming concepts"
+```
+
+## Provider-Specific Features
+
+### Jina AI Advanced Features
+
+Jina AI offers unique capabilities beyond standard search:
+
+#### Full Content Reading
+
+Enable `X-Engine: direct` to get complete page content instead of just snippets:
+
+```bash
+# Enable full content reading
+lc search provider set jina X-Engine direct
+
+# Now searches return full page content (much richer!)
+lc search query jina "topic" -f json
+```
+
+**Benefits:**
+- ✅ Complete article content (thousands of characters)
+- ✅ No need to visit individual URLs
+- ✅ Perfect for research and AI analysis
+- ⚠️ Slower response times
+- ⚠️ Higher API costs
+
+#### Response Formats
+
+```bash
+# Text format (default)
+lc search query jina "topic"
+
+# JSON format
+lc search provider set jina Accept application/json
+lc search query jina "topic" -f json
+```
+
+### DuckDuckGo (Free Option)
+
+DuckDuckGo is the only provider that requires **no API key**:
+
+```bash
+# Just add and use - no authentication needed!
+lc search provider add ddg https://api.duckduckgo.com/
+lc search query ddg "your search query"
+```
+
+Perfect for:
+- ✅ Testing search functionality
+- ✅ Users without API budgets
+- ✅ Privacy-focused searches
+- ⚠️ Limited to basic instant answers
+
+## Provider Comparison
+
+| Feature | Brave | Exa | Serper | SerpApi | DuckDuckGo | Jina AI |
+|---------|-------|-----|--------|---------|------------|---------|
+| **Cost** | Paid | Paid | Paid | Paid | **Free** | Paid |
+| **Search Quality** | High | AI-Enhanced | Google Results | Google Results | Basic | AI-Enhanced |
+| **Speed** | Fast | Fast | Fast | Fast | Fast | Fast/Slow* |
+| **Rich Snippets** | ✅ | ✅ | ✅ | ✅ | Limited | ✅ |
+| **Full Content** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅* |
+| **Metadata** | ✅ | ✅ | ✅ | ✅ | Limited | ✅ |
+
+*With X-Engine: direct enabled
+
+## Authentication Headers
+
+Each provider uses different authentication methods:
+
+| Provider | Header Name | Format | Example |
+|----------|-------------|--------|---------|
+| **Brave** | `X-Subscription-Token` | Direct | `YOUR_API_KEY` |
+| **Exa** | `x-api-key` | Direct | `YOUR_API_KEY` |
+| **Serper** | `X-API-KEY` | Direct | `YOUR_API_KEY` |
+| **SerpApi** | `api_key` | Query Param | `YOUR_API_KEY` |
+| **DuckDuckGo** | None | N/A | No auth required |
+| **Jina AI** | `Authorization` | Bearer | `Bearer YOUR_API_KEY` |
 
 ## Tips and Best Practices
 
-1. **API Keys**: Store your API keys securely and never commit them to version control
-2. **Result Count**: For general queries, 3-5 results are usually sufficient. For research, consider 10+
-3. **Query Optimization**: Be specific with your search queries for better results
-4. **Context Integration**: The search results are automatically formatted and prepended to your prompt
-5. **Rate Limits**: Be aware of your search provider's rate limits and pricing
+1. **Start with DuckDuckGo**: Test search functionality for free before getting API keys
+2. **API Keys**: Store your API keys securely and never commit them to version control
+3. **Result Count**: For general queries, 3-5 results are sufficient. For research, consider 10+
+4. **Query Optimization**: Be specific with your search queries for better results
+5. **Provider Selection**: 
+   - Use **DuckDuckGo** for free basic searches
+   - Use **Brave/Serper** for general web search
+   - Use **Exa** for AI-enhanced content discovery
+   - Use **Jina AI** for research requiring full content
+6. **Rate Limits**: Be aware of your search provider's rate limits and pricing
+7. **Jina Full Content**: Only enable `X-Engine: direct` when you need comprehensive content
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **401 Unauthorized**: Check your API key is correctly set
+1. **401 Unauthorized**: Check your API key and header format
 
    ```bash
-   lc search provider set brave X-Subscription-Token YOUR_KEY
-   ```
-
-2. **No results found**: Verify your search query and provider URL
-
-   ```bash
+   # Check current providers
    lc search provider list
+   
+   # Set correct API key for each provider
+   lc search provider set brave X-Subscription-Token YOUR_KEY
+   lc search provider set jina Authorization YOUR_KEY
    ```
 
-3. **Provider not found**: Ensure the provider is added
+2. **Auto-detection failed**: Ensure you're using the correct URL pattern
 
    ```bash
+   # These URLs will auto-detect correctly:
    lc search provider add brave https://api.search.brave.com/res/v1/web/search
+   lc search provider add jina https://s.jina.ai/
+   lc search provider add ddg https://api.duckduckgo.com/
+   ```
+
+3. **No results found**: Try a different provider or check your query
+
+   ```bash
+   # Test with free DuckDuckGo first
+   lc search query ddg "test query"
+   ```
+
+4. **Jina parsing errors**: Check if you need both headers for JSON + full content
+
+   ```bash
+   lc search provider set jina Accept application/json
+   lc search provider set jina X-Engine direct
    ```
 
 ## Examples
 
-### Research Assistant
+### Research Assistant with Full Content
 
 ```bash
-lc --use-search "brave:latest machine learning papers arxiv 2024" \
+# Use Jina with full content reading for comprehensive research
+lc search provider set jina X-Engine direct
+lc --use-search "jina:latest machine learning papers arxiv 2024" \
   "Summarize the most important recent developments in machine learning"
 ```
 
-### News Analysis
+### Free News Analysis
 
 ```bash
-lc --use-search brave "What happened in tech news today?"
+# Use free DuckDuckGo for basic news queries
+lc --use-search ddg "What happened in tech news today?"
 ```
 
-### Fact Checking
+### Fact Checking with Google Results
 
 ```bash
-lc --use-search "brave:climate change statistics 2024" \
+# Use Serper for Google-quality fact checking
+lc --use-search "serper:climate change statistics 2024" \
   "Verify and explain the latest climate data"
+```
+
+### AI-Enhanced Content Discovery
+
+```bash
+# Use Exa for AI-powered content discovery
+lc --use-search "exa:best practices machine learning 2024" \
+  "What are the current ML best practices?"
 ```
 
 ### Competitive Analysis
 
 ```bash
-lc --use-search "brave:OpenAI competitors 2024" \
+# Use SerpApi for comprehensive competitive research
+lc --use-search "serpapi:OpenAI competitors 2024" \
   "Analyze the current competitive landscape in AI"
+```
+
+## Getting API Keys
+
+### Free Option
+- **DuckDuckGo**: No API key required! ✅
+
+### Paid Options
+- **Brave Search**: [Get API Key](https://brave.com/search/api/)
+- **Exa**: [Get API Key](https://exa.ai/)
+- **Serper**: [Get API Key](https://serper.dev/)
+- **SerpApi**: [Get API Key](https://serpapi.com/)
+- **Jina AI**: [Get API Key](https://jina.ai/)
+
+Start with DuckDuckGo to test the functionality, then choose paid providers based on your specific needs!

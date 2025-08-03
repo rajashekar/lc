@@ -37,6 +37,7 @@ LLM Client was created to solve common pain points when working with LLMs:
 
 - 🧠 **Vector Database & RAG** - Built-in embeddings and similarity search
 - 📚 **Smart File Processing** - Embed entire documents with intelligent chunking
+- 🔍 **Web Search Integration** - 6 search providers including free DuckDuckGo and AI-powered Jina
 - ☁️ **Configuration Sync** - Sync settings across machines with encryption
 - 🤖 **Model Context Protocol** - Extend LLMs with tools for web access, file operations, and more
 
@@ -83,6 +84,10 @@ lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Write a haiku about coding"
 
 # Use MCP tools for internet access
 lc -t fetch "What's the latest news about AI?"
+
+# Use web search integration
+lc --use-search ddg "What are the latest AI developments?"  # Free!
+lc --use-search jina "Research quantum computing advances"  # AI-powered
 ```
 
 ## Next Steps

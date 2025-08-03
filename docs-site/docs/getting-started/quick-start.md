@@ -120,6 +120,42 @@ lc config set model gpt-4
 lc "Your prompt here"
 ```
 
+## Step 6: Add Search Integration (Optional)
+
+Enhance your prompts with real-time web search results:
+
+### Quick Setup with Free DuckDuckGo
+
+```bash
+# Add DuckDuckGo (no API key required!)
+lc search provider add ddg https://api.duckduckgo.com/
+
+# Test search
+lc search query ddg "latest AI news" -f json
+
+# Use in prompts
+lc --use-search ddg "What are the latest developments in AI?"
+```
+
+### Setup with Premium Providers
+
+```bash
+# Add Brave Search (requires API key)
+lc search provider add brave https://api.search.brave.com/res/v1/web/search
+lc search provider set brave X-Subscription-Token YOUR_API_KEY
+
+# Add Jina AI for advanced features (requires API key)
+lc search provider add jina https://s.jina.ai/
+lc search provider set jina Authorization YOUR_API_KEY
+
+# Enable full content reading for research
+lc search provider set jina X-Engine direct
+
+# Use in prompts
+lc --use-search brave "What's happening in tech today?"
+lc --use-search jina "Comprehensive research on quantum computing"
+```
+
 ## What's Next?
 
 ### Essential Features
@@ -156,6 +192,11 @@ lc -p openai "prompt"    # Specify provider
 # Interactive
 lc chat -m gpt-4         # Start chat session
 lc c -m gpt-4           # Short alias
+
+# Search integration
+lc se p l                # List search providers
+lc se q ddg "query"      # Direct search (free!)
+lc --use-search ddg "prompt with search"  # Search + LLM
 
 # Logs
 lc l r                   # Recent logs

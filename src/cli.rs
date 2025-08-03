@@ -4154,8 +4154,12 @@ async fn handle_search_provider_command(command: SearchProviderCommands) -> Resu
                     
                     // Provider-specific instructions using the new API key header method
                     let api_key_header = provider_type.api_key_header();
-                    println!("\n{} Don't forget to set the API key:", "💡".yellow());
-                    println!("  lc search provider set {} {} <your-api-key>", name, api_key_header);
+                    if !api_key_header.is_empty() {
+                        println!("\n{} Don't forget to set the API key:", "💡".yellow());
+                        println!("  lc search provider set {} {} <your-api-key>", name, api_key_header);
+                    } else {
+                        println!("\n{} No API key required for this provider!", "✅".green());
+                    }
                 }
                 Err(e) => {
                     anyhow::bail!("Failed to add search provider: {}", e);

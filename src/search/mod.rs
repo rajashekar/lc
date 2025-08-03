@@ -4,6 +4,8 @@ pub mod brave;
 pub mod exa;
 pub mod serper;
 pub mod serpapi;
+pub mod duckduckgo;
+pub mod jina;
 pub mod search_result;
 
 use anyhow::Result;
@@ -43,6 +45,12 @@ impl SearchEngine {
             }
             SearchProviderType::SerpApi => {
                 serpapi::search(provider_config, query, count).await
+            }
+            SearchProviderType::DuckDuckGo => {
+                duckduckgo::search(provider_config, query, count).await
+            }
+            SearchProviderType::Jina => {
+                jina::search(provider_config, query, count).await
             }
         }
     }
