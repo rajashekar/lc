@@ -133,7 +133,7 @@ async fn main() -> Result<()> {
             cli::handle_config_command(command).await?;
         }
         (true, Some(Commands::Chat { model, provider, cid, tools, database, debug })) => {
-            cli::handle_chat_command(model, provider, cid, tools, database, debug).await?;
+            cli::handle_chat_command(model, provider, cid, tools, database, debug, cli.stream).await?;
         }
         (true, Some(Commands::Models { command, query, tools, reasoning, vision, audio, code, context_length, input_length, output_length, input_price, output_price })) => {
             cli::handle_models_command(command, query, tools, reasoning, vision, audio, code, context_length, input_length, output_length, input_price, output_price).await?;

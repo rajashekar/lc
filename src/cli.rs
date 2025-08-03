@@ -2224,7 +2224,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
 }
 
 // Interactive chat mode
-pub async fn handle_chat_command(model: Option<String>, provider: Option<String>, cid: Option<String>, tools: Option<String>, database: Option<String>, debug: bool) -> Result<()> {
+pub async fn handle_chat_command(model: Option<String>, provider: Option<String>, cid: Option<String>, tools: Option<String>, database: Option<String>, debug: bool, stream: bool) -> Result<()> {
     // Set debug mode if requested
     if debug {
         set_debug_mode(true);
@@ -2356,8 +2356,9 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
             None
         };
         
-        // Determine if streaming should be used (config setting, default false)
-        let use_streaming = config.stream.unwrap_or(false);
+        // Determine if streaming should be used (default to true for interactive chat)
+        // CLI flag takes precedence, then config, then default to true for chat mode
+        let use_streaming = stream || config.stream.unwrap_or(true);
         
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Use tool execution loop when tools are available (tools don't support streaming yet)
