@@ -49,6 +49,10 @@ lc "What is the capital of France?"
 
 **⚠️ Note**: Starting with recent versions, `lc` uses a stricter policy for displaying model capability icons (🔧 tools, 👁 vision, 🧠 reasoning, etc.). Icons are now only shown when capabilities are explicitly provided by the provider's API response. Previously, some icons were displayed based on assumptions derived from model names or patterns.
 
+### Troubleshooting
+
+If you notice that responses are slower than expected or formatted differently, please check your network proxy settings. Some proxies may re-compress responses, causing delays or unexpected behavior. Disable such features if streaming output is required in real-time.
+
 **Impact**: You may notice that some capability icons you previously saw have disappeared. This doesn't mean the models have lost these capabilities - it simply means the provider's API doesn't explicitly advertise them. The actual model capabilities remain unchanged.
 
 ## Documentation

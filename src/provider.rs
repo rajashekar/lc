@@ -227,6 +227,7 @@ pub struct TokenResponse {
 
 pub struct OpenAIClient {
     client: Client,
+    streaming_client: Client,  // Separate client optimized for streaming
     base_url: String,
     api_key: String,
     models_path: String,
@@ -238,6 +239,7 @@ impl OpenAIClient {
     
     pub fn new_with_headers(base_url: String, api_key: String, models_path: String, chat_path: String, custom_headers: std::collections::HashMap<String, String>) -> Self {
         // Create optimized HTTP client with connection pooling and keep-alive settings
+        // This client keeps compression enabled for regular requests
         let client = Client::builder()
             .pool_max_idle_per_host(10) // Keep up to 10 idle connections per host
             .pool_idle_timeout(Duration::from_secs(90)) // Keep connections alive for 90 seconds
@@ -247,9 +249,16 @@ impl OpenAIClient {
             .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("Failed to create optimized HTTP client");
-        
+
+        // Create a separate streaming-optimized client
+        let streaming_client = Client::builder()
+            .timeout(Duration::from_secs(300))  // Longer timeout for streaming
+            .build()
+            .expect("Failed to create streaming-optimized HTTP client");
+
         Self {
             client,
+            streaming_client,
             base_url: base_url.trim_end_matches('/').to_string(),
             api_key,
             models_path,
@@ -264,6 +273,11 @@ impl OpenAIClient {
         let mut req = self.client
             .post(&url)
             .header("Content-Type", "application/json");
+        
+        // Disable compression for streaming requests
+        if request.stream == Some(true) {
+            req = req.header("Accept-Encoding", "identity");
+        }
         
         // Add Authorization header only if no custom headers are present
         // This allows providers like Gemini to use custom authentication headers
@@ -421,6 +435,11 @@ impl OpenAIClient {
             .post(&url)
             .header("Content-Type", "application/json");
         
+        // Disable compression for streaming requests
+        if request.stream == Some(true) {
+            req = req.header("Accept-Encoding", "identity");
+        }
+        
         // Add Authorization header only if no custom headers are present
         if self.custom_headers.is_empty() {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
@@ -510,13 +529,21 @@ impl OpenAIClient {
     }
     
     pub async fn chat_stream(&self, request: &ChatRequest) -> Result<()> {
-        use std::io::{stdout, BufWriter};
+        use std::io::{stdout, Write};
         
         let url = format!("{}{}", self.base_url, self.chat_path);
         
-        let mut req = self.client
+        // Use the streaming-optimized client for streaming requests
+        let mut req = self.streaming_client
             .post(&url)
-            .header("Content-Type", "application/json");
+            .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream")  // Explicitly request SSE format
+            .header("Cache-Control", "no-cache")  // Prevent caching for streaming
+            .header("Accept-Encoding", "identity");  // Explicitly request no compression
+        
+        // Wrap stdout in BufWriter for efficiency
+        let stdout = stdout();
+        let mut handle = std::io::BufWriter::new(stdout.lock());
         
         // Add Authorization header only if no custom headers are present
         if self.custom_headers.is_empty() {
@@ -539,23 +566,44 @@ impl OpenAIClient {
             anyhow::bail!("API request failed with status {}: {}", status, text);
         }
         
+        // Log response headers for debugging
+        let headers = response.headers();
+        eprintln!("Response headers: {:?}", headers);
+        
+        // Check for compression headers
+        if let Some(content_encoding) = headers.get("content-encoding") {
+            eprintln!("Warning: Content-Encoding detected: {:?}", content_encoding);
+            eprintln!("This may cause buffering delays in streaming.");
+        }
+        
+        if let Some(transfer_encoding) = headers.get("transfer-encoding") {
+            eprintln!("Transfer-Encoding: {:?}", transfer_encoding);
+        }
+        
         let mut stream = response.bytes_stream();
         
-        // Use unbuffered stdout for immediate output
-        let stdout = stdout();
-        let mut handle = stdout.lock();
+        let mut buffer = String::new();
         
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            let chunk_str = String::from_utf8_lossy(&chunk);
+            eprintln!("Received {} bytes at {:?}", chunk.len(), std::time::SystemTime::now());
             
-            // Handle Server-Sent Events format
-            for line in chunk_str.lines() {
+            let chunk_str = String::from_utf8_lossy(&chunk);
+            buffer.push_str(&chunk_str);
+            
+            // Process complete lines from buffer
+            while let Some(newline_pos) = buffer.find('\n') {
+                let line = buffer[..newline_pos].to_string();
+                buffer.drain(..=newline_pos);
+                
+                // Handle Server-Sent Events format
                 if line.starts_with("data: ") {
                     let data = &line[6..]; // Remove "data: " prefix
                     
-                    if data == "[DONE]" {
-                        break;
+                    if data.trim() == "[DONE]" {
+                        handle.write_all(b"\n")?;
+                        handle.flush()?;
+                        return Ok(());
                     }
                     
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
@@ -565,7 +613,25 @@ impl OpenAIClient {
                                     if let Some(content) = delta.get("content") {
                                         if let Some(text) = content.as_str() {
                                             // Write directly to stdout and flush immediately
-                                            use std::io::Write;
+                                            handle.write_all(text.as_bytes())?;
+                                            handle.flush()?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if line.trim().is_empty() {
+                    // Skip empty lines in SSE format
+                    continue;
+                } else {
+                    // Handle non-SSE format (direct JSON stream)
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                        if let Some(choices) = json.get("choices") {
+                            if let Some(choice) = choices.get(0) {
+                                if let Some(delta) = choice.get("delta") {
+                                    if let Some(content) = delta.get("content") {
+                                        if let Some(text) = content.as_str() {
                                             handle.write_all(text.as_bytes())?;
                                             handle.flush()?;
                                         }
@@ -578,8 +644,25 @@ impl OpenAIClient {
             }
         }
         
+        // Process any remaining data in buffer
+        if !buffer.trim().is_empty() {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&buffer) {
+                if let Some(choices) = json.get("choices") {
+                    if let Some(choice) = choices.get(0) {
+                        if let Some(delta) = choice.get("delta") {
+                            if let Some(content) = delta.get("content") {
+                                if let Some(text) = content.as_str() {
+                                    handle.write_all(text.as_bytes())?;
+                                    handle.flush()?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         // Add newline at the end
-        use std::io::Write;
         handle.write_all(b"\n")?;
         handle.flush()?;
         Ok(())

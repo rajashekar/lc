@@ -97,6 +97,7 @@ impl S3Provider {
             bucket
         } else {
             print!("Enter S3 bucket name: ");
+            // Deliberately flush stdout to ensure prompt appears before user input
             io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
@@ -112,6 +113,7 @@ impl S3Provider {
             region
         } else {
             print!("Enter AWS region (default: us-east-1): ");
+            // Deliberately flush stdout to ensure prompt appears before user input
             io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
@@ -128,6 +130,7 @@ impl S3Provider {
             key
         } else {
             print!("Enter AWS Access Key ID: ");
+            // Deliberately flush stdout to ensure prompt appears before user input
             io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
@@ -143,6 +146,7 @@ impl S3Provider {
             secret
         } else {
             print!("Enter AWS Secret Access Key: ");
+            // Deliberately flush stdout to ensure prompt appears before password input
             io::stdout().flush()?;
             let secret = rpassword::read_password()?;
             if secret.is_empty() {
@@ -156,6 +160,7 @@ impl S3Provider {
             Some(endpoint)
         } else {
             print!("Enter custom S3 endpoint URL (optional, for Backblaze/Cloudflare R2/etc., press Enter to skip): ");
+            // Deliberately flush stdout to ensure prompt appears before user input
             io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;

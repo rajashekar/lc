@@ -174,6 +174,7 @@ async fn setup_s3_config() -> Result<()> {
     
     // Get bucket name
     print!("Enter S3 bucket name: ");
+    // Deliberately flush stdout to ensure prompt appears before user input
     io::stdout().flush()?;
     let mut bucket_name = String::new();
     io::stdin().read_line(&mut bucket_name)?;
@@ -184,6 +185,7 @@ async fn setup_s3_config() -> Result<()> {
     
     // Get region
     print!("Enter AWS region (default: us-east-1): ");
+    // Deliberately flush stdout to ensure prompt appears before user input
     io::stdout().flush()?;
     let mut region = String::new();
     io::stdin().read_line(&mut region)?;
@@ -196,6 +198,7 @@ async fn setup_s3_config() -> Result<()> {
     
     // Get access key ID
     print!("Enter AWS Access Key ID: ");
+    // Deliberately flush stdout to ensure prompt appears before user input
     io::stdout().flush()?;
     let mut access_key_id = String::new();
     io::stdin().read_line(&mut access_key_id)?;
@@ -206,6 +209,7 @@ async fn setup_s3_config() -> Result<()> {
     
     // Get secret access key (hidden input)
     print!("Enter AWS Secret Access Key: ");
+    // Deliberately flush stdout to ensure prompt appears before password input
     io::stdout().flush()?;
     let secret_access_key = rpassword::read_password()?;
     if secret_access_key.is_empty() {
@@ -214,6 +218,7 @@ async fn setup_s3_config() -> Result<()> {
     
     // Get optional endpoint URL
     print!("Enter custom S3 endpoint URL (optional, for Backblaze/Cloudflare R2/etc., press Enter to skip): ");
+    // Deliberately flush stdout to ensure prompt appears before user input
     io::stdout().flush()?;
     let mut endpoint_url = String::new();
     io::stdin().read_line(&mut endpoint_url)?;

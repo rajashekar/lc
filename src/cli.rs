@@ -1069,6 +1069,7 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
             }
             
             print!("Enter API key for {}: ", name);
+            // Deliberately flush stdout to ensure prompt appears before password input
             io::stdout().flush()?;
             let key = read_password()?;
             
@@ -1361,6 +1362,7 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
         LogCommands::Purge { yes } => {
             if !yes {
                 print!("Are you sure you want to purge all logs? This cannot be undone. (y/N): ");
+                // Deliberately flush stdout to ensure prompt appears before user input
                 io::stdout().flush()?;
                 
                 let mut input = String::new();
@@ -1943,6 +1945,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // For now, tools don't support streaming, fall back to regular
             print!("{} ", "Thinking...".dimmed());
+            // Deliberately flush stdout to show thinking indicator immediately
             io::stdout().flush()?;
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
             match chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await {
@@ -1980,6 +1983,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     } else {
         // Use regular non-streaming
         print!("{} ", "Thinking...".dimmed());
+        // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
         
         let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
@@ -2131,6 +2135,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // For now, tools don't support streaming, fall back to regular
             print!("{} ", "Thinking...".dimmed());
+            // Deliberately flush stdout to show thinking indicator immediately
             io::stdout().flush()?;
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
             match chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await {
@@ -2180,6 +2185,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     } else {
         // Use regular non-streaming
         print!("{} ", "Thinking...".dimmed());
+        // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
         
         let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
@@ -2266,6 +2272,7 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
     
     loop {
         print!("{} ", "You:".bold().green());
+        // Deliberately flush stdout to ensure prompt appears before user input
         io::stdout().flush()?;
         
         let mut input = String::new();
@@ -2340,6 +2347,7 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
         }
         
         print!("{} ", "Thinking...".dimmed());
+        // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
         
         let resolved_system_prompt = if let Some(system_prompt) = &config.system_prompt {
@@ -2372,6 +2380,7 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
         } else if use_streaming {
             // Use streaming chat when no tools and streaming is enabled - content is streamed directly to stdout
             print!("{} ", "Assistant:".bold().blue());
+            // Deliberately flush stdout to show assistant label before streaming
             io::stdout().flush()?;
             match chat::send_chat_request_with_streaming(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await {
                 Ok(_) => {
@@ -4094,6 +4103,7 @@ async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> 
                 token
             } else {
                 print!("Enter authentication token for kagi: ");
+                // Deliberately flush stdout to ensure prompt appears before password input
                 io::stdout().flush()?;
                 rpassword::read_password()?
             };
