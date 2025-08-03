@@ -16,6 +16,7 @@ pub trait FileReader {
     }
     
     /// Read file content as text from a readable stream
+    #[allow(dead_code)]
     fn read_as_text_from_reader(&self, mut reader: Box<dyn Read>) -> Result<String> {
         // Default implementation: read all bytes and use bytes method
         let mut bytes = Vec::new();
@@ -25,6 +26,7 @@ pub trait FileReader {
     }
     
     /// Check if this reader can handle the given file extension
+    #[allow(dead_code)]
     fn can_handle(&self, extension: &str) -> bool;
 }
 

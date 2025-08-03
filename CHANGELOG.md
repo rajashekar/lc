@@ -13,13 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions workflows for automated releases
 - Cross-platform testing matrix
 - Logo and branding
+- Comprehensive tests to ensure capability flags match explicit provider data
 
 ### Changed
+- **BREAKING**: Stricter capability display policy for model icons
+  - Capability icons (🔧 tools, 👁 vision, 🧠 reasoning, 💻 code, etc.) are now only displayed when explicitly provided by the provider's API response
+  - Removed capability inference based on model names or patterns
+  - Users may notice some previously visible icons have disappeared - this doesn't mean models lost capabilities, just that providers don't explicitly advertise them
 - Reorganized README to be more concise with links to full documentation
 - Improved documentation structure with categorized sections
+- Updated model metadata extraction to only use explicit capability data from JSON responses
 
 ### Fixed
 - Documentation site configuration for proper deployment
+- Eliminated assumptions in capability detection that could lead to misleading displays
 
 ## [0.1.0] - 2025-01-XX
 

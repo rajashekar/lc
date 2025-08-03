@@ -45,6 +45,12 @@ lc "What is the capital of France?"
 - 🔐 **Secure** - Encrypted configuration sync
 - 💬 **Intuitive** - Simple commands with short aliases
 
+### Important: Capability Display Policy
+
+**⚠️ Note**: Starting with recent versions, `lc` uses a stricter policy for displaying model capability icons (🔧 tools, 👁 vision, 🧠 reasoning, etc.). Icons are now only shown when capabilities are explicitly provided by the provider's API response. Previously, some icons were displayed based on assumptions derived from model names or patterns.
+
+**Impact**: You may notice that some capability icons you previously saw have disappeared. This doesn't mean the models have lost these capabilities - it simply means the provider's API doesn't explicitly advertise them. The actual model capabilities remain unchanged.
+
 ## Documentation
 
 For comprehensive documentation, visit **[lc.viwq.dev](https://lc.viwq.dev)**

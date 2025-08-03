@@ -2945,6 +2945,12 @@ fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> R
     use colored::Colorize;
     
     for model in models {
+        // Safety check: log if all capability flags are false to catch defaulting bugs
+        if !model.supports_tools && !model.supports_function_calling && !model.supports_vision && 
+           !model.supports_audio && !model.supports_reasoning && !model.supports_code {
+            debug_log!("All capability flags are false for model '{}' - this might indicate a defaulting bug", model.id);
+        }
+        
         // Build capability indicators
         let mut capabilities = Vec::new();
         if model.supports_tools || model.supports_function_calling {

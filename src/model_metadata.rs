@@ -18,19 +18,29 @@ pub struct ModelMetadata {
     pub input_price_per_m: Option<f64>,
     pub output_price_per_m: Option<f64>,
     
-    // Capabilities
+    // Capabilities - These flags must only be set to `true` when the provider JSON explicitly contains that feature
+    /// Only set to `true` when provider JSON explicitly indicates tool/function calling support
     pub supports_tools: bool,
+    /// Only set to `true` when provider JSON explicitly indicates vision/image processing support
     pub supports_vision: bool,
+    /// Only set to `true` when provider JSON explicitly indicates audio processing support
     pub supports_audio: bool,
+    /// Only set to `true` when provider JSON explicitly indicates advanced reasoning capabilities
     pub supports_reasoning: bool,
+    /// Only set to `true` when provider JSON explicitly indicates code generation support
     pub supports_code: bool,
+    /// Only set to `true` when provider JSON explicitly indicates function calling support
     pub supports_function_calling: bool,
+    /// Only set to `true` when provider JSON explicitly indicates JSON mode support
     pub supports_json_mode: bool,
+    /// Only set to `true` when provider JSON explicitly indicates streaming support
     pub supports_streaming: bool,
     
     // Model type and characteristics
     pub model_type: ModelType,
+    /// Only set to `true` when provider JSON explicitly indicates the model is deprecated
     pub is_deprecated: bool,
+    /// Only set to `true` when provider JSON explicitly indicates the model supports fine-tuning
     pub is_fine_tunable: bool,
     
     // Raw provider-specific data
@@ -98,45 +108,54 @@ impl MetadataExtractor {
             "github" => Self::extract_github(raw_json),
             "together" => Self::extract_together(raw_json),
             "gemini" => Self::extract_gemini(raw_json),
+            "ollama" => Self::extract_ollama(raw_json),
             _ => Self::extract_generic(provider, raw_json),
         }
     }
     
     fn extract_openai(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct OpenAIResponse {
-            data: Vec<OpenAIModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct OpenAIModel {
-            id: String,
-            object: String,
-            owned_by: String,
-            created: i64,
-        }
-        
-        let response: OpenAIResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            let mut metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "openai".to_string(),
-                owned_by: Some(model.owned_by),
-                created: Some(model.created),
-                raw_data,
-                ..Default::default()
-            };
-            
-            // Infer capabilities from model name
-            Self::infer_openai_capabilities(&mut metadata);
-            models.push(metadata);
-        }
-        
-        Ok(models)
+    #[derive(Deserialize)]
+    struct OpenAIResponse {
+        data: Vec<OpenAIModel>,
     }
+    
+    #[derive(Deserialize, Serialize)]
+    struct OpenAIModel {
+        id: String,
+        object: String,
+        owned_by: String,
+        created: i64,
+        capabilities: Option<Vec<String>>, // Expect potential capabilities array
+    }
+    
+    let response: OpenAIResponse = serde_json::from_str(raw_json)?;
+    let mut models = Vec::new();
+    
+    for model in response.data {
+        let raw_data = serde_json::to_value(&model)?;
+        let mut metadata = ModelMetadata {
+            id: model.id.clone(),
+            provider: "openai".to_string(),
+            owned_by: Some(model.owned_by),
+            created: Some(model.created),
+            raw_data,
+            ..Default::default()
+        };
+        
+        // Extract capabilities if present
+        if let Some(ref capabilities) = model.capabilities {
+            capabilities.iter().for_each(|capability| match capability.as_str() {
+                "tools" | "function-calling" => metadata.supports_tools = true,
+                "json-mode" => metadata.supports_json_mode = true,
+                _ => (),
+            });
+        }
+        
+        models.push(metadata);
+    }
+    
+    Ok(models)
+}
     
     fn extract_groq(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
         #[derive(Deserialize)]
@@ -160,7 +179,7 @@ impl MetadataExtractor {
         
         for model in response.data {
             let raw_data = serde_json::to_value(&model)?;
-            let mut metadata = ModelMetadata {
+            let metadata = ModelMetadata {
                 id: model.id.clone(),
                 provider: "groq".to_string(),
                 owned_by: Some(model.owned_by),
@@ -172,7 +191,7 @@ impl MetadataExtractor {
                 ..Default::default()
             };
             
-            Self::infer_groq_capabilities(&mut metadata);
+// Self::infer_groq_capabilities(&mut metadata); (removed call due to lack of explicit capability info)
             models.push(metadata);
         }
         
@@ -199,7 +218,7 @@ impl MetadataExtractor {
         
         for model in response.data {
             let raw_data = serde_json::to_value(&model)?;
-            let mut metadata = ModelMetadata {
+            let metadata = ModelMetadata {
                 id: model.id.clone(),
                 provider: "claude".to_string(),
                 display_name: Some(model.display_name),
@@ -207,7 +226,7 @@ impl MetadataExtractor {
                 ..Default::default()
             };
             
-            Self::infer_claude_capabilities(&mut metadata);
+// Self::infer_claude_capabilities(&mut metadata); (removed call due to lack of explicit capability info)
             models.push(metadata);
         }
         
@@ -357,6 +376,15 @@ impl MetadataExtractor {
         Self::extract_openai(raw_json).map(|mut models| {
             for model in &mut models {
                 model.provider = "nvidia".to_string();
+                // Reset all inferred capabilities due to lack of explicit NVIDIA capability info
+                model.supports_tools = false;
+                model.supports_function_calling = false;
+                model.supports_json_mode = false;
+                model.supports_streaming = false;
+                model.supports_vision = false;
+                model.supports_audio = false;
+                model.supports_reasoning = false;
+                model.supports_code = false;
             }
             models
         })
@@ -411,14 +439,8 @@ impl MetadataExtractor {
                 .and_then(|arch| arch.input_modalities.as_ref())
                 .map_or(false, |modalities| modalities.contains(&"image".to_string()));
             
-            // Extract code support from model name/description
-            let model_name_lower = model.name.to_lowercase();
-            let supports_code = model_name_lower.contains("code") ||
-                               model_name_lower.contains("coder") ||
-                               model.description.as_ref().map_or(false, |desc| {
-                                   let desc_lower = desc.to_lowercase();
-                                   desc_lower.contains("code") || desc_lower.contains("programming")
-                               });
+            // Only use explicit code support fields from JSON - no inference
+            let supports_code = false; // OpenRouter doesn't provide explicit code capability flags
             
             // Extract pricing (convert from per-token to per-million-token)
             let input_price_per_m = model.pricing
@@ -577,47 +599,161 @@ impl MetadataExtractor {
         Ok(models)
     }
     
+    fn extract_ollama(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
+        #[derive(Deserialize)]
+        struct OllamaResponse {
+            data: Vec<OllamaModel>,
+        }
+        
+        #[derive(Deserialize, Serialize)]
+        struct OllamaModel {
+            id: String,
+            object: String,
+            owned_by: String,
+            created: i64,
+        }
+        
+        let response: OllamaResponse = serde_json::from_str(raw_json)?;
+        let mut models = Vec::new();
+        
+        for model in response.data {
+            let raw_data = serde_json::to_value(&model)?;
+            let metadata = ModelMetadata {
+                id: model.id.clone(),
+                provider: "ollama".to_string(),
+                owned_by: Some(model.owned_by),
+                created: Some(model.created),
+                raw_data,
+                // Do NOT infer any capabilities - only use explicit JSON data
+                // All capabilities remain false unless explicitly stated in JSON
+                ..Default::default()
+            };
+            
+            models.push(metadata);
+        }
+        
+        Ok(models)
+    }
+    
     fn extract_generic(provider: &str, raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
         // Try to parse as standard OpenAI format first
-        if let Ok(models) = Self::extract_openai(raw_json) {
-            return Ok(models.into_iter().map(|mut m| {
-                m.provider = provider.to_string();
-                m
+        if let Ok(openai_models) = Self::extract_openai(raw_json) {
+            // For non-OpenAI providers, we need to reset the inferred capabilities
+            // and only use explicit data from the JSON
+            
+            // Re-parse the JSON to get access to the original model objects
+            let value: serde_json::Value = serde_json::from_str(raw_json)?;
+            let mut model_raw_data_map = std::collections::HashMap::new();
+            
+            // Build a map of model ID to its raw JSON data
+            if let Some(data) = value.get("data").and_then(|d| d.as_array()) {
+                for model_value in data {
+                    if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
+                        model_raw_data_map.insert(id.to_string(), model_value.clone());
+                    }
+                }
+            }
+            
+            return Ok(openai_models.into_iter().map(|model| {
+                let mut metadata = ModelMetadata {
+                    id: model.id.clone(),
+                    provider: provider.to_string(),
+                    display_name: model.display_name,
+                    description: model.description,
+                    owned_by: model.owned_by,
+                    created: model.created,
+                    context_length: model.context_length,
+                    max_input_tokens: model.max_input_tokens,
+                    max_output_tokens: model.max_output_tokens,
+                    input_price_per_m: model.input_price_per_m,
+                    output_price_per_m: model.output_price_per_m,
+                    model_type: model.model_type,
+                    raw_data: model_raw_data_map.get(&model.id).unwrap_or(&model.raw_data).clone(),
+                    // Reset all capability flags to false - only set based on explicit JSON data
+                    ..Default::default()
+                };
+                
+                // Only extract explicit capabilities from the raw JSON data
+                if let Some(raw_obj) = metadata.raw_data.as_object() {
+                    // Check for explicit capability fields in the JSON
+                    if let Some(tools) = raw_obj.get("supports_tools").and_then(|v| v.as_bool()) {
+                        metadata.supports_tools = tools;
+                    }
+                    if let Some(vision) = raw_obj.get("supports_vision").and_then(|v| v.as_bool()) {
+                        metadata.supports_vision = vision;
+                    }
+                    // Also check for supports_image_input (used by Hyperbolic and others)
+                    if let Some(image_input) = raw_obj.get("supports_image_input").and_then(|v| v.as_bool()) {
+                        metadata.supports_vision = image_input;
+                    }
+                    if let Some(audio) = raw_obj.get("supports_audio").and_then(|v| v.as_bool()) {
+                        metadata.supports_audio = audio;
+                    }
+                    if let Some(reasoning) = raw_obj.get("supports_reasoning").and_then(|v| v.as_bool()) {
+                        metadata.supports_reasoning = reasoning;
+                    }
+                    if let Some(code) = raw_obj.get("supports_code").and_then(|v| v.as_bool()) {
+                        metadata.supports_code = code;
+                    }
+                    if let Some(func_calling) = raw_obj.get("supports_function_calling").and_then(|v| v.as_bool()) {
+                        metadata.supports_function_calling = func_calling;
+                    }
+                    if let Some(json_mode) = raw_obj.get("supports_json_mode").and_then(|v| v.as_bool()) {
+                        metadata.supports_json_mode = json_mode;
+                    }
+                    if let Some(streaming) = raw_obj.get("supports_streaming").and_then(|v| v.as_bool()) {
+                        metadata.supports_streaming = streaming;
+                    }
+                    if let Some(deprecated) = raw_obj.get("is_deprecated").and_then(|v| v.as_bool()) {
+                        metadata.is_deprecated = deprecated;
+                    }
+                    if let Some(fine_tunable) = raw_obj.get("is_fine_tunable").and_then(|v| v.as_bool()) {
+                        metadata.is_fine_tunable = fine_tunable;
+                    }
+                }
+                
+                metadata
             }).collect());
         }
         
         // If that fails, try to extract basic model list
         let value: serde_json::Value = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        // First, try to get models from "data" field (wrapped format)
-        if let Some(data) = value.get("data").and_then(|d| d.as_array()) {
-            for model_value in data {
-                if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
-                    let metadata = ModelMetadata {
-                        id: id.to_string(),
-                        provider: provider.to_string(),
-                        raw_data: model_value.clone(),
-                        ..Default::default()
-                    };
-                    models.push(metadata);
+let mut models = Vec::new();
+
+    // First, try to get models from "data" field (wrapped format)
+    if let Some(data) = value.get("data").and_then(|d| d.as_array()) {
+        for model_value in data {
+            if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
+                let mut metadata = ModelMetadata {
+                    id: id.to_string(),
+                    provider: provider.to_string(),
+                    raw_data: model_value.clone(),
+                    ..Default::default()
+                };
+                if let Some(supports_image_input) = model_value.get("supports_image_input").and_then(|v| v.as_bool()) {
+                    metadata.supports_vision = supports_image_input;
                 }
+                models.push(metadata);
             }
         }
-        // If no "data" field, try to parse as direct array (providers like together, github)
-        else if let Some(array) = value.as_array() {
-            for model_value in array {
-                if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
-                    let metadata = ModelMetadata {
-                        id: id.to_string(),
-                        provider: provider.to_string(),
-                        raw_data: model_value.clone(),
-                        ..Default::default()
-                    };
-                    models.push(metadata);
+    }
+    // If no "data" field, try to parse as direct array (providers like together, github)
+    else if let Some(array) = value.as_array() {
+        for model_value in array {
+            if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
+                let mut metadata = ModelMetadata {
+                    id: id.to_string(),
+                    provider: provider.to_string(),
+                    raw_data: model_value.clone(),
+                    ..Default::default()
+                };
+                if let Some(supports_image_input) = model_value.get("supports_image_input").and_then(|v| v.as_bool()) {
+                    metadata.supports_vision = supports_image_input;
                 }
+                models.push(metadata);
             }
         }
+    }
         
         Ok(models)
     }
@@ -918,36 +1054,15 @@ impl MetadataExtractor {
                 None => ModelType::Chat, // Default to chat if not specified
             };
             
-            // Infer capabilities from model name and type
-            let model_name_lower = model.display_name.as_ref()
-                .unwrap_or(&model.id)
-                .to_lowercase();
-            
-            let supports_vision = model_name_lower.contains("vision") ||
-                                 model_name_lower.contains("vl") ||
-                                 model_name_lower.contains("multimodal");
-            
-            let supports_code = model_name_lower.contains("code") ||
-                               model_name_lower.contains("coder") ||
-                               model_name_lower.contains("starcoder") ||
-                               model_name_lower.contains("codestral");
-            
-            let supports_reasoning = model_name_lower.contains("reasoning") ||
-                                    model_name_lower.contains("qwq") ||
-                                    model_name_lower.contains("r1");
-            
-            let supports_audio = matches!(model_type, ModelType::AudioGeneration) ||
-                                model_name_lower.contains("whisper") ||
-                                model_name_lower.contains("sonic");
-            
-            // Most Together chat models support tools and streaming
-            let supports_tools = matches!(model_type, ModelType::Chat) &&
-                                 !model_name_lower.contains("guard") &&
-                                 !model_name_lower.contains("embed");
-            
-            let supports_function_calling = supports_tools;
-            let supports_streaming = matches!(model_type, ModelType::Chat);
-            let supports_json_mode = supports_tools; // Most tool-capable models support JSON mode
+            // Only use explicit capability fields from JSON - no inference from names or types
+            let supports_vision = false; // Together doesn't provide explicit vision capability flags
+            let supports_code = false; // Together doesn't provide explicit code capability flags
+            let supports_reasoning = false; // Together doesn't provide explicit reasoning capability flags
+            let supports_audio = false; // Together doesn't provide explicit audio capability flags
+            let supports_tools = false; // Together doesn't provide explicit tools capability flags
+            let supports_function_calling = false; // Together doesn't provide explicit function calling capability flags
+            let supports_streaming = false; // Together doesn't provide explicit streaming capability flags
+            let supports_json_mode = false; // Together doesn't provide explicit JSON mode capability flags
             
             // Check if model is deprecated (not running)
             let is_deprecated = model.running == Some(false);
@@ -1021,33 +1136,18 @@ impl MetadataExtractor {
             // Extract model ID from name (e.g., "models/gemini-1.5-pro-latest" -> "gemini-1.5-pro-latest")
             let id = model.name.strip_prefix("models/").unwrap_or(&model.name).to_string();
             
-            // Determine capabilities based on supported generation methods and model name
-            let supports_tools = model.supported_generation_methods.contains(&"generateContent".to_string());
-            let supports_function_calling = supports_tools; // Same as tools for Gemini
-            
-            // Infer vision support from model name (Gemini Pro Vision, etc.)
-            let model_name_lower = model.display_name.to_lowercase();
-            let supports_vision = model_name_lower.contains("vision") ||
-                                 model_name_lower.contains("pro") || // Most Gemini Pro models support vision
-                                 model_name_lower.contains("1.5"); // Gemini 1.5 models support vision
-            
-            // Infer code support from model name
-            let supports_code = model_name_lower.contains("code") ||
-                               model_name_lower.contains("pro") || // Pro models generally good at code
-                               model_name_lower.contains("1.5"); // 1.5 models are good at code
-            
-            // Infer reasoning support from model name
-            let supports_reasoning = model_name_lower.contains("pro") ||
-                                    model_name_lower.contains("1.5") ||
-                                    model_name_lower.contains("ultra");
-            
-            // Most Gemini models support JSON mode and streaming
-            let supports_json_mode = supports_tools; // Tool-capable models typically support JSON
-            let supports_streaming = true; // Gemini supports streaming
-            
-            // Determine if model is deprecated (basic heuristic)
-            let is_deprecated = model_name_lower.contains("deprecated") ||
-                               model_name_lower.contains("legacy");
+// Only use explicit capabilities from JSON - no inference from model names
+let supports_tools = false; // Gemini doesn't provide explicit tools capability flags
+let supports_function_calling = false; // Gemini doesn't provide explicit function calling capability flags
+let supports_vision = false; // Gemini doesn't provide explicit vision capability flags
+let supports_code = false; // Gemini doesn't provide explicit code capability flags
+let supports_reasoning = false; // Gemini doesn't provide explicit reasoning capability flags
+let supports_json_mode = false; // Gemini doesn't provide explicit JSON mode capability flags
+let supports_streaming = false; // Gemini doesn't provide explicit streaming capability flags
+let _supports_audio = false; // Gemini doesn't provide explicit audio capability flags
+
+// Check if model is deprecated based only on explicit fields - no name heuristics
+let is_deprecated = false; // Gemini doesn't provide explicit deprecation info
             
             let metadata = ModelMetadata {
                 id: id.clone(),
@@ -1063,7 +1163,7 @@ impl MetadataExtractor {
                 output_price_per_m: None,
                 supports_tools,
                 supports_vision,
-                supports_audio: false, // Gemini doesn't support audio in text models
+                supports_audio: _supports_audio,
                 supports_reasoning,
                 supports_code,
                 supports_function_calling,
@@ -1082,98 +1182,6 @@ impl MetadataExtractor {
         Ok(models)
     }
     
-    // Capability inference helpers
-    fn infer_openai_capabilities(metadata: &mut ModelMetadata) {
-        let id = &metadata.id;
-        
-        // Vision models
-        if id.contains("vision") || id.contains("gpt-4o") || id.contains("gpt-4-turbo") {
-            metadata.supports_vision = true;
-        }
-        
-        // Audio models
-        if id.contains("audio") || id.contains("tts") || id.contains("whisper") {
-            metadata.supports_audio = true;
-            metadata.model_type = ModelType::AudioGeneration;
-        }
-        
-        // Reasoning models
-        if id.contains("o1") || id.contains("o3") || id.contains("reasoning") {
-            metadata.supports_reasoning = true;
-        }
-        
-        // Code models
-        if id.contains("code") || id.contains("davinci-002") || id.contains("babbage-002") {
-            metadata.supports_code = true;
-        }
-        
-        // Image generation
-        if id.contains("dall-e") {
-            metadata.model_type = ModelType::ImageGeneration;
-        }
-        
-        // Embeddings
-        if id.contains("embedding") {
-            metadata.model_type = ModelType::Embedding;
-        }
-        
-        // Moderation
-        if id.contains("moderation") {
-            metadata.model_type = ModelType::Moderation;
-        }
-        
-        // Most OpenAI models support tools and function calling
-        if matches!(metadata.model_type, ModelType::Chat) {
-            metadata.supports_tools = true;
-            metadata.supports_function_calling = true;
-            metadata.supports_json_mode = true;
-            metadata.supports_streaming = true;
-        }
-    }
-    
-    fn infer_groq_capabilities(metadata: &mut ModelMetadata) {
-        let id = &metadata.id;
-        
-        // Audio models
-        if id.contains("whisper") {
-            metadata.supports_audio = true;
-            metadata.model_type = ModelType::AudioGeneration;
-        }
-        
-        // Code models
-        if id.contains("code") || id.contains("starcoder") {
-            metadata.supports_code = true;
-        }
-        
-        // Most Groq models support tools
-        if matches!(metadata.model_type, ModelType::Chat) {
-            metadata.supports_tools = true;
-            metadata.supports_function_calling = true;
-            metadata.supports_streaming = true;
-        }
-    }
-    
-    fn infer_claude_capabilities(metadata: &mut ModelMetadata) {
-        // All Claude models support tools, streaming, and JSON mode
-        metadata.supports_tools = true;
-        metadata.supports_function_calling = true;
-        metadata.supports_json_mode = true;
-        metadata.supports_streaming = true;
-        
-        // Claude 3+ models support vision
-        if metadata.id.contains("claude-3") || metadata.id.contains("claude-4") {
-            metadata.supports_vision = true;
-        }
-        
-        // Set context lengths based on model
-        if metadata.id.contains("haiku") {
-            metadata.context_length = Some(200000);
-        } else if metadata.id.contains("sonnet") {
-            metadata.context_length = Some(200000);
-        } else if metadata.id.contains("opus") {
-            metadata.context_length = Some(200000);
-        }
-    }
     
     fn infer_cohere_model_type(endpoints: &[String]) -> ModelType {
         if endpoints.contains(&"chat".to_string()) {
