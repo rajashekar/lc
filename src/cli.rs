@@ -123,7 +123,7 @@ pub enum Commands {
     Chat {
         /// Model to use for the chat
         #[arg(short, long)]
-        model: String,
+        model: Option<String>,
         /// Provider to use for the chat
         #[arg(short, long)]
         provider: Option<String>,
@@ -2224,7 +2224,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
 }
 
 // Interactive chat mode
-pub async fn handle_chat_command(model: String, provider: Option<String>, cid: Option<String>, tools: Option<String>, database: Option<String>, debug: bool) -> Result<()> {
+pub async fn handle_chat_command(model: Option<String>, provider: Option<String>, cid: Option<String>, tools: Option<String>, database: Option<String>, debug: bool) -> Result<()> {
     // Set debug mode if requested
     if debug {
         set_debug_mode(true);
@@ -2240,7 +2240,7 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
     });
     
     // Resolve provider and model using the same logic as direct prompts
-    let (provider_name, resolved_model) = resolve_model_and_provider(&config, provider, Some(model))?;
+    let (provider_name, resolved_model) = resolve_model_and_provider(&config, provider, model)?;
     let _provider_config = config.get_provider(&provider_name)?;
     
     let mut config_mut = config.clone();

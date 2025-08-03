@@ -3,7 +3,6 @@
 - Support lc serve
 - Check images
 - Check audio
-- support streaming
 - Support other vector dbs like milvus, pinecone, qdrant
 - Support other web proxy chats
 - Add support to sync db to cloud
