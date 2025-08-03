@@ -1,10 +1,10 @@
 - Make sure documentation works
-- Support search ✓ (Brave and Exa providers implemented)
 - Support Amazon, alibaba, azure, vertex ai models
 - Support lc serve
 - Check images
 - Check audio
-- Fix tools bug in listing
+- support streaming
+- Support other vector dbs like milvus, pinecone, qdrant
 - Support other web proxy chats
 - Add support to sync db to cloud
 - provide sample config.toml

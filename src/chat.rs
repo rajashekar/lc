@@ -115,6 +115,7 @@ pub async fn send_chat_request_with_validation(
         max_tokens: max_tokens.or(Some(1024)),
         temperature: temperature.or(Some(0.7)),
         tools,
+        stream: None, // Non-streaming request
     };
     
     crate::debug_log!("Sending chat request with {} messages, max_tokens: {:?}, temperature: {:?}",
@@ -151,6 +152,120 @@ pub async fn send_chat_request_with_validation(
     }
     
     Ok((response, input_tokens, output_tokens))
+}
+
+pub async fn send_chat_request_with_streaming(
+    client: &LLMClient,
+    model: &str,
+    prompt: &str,
+    history: &[ChatEntry],
+    system_prompt: Option<&str>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
+    provider_name: &str,
+    tools: Option<Vec<crate::provider::Tool>>,
+) -> Result<()> {
+    crate::debug_log!("Sending streaming chat request - provider: '{}', model: '{}', prompt length: {}, history entries: {}",
+                      provider_name, model, prompt.len(), history.len());
+    crate::debug_log!("Request parameters - max_tokens: {:?}, temperature: {:?}", max_tokens, temperature);
+    
+    // Try to get model metadata for context validation
+    crate::debug_log!("Loading model metadata for provider '{}', model '{}'", provider_name, model);
+    let model_metadata = get_model_metadata(provider_name, model).await;
+    
+    if let Some(ref metadata) = model_metadata {
+        crate::debug_log!("Found metadata for model '{}' - context_length: {:?}, max_output: {:?}",
+                          model, metadata.context_length, metadata.max_output_tokens);
+    } else {
+        crate::debug_log!("No metadata found for model '{}'", model);
+    }
+    
+    // Create token counter
+    crate::debug_log!("Creating token counter for model '{}'", model);
+    let token_counter = match TokenCounter::new(model) {
+        Ok(counter) => {
+            crate::debug_log!("Successfully created token counter for model '{}'", model);
+            Some(counter)
+        }
+        Err(e) => {
+            crate::debug_log!("Failed to create token counter for model '{}': {}", model, e);
+            eprintln!("Warning: Failed to create token counter for model '{}': {}", model, e);
+            None
+        }
+    };
+    
+    let mut final_prompt = prompt.to_string();
+    let mut final_history = history.to_vec();
+    
+    // Validate context size if we have both metadata and token counter
+    if let (Some(metadata), Some(ref counter)) = (&model_metadata, &token_counter) {
+        if let Some(context_limit) = metadata.context_length {
+            // Check if input exceeds context limit
+            if counter.exceeds_context_limit(prompt, system_prompt, history, context_limit) {
+                println!("⚠️  Input exceeds model context limit ({}k tokens). Truncating...", context_limit / 1000);
+                
+                // Truncate to fit within context limit
+                let (truncated_prompt, truncated_history) = counter.truncate_to_fit(
+                    prompt,
+                    system_prompt,
+                    history,
+                    context_limit,
+                    metadata.max_output_tokens
+                );
+                
+                final_prompt = truncated_prompt;
+                final_history = truncated_history;
+                
+                if final_history.len() < history.len() {
+                    println!("📝 Truncated conversation history from {} to {} messages", history.len(), final_history.len());
+                }
+                
+                if final_prompt.len() < prompt.len() {
+                    println!("✂️  Truncated prompt from {} to {} characters", prompt.len(), final_prompt.len());
+                }
+            }
+        }
+    }
+    
+    // Build messages for the request
+    let mut messages = Vec::new();
+    
+    // Add system prompt if provided
+    if let Some(sys_prompt) = system_prompt {
+        messages.push(Message {
+            role: "system".to_string(),
+            content: Some(sys_prompt.to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+        });
+    }
+    
+    // Add conversation history
+    for entry in &final_history {
+        messages.push(Message::user(entry.question.clone()));
+        messages.push(Message::assistant(entry.response.clone()));
+    }
+    
+    // Add current prompt
+    messages.push(Message::user(final_prompt));
+    
+    let request = ChatRequest {
+        model: model.to_string(),
+        messages: messages.clone(),
+        max_tokens: max_tokens.or(Some(1024)),
+        temperature: temperature.or(Some(0.7)),
+        tools,
+        stream: Some(true), // Enable streaming
+    };
+    
+    crate::debug_log!("Sending streaming chat request with {} messages, max_tokens: {:?}, temperature: {:?}",
+                      messages.len(), request.max_tokens, request.temperature);
+    
+    // Send the streaming request
+    crate::debug_log!("Making streaming API call to chat endpoint...");
+    client.chat_stream(&request, model).await?;
+    
+    Ok(())
 }
 
 async fn get_model_metadata(provider_name: &str, model_name: &str) -> Option<crate::model_metadata::ModelMetadata> {
@@ -258,6 +373,17 @@ impl LLMClient {
                 // Gemini doesn't support embeddings through the same API
                 // For now, return an error - this could be extended later
                 anyhow::bail!("Embeddings not supported for Gemini provider. Use a dedicated embedding model.")
+            }
+        }
+    }
+    
+    pub async fn chat_stream(&self, request: &ChatRequest, model: &str) -> Result<()> {
+        match self {
+            LLMClient::OpenAI(client) => client.chat_stream(request).await,
+            LLMClient::Gemini(client) => {
+                // Convert OpenAI format to Gemini format
+                let gemini_request = convert_to_gemini_request(request)?;
+                client.chat_stream(&gemini_request, model).await
             }
         }
     }
@@ -526,6 +652,7 @@ pub async fn send_chat_request_with_tool_execution(
             max_tokens: max_tokens.or(Some(1024)),
             temperature: temperature.or(Some(0.7)),
             tools: tools.clone(),
+            stream: None, // Non-streaming request for tool execution
         };
         
         // Make the API call

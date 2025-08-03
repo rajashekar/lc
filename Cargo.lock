@@ -2471,6 +2471,7 @@ dependencies = [
  "criterion",
  "dashmap",
  "dirs",
+ "futures-util",
  "glob",
  "hnsw_rs",
  "lazy_static",

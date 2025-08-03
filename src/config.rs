@@ -20,6 +20,8 @@ pub struct Config {
     pub max_tokens: Option<u32>,
     #[serde(default)]
     pub temperature: Option<f32>,
+    #[serde(default)]
+    pub stream: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -72,6 +74,7 @@ impl Config {
                 templates: HashMap::new(),
                 max_tokens: None,
                 temperature: None,
+                stream: None,
             };
             
             // Ensure config directory exists

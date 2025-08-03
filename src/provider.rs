@@ -2,6 +2,8 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use futures_util::StreamExt;
+use std::io::{self, Write};
 
 #[derive(Debug, Serialize)]
 pub struct ChatRequest {
@@ -11,6 +13,8 @@ pub struct ChatRequest {
     pub temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -504,6 +508,82 @@ impl OpenAIClient {
         let embedding_response: EmbeddingResponse = response.json().await?;
         Ok(embedding_response)
     }
+    
+    pub async fn chat_stream(&self, request: &ChatRequest) -> Result<()> {
+        use std::io::{stdout, BufWriter};
+        
+        let url = format!("{}{}", self.base_url, self.chat_path);
+        
+        let mut req = self.client
+            .post(&url)
+            .header("Content-Type", "application/json");
+        
+        // Add Authorization header only if no custom headers are present
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
+        
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
+            .json(request)
+            .send()
+            .await?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("API request failed with status {}: {}", status, text);
+        }
+        
+        let mut stream = response.bytes_stream();
+        
+        // Use unbuffered stdout for immediate output
+        let stdout = stdout();
+        let mut handle = stdout.lock();
+        
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            let chunk_str = String::from_utf8_lossy(&chunk);
+            
+            // Handle Server-Sent Events format
+            for line in chunk_str.lines() {
+                if line.starts_with("data: ") {
+                    let data = &line[6..]; // Remove "data: " prefix
+                    
+                    if data == "[DONE]" {
+                        break;
+                    }
+                    
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(choices) = json.get("choices") {
+                            if let Some(choice) = choices.get(0) {
+                                if let Some(delta) = choice.get("delta") {
+                                    if let Some(content) = delta.get("content") {
+                                        if let Some(text) = content.as_str() {
+                                            // Write directly to stdout and flush immediately
+                                            use std::io::Write;
+                                            handle.write_all(text.as_bytes())?;
+                                            handle.flush()?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Add newline at the end
+        use std::io::Write;
+        handle.write_all(b"\n")?;
+        handle.flush()?;
+        Ok(())
+    }
 }
 
 // Gemini-specific structures
@@ -818,5 +898,15 @@ impl GeminiClient {
         }).collect();
         
         Ok(models)
+    }
+    
+    pub async fn chat_stream(&self, request: &GeminiChatRequest, model: &str) -> Result<()> {
+        // For now, Gemini streaming will fall back to regular chat
+        // This can be enhanced later with proper Gemini streaming support
+        let response = self.chat(request, model).await?;
+        print!("{}", response);
+        io::stdout().flush()?;
+        println!();
+        Ok(())
     }
 }

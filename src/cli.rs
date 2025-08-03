@@ -84,6 +84,10 @@ pub struct Cli {
     #[arg(long = "use-search")]
     pub use_search: Option<String>,
     
+    /// Enable streaming output for prompt responses
+    #[arg(long = "stream")]
+    pub stream: bool,
+    
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -565,6 +569,12 @@ pub enum SetCommands {
         /// Search provider name
         name: String,
     },
+    /// Set streaming mode (alias: st)
+    #[command(alias = "st")]
+    Stream {
+        /// Enable or disable streaming (true/false)
+        value: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -587,6 +597,9 @@ pub enum GetCommands {
     /// Get default search provider (alias: se)
     #[command(alias = "se")]
     Search,
+    /// Get streaming mode (alias: st)
+    #[command(alias = "st")]
+    Stream,
 }
 
 #[derive(Subcommand)]
@@ -609,6 +622,9 @@ pub enum DeleteCommands {
     /// Delete default search provider (alias: se)
     #[command(alias = "se")]
     Search,
+    /// Delete streaming mode (alias: st)
+    #[command(alias = "st")]
+    Stream,
 }
 
 #[derive(Subcommand)]
@@ -1417,6 +1433,17 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                     search_config.save()?;
                     println!("{} Default search provider set to '{}'", "✓".green(), name);
                 }
+                SetCommands::Stream { value } => {
+                    let mut config = config::Config::load()?;
+                    let stream_value = match value.to_lowercase().as_str() {
+                        "true" | "1" | "yes" | "on" => true,
+                        "false" | "0" | "no" | "off" => false,
+                        _ => anyhow::bail!("Invalid stream value '{}'. Use 'true' or 'false'", value),
+                    };
+                    config.stream = Some(stream_value);
+                    config.save()?;
+                    println!("{} Streaming mode set to {}", "✓".green(), stream_value);
+                }
             }
         }
         Some(ConfigCommands::Get { command }) => {
@@ -1463,6 +1490,13 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                         println!("{}", provider);
                     } else {
                         anyhow::bail!("No default search provider configured");
+                    }
+                }
+                GetCommands::Stream => {
+                    if let Some(stream) = &config.stream {
+                        println!("{}", stream);
+                    } else {
+                        anyhow::bail!("No streaming mode configured");
                     }
                 }
             }
@@ -1523,6 +1557,16 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                         println!("{} Default search provider deleted", "✓".green());
                     } else {
                         anyhow::bail!("No default search provider configured to delete");
+                    }
+                }
+                DeleteCommands::Stream => {
+                    let mut config = config::Config::load()?;
+                    if config.stream.is_some() {
+                        config.stream = None;
+                        config.save()?;
+                        println!("{} Streaming mode deleted", "✓".green());
+                    } else {
+                        anyhow::bail!("No streaming mode configured to delete");
                     }
                 }
             }
@@ -1649,6 +1693,12 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                 println!("temperature {}", temperature);
             } else {
                 println!("temperature {}", "not set".dimmed());
+            }
+            
+            if let Some(stream) = &config.stream {
+                println!("stream {}", stream);
+            } else {
+                println!("stream {}", "not set".dimmed());
             }
         }
     }
@@ -1787,7 +1837,7 @@ pub fn is_code_file(extension: &str) -> bool {
 }
 
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>) -> Result<()> {
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>, stream: bool) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
@@ -1884,32 +1934,77 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         }
     }
     
+    // Determine if streaming should be used (CLI flag takes precedence over config)
+    let use_streaming = stream || config.stream.unwrap_or(false);
+    
     // Send the prompt
-    print!("{} ", "Thinking...".dimmed());
-    io::stdout().flush()?;
-    
-    let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
-        // Use tool execution loop when tools are available
-        let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-        chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
-    } else {
-        // Use regular chat when no tools
-        chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
-    };
-    
-    match result {
-        Ok((response, input_tokens, output_tokens)) => {
-            print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
-            println!("{}", response);
-            
-            // Save to database with token counts (save original prompt for cleaner logs)
-            if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &prompt, &response, input_tokens, output_tokens) {
-                eprintln!("Warning: Failed to save chat entry: {}", e);
+    if use_streaming {
+        // Use streaming
+        if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+            // For now, tools don't support streaming, fall back to regular
+            print!("{} ", "Thinking...".dimmed());
+            io::stdout().flush()?;
+            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+            match chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await {
+                Ok((response, input_tokens, output_tokens)) => {
+                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    println!("{}", response);
+                    
+                    // Save to database with token counts
+                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &prompt, &response, input_tokens, output_tokens) {
+                        eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                }
+                Err(e) => {
+                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    anyhow::bail!("Error: {}", e);
+                }
+            }
+        } else {
+            // Use streaming chat - content is streamed directly to stdout
+            match chat::send_chat_request_with_streaming(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await {
+                Ok(_) => {
+                    // Streaming completed successfully, add a newline
+                    println!();
+                    
+                    // For streaming, we save a placeholder since the actual response was streamed
+                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &prompt, "[Streamed Response]", None, None) {
+                        eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                }
+                Err(e) => {
+                    anyhow::bail!("Error: {}", e);
+                }
             }
         }
-        Err(e) => {
-            print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
-            anyhow::bail!("Error: {}", e);
+    } else {
+        // Use regular non-streaming
+        print!("{} ", "Thinking...".dimmed());
+        io::stdout().flush()?;
+        
+        let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+            // Use tool execution loop when tools are available
+            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+            chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+        } else {
+            // Use regular chat when no tools
+            chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+        };
+        
+        match result {
+            Ok((response, input_tokens, output_tokens)) => {
+                print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                println!("{}", response);
+                
+                // Save to database with token counts (save original prompt for cleaner logs)
+                if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &prompt, &response, input_tokens, output_tokens) {
+                    eprintln!("Warning: Failed to save chat entry: {}", e);
+                }
+            }
+            Err(e) => {
+                print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                anyhow::bail!("Error: {}", e);
+            }
         }
     }
     
@@ -1917,7 +2012,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
 }
 
 // Direct prompt handler for piped input (treats piped content as attachment)
-pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>) -> Result<()> {
+pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>, stream: bool) -> Result<()> {
     // For piped input, we need to determine if there's a prompt in the arguments
     // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
     // But we should provide a way to specify a prompt when piping content
@@ -2027,38 +2122,95 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         }
     }
     
+    // Determine if streaming should be used (CLI flag takes precedence over config)
+    let use_streaming = stream || config.stream.unwrap_or(false);
+    
     // Send the prompt
-    print!("{} ", "Thinking...".dimmed());
-    io::stdout().flush()?;
-    
-    let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
-        // Use tool execution loop when tools are available
-        let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-        chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
-    } else {
-        // Use regular chat when no tools
-        chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
-    };
-    
-    match result {
-        Ok((response, input_tokens, output_tokens)) => {
-            print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
-            println!("{}", response);
-            
-            // Save to database with token counts (save a shortened version for cleaner logs)
-            let log_prompt = if piped_content.len() > 100 {
-                format!("{}... (piped content)", &piped_content[..100])
-            } else {
-                format!("{} (piped content)", piped_content)
-            };
-            
-            if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &log_prompt, &response, input_tokens, output_tokens) {
-                eprintln!("Warning: Failed to save chat entry: {}", e);
+    if use_streaming {
+        // Use streaming
+        if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+            // For now, tools don't support streaming, fall back to regular
+            print!("{} ", "Thinking...".dimmed());
+            io::stdout().flush()?;
+            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+            match chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await {
+                Ok((response, input_tokens, output_tokens)) => {
+                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    println!("{}", response);
+                    
+                    // Save to database with token counts (save a shortened version for cleaner logs)
+                    let log_prompt = if piped_content.len() > 100 {
+                        format!("{}... (piped content)", &piped_content[..100])
+                    } else {
+                        format!("{} (piped content)", piped_content)
+                    };
+                    
+                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &log_prompt, &response, input_tokens, output_tokens) {
+                        eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                }
+                Err(e) => {
+                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    anyhow::bail!("Error: {}", e);
+                }
+            }
+        } else {
+            // Use streaming chat - content is streamed directly to stdout
+            match chat::send_chat_request_with_streaming(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await {
+                Ok(_) => {
+                    // Streaming completed successfully, add a newline
+                    println!();
+                    
+                    // Save to database with token counts (save a shortened version for cleaner logs)
+                    let log_prompt = if piped_content.len() > 100 {
+                        format!("{}... (piped content)", &piped_content[..100])
+                    } else {
+                        format!("{} (piped content)", piped_content)
+                    };
+                    
+                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &log_prompt, "[Streamed Response]", None, None) {
+                        eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                }
+                Err(e) => {
+                    anyhow::bail!("Error: {}", e);
+                }
             }
         }
-        Err(e) => {
-            print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
-            anyhow::bail!("Error: {}", e);
+    } else {
+        // Use regular non-streaming
+        print!("{} ", "Thinking...".dimmed());
+        io::stdout().flush()?;
+        
+        let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+            // Use tool execution loop when tools are available
+            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+            chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+        } else {
+            // Use regular chat when no tools
+            chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+        };
+        
+        match result {
+            Ok((response, input_tokens, output_tokens)) => {
+                print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                println!("{}", response);
+                
+                // Save to database with token counts (save a shortened version for cleaner logs)
+                let log_prompt = if piped_content.len() > 100 {
+                    format!("{}... (piped content)", &piped_content[..100])
+                } else {
+                    format!("{} (piped content)", piped_content)
+                };
+                
+                if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &log_prompt, &response, input_tokens, output_tokens) {
+                    eprintln!("Warning: Failed to save chat entry: {}", e);
+                }
+            }
+            Err(e) => {
+                print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                anyhow::bail!("Error: {}", e);
+            }
         }
     }
     
@@ -2196,28 +2348,61 @@ pub async fn handle_chat_command(model: String, provider: Option<String>, cid: O
             None
         };
         
-        let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
-            // Use tool execution loop when tools are available
-            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            chat::send_chat_request_with_tool_execution(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await
-        } else {
-            // Use regular chat when no tools
-            chat::send_chat_request_with_validation(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
-        };
+        // Determine if streaming should be used (config setting, default false)
+        let use_streaming = config.stream.unwrap_or(false);
         
-        match result {
-            Ok((response, input_tokens, output_tokens)) => {
-                print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
-                println!("{} {}", "Assistant:".bold().blue(), response);
-                
-                // Save to database with token counts
-                if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, &response, input_tokens, output_tokens) {
-                    eprintln!("Warning: Failed to save chat entry: {}", e);
+        if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+            // Use tool execution loop when tools are available (tools don't support streaming yet)
+            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+            match chat::send_chat_request_with_tool_execution(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await {
+                Ok((response, input_tokens, output_tokens)) => {
+                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    println!("{} {}", "Assistant:".bold().blue(), response);
+                    
+                    // Save to database with token counts
+                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, &response, input_tokens, output_tokens) {
+                        eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                }
+                Err(e) => {
+                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    println!("{} Error: {}", "✗".red(), e);
                 }
             }
-            Err(e) => {
-                print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
-                println!("{} Error: {}", "✗".red(), e);
+        } else if use_streaming {
+            // Use streaming chat when no tools and streaming is enabled - content is streamed directly to stdout
+            print!("{} ", "Assistant:".bold().blue());
+            io::stdout().flush()?;
+            match chat::send_chat_request_with_streaming(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await {
+                Ok(_) => {
+                    // Streaming completed successfully, add a newline
+                    println!();
+                    
+                    // Save to database with placeholder since the actual response was streamed
+                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, "[Streamed Response]", None, None) {
+                        eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                }
+                Err(e) => {
+                    println!("\n{} Error: {}", "✗".red(), e);
+                }
+            }
+        } else {
+            // Use regular chat when no tools and streaming is disabled
+            match chat::send_chat_request_with_validation(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await {
+                Ok((response, input_tokens, output_tokens)) => {
+                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    println!("{} {}", "Assistant:".bold().blue(), response);
+                    
+                    // Save to database with token counts
+                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, &response, input_tokens, output_tokens) {
+                        eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                }
+                Err(e) => {
+                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    println!("{} Error: {}", "✗".red(), e);
+                }
             }
         }
         
