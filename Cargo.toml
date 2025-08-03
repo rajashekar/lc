@@ -69,11 +69,3 @@ nix = { version = "0.27", features = ["fs", "signal", "process"] }
 [dev-dependencies]
 tempfile = "3.8"
 criterion = { version = "0.5", features = ["html_reports"] }
-
-[[bench]]
-name = "database_benchmark"
-harness = false
-
-[[bench]]
-name = "http_client_benchmark"
-harness = false

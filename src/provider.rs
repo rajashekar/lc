@@ -566,18 +566,10 @@ impl OpenAIClient {
             anyhow::bail!("API request failed with status {}: {}", status, text);
         }
         
-        // Log response headers for debugging
+        // Check for compression headers (silent check for potential issues)
         let headers = response.headers();
-        eprintln!("Response headers: {:?}", headers);
-        
-        // Check for compression headers
-        if let Some(content_encoding) = headers.get("content-encoding") {
-            eprintln!("Warning: Content-Encoding detected: {:?}", content_encoding);
-            eprintln!("This may cause buffering delays in streaming.");
-        }
-        
-        if let Some(transfer_encoding) = headers.get("transfer-encoding") {
-            eprintln!("Transfer-Encoding: {:?}", transfer_encoding);
+        if headers.get("content-encoding").is_some() {
+            // Content encoding detected - may cause buffering delays but continue silently
         }
         
         let mut stream = response.bytes_stream();
@@ -586,7 +578,6 @@ impl OpenAIClient {
         
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            eprintln!("Received {} bytes at {:?}", chunk.len(), std::time::SystemTime::now());
             
             let chunk_str = String::from_utf8_lossy(&chunk);
             buffer.push_str(&chunk_str);
