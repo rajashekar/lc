@@ -86,7 +86,7 @@ impl DuckDuckGoProvider {
         let client = reqwest::Client::new();
         
         // Build query parameters for DuckDuckGo Instant Answer API
-        let mut params = vec![
+        let params = vec![
             ("q", query.to_string()),
             ("format", "json".to_string()),
             ("no_redirect", "1".to_string()),
@@ -96,11 +96,14 @@ impl DuckDuckGoProvider {
         
         crate::debug_log!("DuckDuckGo: Making GET request to {} with params: {:?}", self.url, params);
         
-        let response = client
-            .get(&self.url)
-            .query(&params)
-            .send()
-            .await?;
+        let mut request = client.get(&self.url).query(&params);
+        
+        // Add custom headers if provided
+        for (key, value) in &self.headers {
+            request = request.header(key, value);
+        }
+        
+        let response = request.send().await?;
         
         let status = response.status();
         crate::debug_log!("DuckDuckGo: Received response with status: {}", status);
