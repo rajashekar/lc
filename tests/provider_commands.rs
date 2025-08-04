@@ -25,6 +25,7 @@ mod provider_add_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test adding a basic provider
@@ -56,6 +57,7 @@ mod provider_add_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test adding a provider with custom paths
@@ -86,6 +88,7 @@ mod provider_add_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add multiple providers from test data
@@ -209,6 +212,7 @@ mod provider_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         assert!(config.providers.is_empty());
@@ -234,6 +238,7 @@ mod provider_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add providers in specific order

@@ -22,6 +22,7 @@ mod alias_add_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add some test providers
@@ -182,6 +183,7 @@ mod alias_delete_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add test providers
@@ -304,6 +306,7 @@ mod alias_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         let aliases = config.list_aliases();
@@ -322,6 +325,7 @@ mod alias_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add some aliases
@@ -349,6 +353,7 @@ mod alias_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add aliases in specific order
@@ -376,6 +381,7 @@ mod alias_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         config.aliases.insert("test".to_string(), "provider:model".to_string());
         
@@ -403,6 +409,7 @@ mod alias_validation_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Valid formats
@@ -436,6 +443,7 @@ mod alias_validation_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Invalid formats (no colon)
@@ -468,6 +476,7 @@ mod alias_validation_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add a provider first
@@ -501,6 +510,7 @@ mod alias_validation_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add a provider first
@@ -550,6 +560,7 @@ mod alias_resolution_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add providers
@@ -637,6 +648,7 @@ mod alias_resolution_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add provider
@@ -690,6 +702,7 @@ mod alias_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add provider
@@ -753,6 +766,7 @@ mod alias_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add provider
@@ -781,6 +795,7 @@ mod alias_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         config2.providers = config1.providers.clone();
         config2.aliases = config1.aliases.clone();
@@ -802,6 +817,7 @@ mod alias_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add provider and alias

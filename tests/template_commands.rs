@@ -22,6 +22,7 @@ mod template_add_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         }
     }
 
@@ -174,6 +175,7 @@ mod template_delete_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add test templates
@@ -287,6 +289,7 @@ mod template_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         let templates = config.list_templates();
@@ -305,6 +308,7 @@ mod template_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add some templates
@@ -332,6 +336,7 @@ mod template_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add templates in specific order
@@ -359,6 +364,7 @@ mod template_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         config.templates.insert("test".to_string(), "Test template".to_string());
         
@@ -385,6 +391,7 @@ mod template_resolution_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add test templates
@@ -500,6 +507,7 @@ mod template_validation_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Various template names should be allowed
@@ -535,6 +543,7 @@ mod template_validation_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Various content types should be allowed
@@ -572,6 +581,7 @@ mod template_validation_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add template
@@ -602,6 +612,7 @@ mod template_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Start with empty templates
@@ -657,6 +668,7 @@ mod template_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add templates
@@ -673,6 +685,7 @@ mod template_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         config2.templates = config1.templates.clone();
         
@@ -696,6 +709,7 @@ mod template_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add template
@@ -725,6 +739,7 @@ mod template_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add templates with various complexities

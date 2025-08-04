@@ -55,21 +55,72 @@ pub struct Function {
     pub parameters: serde_json::Value,
 }
 
+// Updated Message struct to support multimodal content
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     pub role: String,
-    pub content: Option<String>,
+    #[serde(flatten)]
+    pub content_type: MessageContent,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
 }
 
+// New enum to support both text and multimodal content
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum MessageContent {
+    Text {
+        content: Option<String>,
+    },
+    Multimodal {
+        content: Vec<ContentPart>,
+    },
+}
+
+// Content part for multimodal messages
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum ContentPart {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "image_url")]
+    ImageUrl { image_url: ImageUrl },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImageUrl {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>, // "low", "high", or "auto"
+}
+
 impl Message {
     pub fn user(content: String) -> Self {
         Self {
             role: "user".to_string(),
-            content: Some(content),
+            content_type: MessageContent::Text { content: Some(content) },
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+    
+    #[allow(dead_code)]
+    pub fn user_with_image(text: String, image_data: String, detail: Option<String>) -> Self {
+        Self {
+            role: "user".to_string(),
+            content_type: MessageContent::Multimodal {
+                content: vec![
+                    ContentPart::Text { text },
+                    ContentPart::ImageUrl {
+                        image_url: ImageUrl {
+                            url: image_data,
+                            detail,
+                        },
+                    },
+                ],
+            },
             tool_calls: None,
             tool_call_id: None,
         }
@@ -78,7 +129,7 @@ impl Message {
     pub fn assistant(content: String) -> Self {
         Self {
             role: "assistant".to_string(),
-            content: Some(content),
+            content_type: MessageContent::Text { content: Some(content) },
             tool_calls: None,
             tool_call_id: None,
         }
@@ -87,7 +138,7 @@ impl Message {
     pub fn assistant_with_tool_calls(tool_calls: Vec<ToolCall>) -> Self {
         Self {
             role: "assistant".to_string(),
-            content: None,
+            content_type: MessageContent::Text { content: None },
             tool_calls: Some(tool_calls),
             tool_call_id: None,
         }
@@ -96,9 +147,23 @@ impl Message {
     pub fn tool_result(tool_call_id: String, content: String) -> Self {
         Self {
             role: "tool".to_string(),
-            content: Some(content),
+            content_type: MessageContent::Text { content: Some(content) },
             tool_calls: None,
             tool_call_id: Some(tool_call_id),
+        }
+    }
+    
+    // Helper method to get text content for backward compatibility
+    pub fn get_text_content(&self) -> Option<&String> {
+        match &self.content_type {
+            MessageContent::Text { content } => content.as_ref(),
+            MessageContent::Multimodal { content } => {
+                // Return the first text content if available
+                content.iter().find_map(|part| match part {
+                    ContentPart::Text { text } => Some(text),
+                    _ => None,
+                })
+            }
         }
     }
 }
@@ -687,8 +752,16 @@ pub struct GeminiContent {
 #[serde(untagged)]
 pub enum GeminiPart {
     Text { text: String },
+    InlineData { inline_data: GeminiInlineData },
     FunctionCall { function_call: GeminiFunctionCall },
     FunctionResponse { function_response: GeminiFunctionResponse },
+}
+
+// New struct for Gemini inline image data
+#[derive(Debug, Serialize)]
+pub struct GeminiInlineData {
+    pub mime_type: String,
+    pub data: String, // base64 encoded
 }
 
 #[derive(Debug, Serialize, Deserialize)]

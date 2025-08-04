@@ -2,6 +2,7 @@ use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 use warp::Filter;
 use std::sync::{Arc, Mutex};
+use futures_util::stream;
 
 #[tokio::test]
 async fn test_lc_stream() {
@@ -13,7 +14,7 @@ async fn test_lc_stream() {
         .map(move || {
             let mut messages = messages_clone.lock().unwrap();
             messages.push("data: counting\n\n".to_string());
-            warp::sse::reply(warp::sse::keep_alive().stream(warp::stream::iter(messages.clone().into_iter().map(|msg| Ok(msg)))))
+            warp::sse::reply(warp::sse::keep_alive().stream(stream::iter(messages.clone().into_iter().map(|msg| Ok::<warp::sse::Event, std::convert::Infallible>(warp::sse::Event::default().data(msg))))))
         });
 
     let (_addr, server) = warp::serve(routes).bind_ephemeral(([127, 0, 0, 1], 3030));

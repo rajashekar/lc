@@ -28,6 +28,7 @@ mod proxy_state_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add test providers
@@ -123,6 +124,7 @@ mod proxy_model_parsing_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add providers
@@ -404,7 +406,7 @@ mod proxy_data_structures_tests {
                 index: 0,
                 message: Message {
                     role: "assistant".to_string(),
-                    content: Some("Hello there!".to_string()),
+                    content_type: lc::provider::MessageContent::Text { content: Some("Hello there!".to_string()) },
                     tool_calls: None,
                     tool_call_id: None,
                 },
@@ -456,6 +458,7 @@ mod proxy_filtering_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         config.providers.insert("openai".to_string(), lc::config::ProviderConfig {
@@ -608,13 +611,13 @@ mod proxy_validation_tests {
         let messages = vec![
             Message {
                 role: "user".to_string(),
-                content: Some("Hello".to_string()),
+                content_type: lc::provider::MessageContent::Text { content: Some("Hello".to_string()) },
                 tool_calls: None,
                 tool_call_id: None,
             },
             Message {
                 role: "assistant".to_string(),
-                content: Some("Hi there!".to_string()),
+                content_type: lc::provider::MessageContent::Text { content: Some("Hi there!".to_string()) },
                 tool_calls: None,
                 tool_call_id: None,
             },
@@ -712,6 +715,7 @@ mod proxy_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add realistic provider configuration
@@ -762,6 +766,7 @@ mod proxy_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Simulate proxy server startup
@@ -803,6 +808,7 @@ mod proxy_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Test error cases
@@ -829,7 +835,7 @@ mod proxy_integration_tests {
                 index: 0,
                 message: Message {
                     role: "assistant".to_string(),
-                    content: Some("Hello!".to_string()),
+                    content_type: lc::provider::MessageContent::Text { content: Some("Hello!".to_string()) },
                     tool_calls: None,
                     tool_call_id: None,
                 },
@@ -892,6 +898,7 @@ mod proxy_authentication_tests {
                 templates: HashMap::new(),
                 max_tokens: None,
                 temperature: None,
+                stream: None,
             },
             api_key: Some("sk-test123".to_string()),
             provider_filter: None,
@@ -908,6 +915,7 @@ mod proxy_authentication_tests {
                 templates: HashMap::new(),
                 max_tokens: None,
                 temperature: None,
+                stream: None,
             },
             api_key: None,
             provider_filter: None,
@@ -1036,6 +1044,7 @@ mod proxy_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         let error_cases = vec![
@@ -1089,6 +1098,7 @@ mod proxy_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add only openai provider
@@ -1113,6 +1123,7 @@ mod proxy_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Test filtering logic
@@ -1165,6 +1176,7 @@ mod proxy_performance_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add many providers and aliases

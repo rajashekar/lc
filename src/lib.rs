@@ -22,6 +22,7 @@ pub mod webchatproxy;
 pub mod sync;
 pub mod search;
 pub mod readers;
+pub mod image_utils;
 
 // Re-export commonly used types for easier access in tests
 pub use config::{Config, ProviderConfig, CachedToken};

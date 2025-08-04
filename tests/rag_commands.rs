@@ -252,6 +252,7 @@ mod rag_model_consistency_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add chat provider (Venice)

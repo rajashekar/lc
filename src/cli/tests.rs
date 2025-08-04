@@ -22,6 +22,7 @@ fn create_test_config() -> (Config, TempDir) {
         templates: HashMap::new(),
         max_tokens: None,
         temperature: None,
+        stream: None,
     };
     
     (config, temp_dir)
@@ -52,6 +53,7 @@ fn create_config_with_providers() -> Config {
         templates: HashMap::new(),
         max_tokens: None,
         temperature: None,
+        stream: None,
     };
     
     // Add test providers
@@ -85,6 +87,7 @@ mod provider_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test adding a basic provider
@@ -118,6 +121,7 @@ mod provider_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test adding a provider with custom paths
@@ -200,6 +204,7 @@ mod provider_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         assert!(config.providers.is_empty());
@@ -536,6 +541,7 @@ mod provider_edge_cases {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test empty provider name
@@ -562,6 +568,7 @@ mod provider_edge_cases {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test various URL formats
@@ -591,6 +598,7 @@ mod provider_edge_cases {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test various path formats
@@ -628,6 +636,7 @@ mod provider_edge_cases {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add provider
@@ -656,6 +665,7 @@ mod provider_edge_cases {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add providers with different cases
@@ -710,6 +720,7 @@ mod provider_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // 1. Add provider
@@ -787,6 +798,7 @@ mod provider_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add multiple providers

@@ -26,6 +26,7 @@ mod chat_model_resolution_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add test providers
@@ -164,26 +165,38 @@ mod chat_message_handling_tests {
         // Test user message
         let user_msg = Message::user("Hello, world!".to_string());
         assert_eq!(user_msg.role, "user");
-        assert_eq!(user_msg.content, Some("Hello, world!".to_string()));
+        if let lc::provider::MessageContent::Text { content } = &user_msg.content_type {
+            assert_eq!(content, &Some("Hello, world!".to_string()));
+        } else {
+            panic!("Expected Text content");
+        }
         assert!(user_msg.tool_calls.is_none());
         assert!(user_msg.tool_call_id.is_none());
         
         // Test assistant message
         let assistant_msg = Message::assistant("Hi there!".to_string());
         assert_eq!(assistant_msg.role, "assistant");
-        assert_eq!(assistant_msg.content, Some("Hi there!".to_string()));
+        if let lc::provider::MessageContent::Text { content } = &assistant_msg.content_type {
+            assert_eq!(content, &Some("Hi there!".to_string()));
+        } else {
+            panic!("Expected Text content");
+        }
         assert!(assistant_msg.tool_calls.is_none());
         assert!(assistant_msg.tool_call_id.is_none());
         
         // Test system message
         let system_msg = Message {
             role: "system".to_string(),
-            content: Some("You are a helpful assistant.".to_string()),
+            content_type: lc::provider::MessageContent::Text { content: Some("You are a helpful assistant.".to_string()) },
             tool_calls: None,
             tool_call_id: None,
         };
         assert_eq!(system_msg.role, "system");
-        assert_eq!(system_msg.content, Some("You are a helpful assistant.".to_string()));
+        if let lc::provider::MessageContent::Text { content } = &system_msg.content_type {
+            assert_eq!(content, &Some("You are a helpful assistant.".to_string()));
+        } else {
+            panic!("Expected Text content");
+        }
     }
 
     #[test]
@@ -198,6 +211,7 @@ mod chat_message_handling_tests {
             max_tokens: Some(100),
             temperature: Some(0.7),
             tools: None,
+            stream: None,
         };
         
         assert_eq!(request.model, "gpt-4");
@@ -233,6 +247,7 @@ mod chat_message_handling_tests {
             max_tokens: Some(100),
             temperature: Some(0.7),
             tools: Some(vec![tool.clone()]),
+            stream: None,
         };
         
         assert!(request.tools.is_some());
@@ -269,7 +284,7 @@ mod chat_message_handling_tests {
         // Add system prompt
         messages.push(Message {
             role: "system".to_string(),
-            content: Some("You are a helpful assistant.".to_string()),
+            content_type: lc::provider::MessageContent::Text { content: Some("You are a helpful assistant.".to_string()) },
             tool_calls: None,
             tool_call_id: None,
         });
@@ -286,11 +301,23 @@ mod chat_message_handling_tests {
         assert_eq!(messages.len(), 6); // 1 system + 2*2 history + 1 current
         assert_eq!(messages[0].role, "system");
         assert_eq!(messages[1].role, "user");
-        assert_eq!(messages[1].content, Some("Hello".to_string()));
+        if let lc::provider::MessageContent::Text { content } = &messages[1].content_type {
+            assert_eq!(content, &Some("Hello".to_string()));
+        } else {
+            panic!("Expected Text content");
+        }
         assert_eq!(messages[2].role, "assistant");
-        assert_eq!(messages[2].content, Some("Hi there!".to_string()));
+        if let lc::provider::MessageContent::Text { content } = &messages[2].content_type {
+            assert_eq!(content, &Some("Hi there!".to_string()));
+        } else {
+            panic!("Expected Text content");
+        }
         assert_eq!(messages[5].role, "user");
-        assert_eq!(messages[5].content, Some("What's your name?".to_string()));
+        if let lc::provider::MessageContent::Text { content } = &messages[5].content_type {
+            assert_eq!(content, &Some("What's your name?".to_string()));
+        } else {
+            panic!("Expected Text content");
+        }
     }
 }
 
@@ -386,6 +413,7 @@ mod chat_parameter_validation_tests {
             templates: HashMap::new(),
             max_tokens: Some(1000),
             temperature: Some(0.5),
+            stream: None,
         };
         
         // Test that CLI overrides take precedence over config
@@ -430,6 +458,7 @@ mod chat_template_resolution_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add templates
@@ -668,6 +697,7 @@ mod chat_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Test with no providers configured
@@ -690,6 +720,7 @@ mod chat_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add provider
@@ -722,6 +753,7 @@ mod chat_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add provider without API key
@@ -774,6 +806,7 @@ mod chat_integration_tests {
             templates: HashMap::new(),
             max_tokens: Some(1000),
             temperature: Some(0.7),
+            stream: None,
         };
         
         // Simulate chat workflow
@@ -794,7 +827,7 @@ mod chat_integration_tests {
         if let Some(system_prompt) = &config.system_prompt {
             messages.push(Message {
                 role: "system".to_string(),
-                content: Some(system_prompt.clone()),
+                content_type: lc::provider::MessageContent::Text { content: Some(system_prompt.clone()) },
                 tool_calls: None,
                 tool_call_id: None,
             });
@@ -806,7 +839,11 @@ mod chat_integration_tests {
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].role, "system");
         assert_eq!(messages[1].role, "user");
-        assert_eq!(messages[1].content, Some("Hello, how are you?".to_string()));
+        if let lc::provider::MessageContent::Text { content } = &messages[1].content_type {
+            assert_eq!(content, &Some("Hello, how are you?".to_string()));
+        } else {
+            panic!("Expected Text content");
+        }
         
         // Test chat request creation
         let request = ChatRequest {
@@ -815,6 +852,7 @@ mod chat_integration_tests {
             max_tokens: config.max_tokens,
             temperature: config.temperature,
             tools: None,
+            stream: None,
         };
         
         assert_eq!(request.model, "gpt-4");
@@ -833,6 +871,7 @@ mod chat_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add provider
@@ -902,6 +941,7 @@ mod chat_integration_tests {
             templates: HashMap::new(),
             max_tokens: Some(1000),
             temperature: Some(0.5),
+            stream: None,
         };
         
         // Test CLI parameter overrides
@@ -940,6 +980,7 @@ mod chat_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Test error when no providers configured
@@ -1050,7 +1091,7 @@ mod chat_session_continuation_tests {
         let cli = cli.unwrap();
         
         if let Some(lc::cli::Commands::Chat { model, cid, .. }) = cli.command {
-            assert_eq!(model, "gpt-4");
+            assert_eq!(model, Some("gpt-4".to_string()));
             assert_eq!(cid, Some("chat-session-789".to_string()));
         } else {
             panic!("Expected Chat command");

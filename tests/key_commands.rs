@@ -73,6 +73,7 @@ mod key_list_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         assert!(config.providers.is_empty());

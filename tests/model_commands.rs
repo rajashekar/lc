@@ -14,7 +14,7 @@ mod models_cache_tests {
     use std::process::Command;
     
     #[test]
-    fn test_lc_models_list_no_capabilities() {
+    fn test_lc_models_list_with_capabilities() {
         let output = Command::new("cargo")
             .args(["run", "--", "models"])
             .output()
@@ -27,15 +27,26 @@ mod models_cache_tests {
         }
         
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // Only check for no capability icons if the command succeeded
-        // This test verifies that models from /v1/models endpoint (like OpenAI) show no capability icons
-        // since the endpoint doesn't provide capability information
+        // This test verifies that the enhanced model display system works correctly
+        // Some providers show capability icons when metadata is available
         if output.status.success() {
-            assert!(!stdout.contains("🔧"), "Output erroneously contained tools capability icon: {}", stdout);
-            assert!(!stdout.contains("👁"), "Output erroneously contained vision capability icon: {}", stdout);
-            assert!(!stdout.contains("💻"), "Output erroneously contained code capability icon: {}", stdout);
-            assert!(!stdout.contains("🧠"), "Output erroneously contained reasoning capability icon: {}", stdout);
-            assert!(!stdout.contains("🔊"), "Output erroneously contained audio capability icon: {}", stdout);
+            // Should show total model count
+            assert!(stdout.contains("total"), "Output should show total model count");
+            
+            // Should show provider sections
+            assert!(stdout.contains("openai:") || stdout.contains("claude:") || stdout.contains("gemini:"),
+                   "Output should show provider sections");
+            
+            // Enhanced providers should show capability icons when available
+            // (This is correct behavior - not all providers will have icons)
+            let has_capability_icons = stdout.contains("🔧") || stdout.contains("👁") ||
+                                     stdout.contains("💻") || stdout.contains("🧠") || stdout.contains("🔊");
+            
+            // Should have some enhanced metadata (either icons or context info)
+            let has_context_info = stdout.contains("ctx") || stdout.contains("out");
+            
+            assert!(has_capability_icons || has_context_info,
+                   "Output should show enhanced metadata (capability icons or context info) for some providers");
         }
     }
 

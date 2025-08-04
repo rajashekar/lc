@@ -60,6 +60,10 @@ pub struct Cli {
     #[arg(short = 'a', long = "attach")]
     pub attachments: Vec<String>,
     
+    /// Attach image(s) to the prompt (supports jpg, png, gif, webp, or URLs)
+    #[arg(short = 'i', long = "image")]
+    pub images: Vec<String>,
+    
     /// Include tools from MCP server(s) (comma-separated server names)
     #[arg(short = 't', long = "tools")]
     pub tools: Option<String>,
@@ -139,6 +143,9 @@ pub enum Commands {
         /// Enable debug/verbose logging
         #[arg(short = 'd', long = "debug")]
         debug: bool,
+        /// Attach image(s) to the chat (supports jpg, png, gif, webp, or URLs)
+        #[arg(short = 'i', long = "image")]
+        images: Vec<String>,
     },
     /// Global models management (alias: m)
     #[command(alias = "m")]
@@ -1839,12 +1846,22 @@ pub fn is_code_file(extension: &str) -> bool {
 }
 
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>, stream: bool) -> Result<()> {
+pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, images: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>, stream: bool) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
     
+    // Note: We don't enforce vision capability checks here as model metadata may be incomplete.
+    // Let the API/model handle vision support validation and return appropriate errors if needed.
+    
     // Read and format attachments
     let attachment_content = read_and_format_attachments(&attachments)?;
+    
+    // Process images if provided
+    let processed_images = if !images.is_empty() {
+        crate::image_utils::process_images(&images)?
+    } else {
+        Vec::new()
+    };
     
     // Combine prompt with attachments
     let final_prompt = if attachment_content.is_empty() {
@@ -1939,6 +1956,34 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     // Determine if streaming should be used (CLI flag takes precedence over config)
     let use_streaming = stream || config.stream.unwrap_or(false);
     
+    // Create the appropriate message based on whether images are included
+    let messages = if !processed_images.is_empty() {
+        // Create multimodal message with text and images
+        let mut content_parts = vec![
+            crate::provider::ContentPart::Text { text: enhanced_prompt.clone() }
+        ];
+        
+        // Add each image as a content part
+        for image_url in processed_images {
+            content_parts.push(crate::provider::ContentPart::ImageUrl {
+                image_url: crate::provider::ImageUrl {
+                    url: image_url,
+                    detail: Some("auto".to_string()),
+                },
+            });
+        }
+        
+        vec![crate::provider::Message {
+            role: "user".to_string(),
+            content_type: crate::provider::MessageContent::Multimodal { content: content_parts },
+            tool_calls: None,
+            tool_call_id: None,
+        }]
+    } else {
+        // Regular text message
+        vec![]
+    };
+    
     // Send the prompt
     if use_streaming {
         // Use streaming
@@ -1948,7 +1993,15 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
             // Deliberately flush stdout to show thinking indicator immediately
             io::stdout().flush()?;
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            match chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await {
+            
+            // Use messages if we have images, otherwise use the text prompt
+            let result = if !messages.is_empty() {
+                chat::send_chat_request_with_tool_execution_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+            } else {
+                chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+            };
+            
+            match result {
                 Ok((response, input_tokens, output_tokens)) => {
                     print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                     println!("{}", response);
@@ -1965,7 +2018,13 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
             }
         } else {
             // Use streaming chat - content is streamed directly to stdout
-            match chat::send_chat_request_with_streaming(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await {
+            let result = if !messages.is_empty() {
+                chat::send_chat_request_with_streaming_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, None).await
+            } else {
+                chat::send_chat_request_with_streaming(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+            };
+            
+            match result {
                 Ok(_) => {
                     // Streaming completed successfully, add a newline
                     println!();
@@ -1989,10 +2048,18 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Use tool execution loop when tools are available
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+            if !messages.is_empty() {
+                chat::send_chat_request_with_tool_execution_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+            } else {
+                chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+            }
         } else {
             // Use regular chat when no tools
-            chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+            if !messages.is_empty() {
+                chat::send_chat_request_with_validation_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, None).await
+            } else {
+                chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+            }
         };
         
         match result {
@@ -2016,7 +2083,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
 }
 
 // Direct prompt handler for piped input (treats piped content as attachment)
-pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>, stream: bool) -> Result<()> {
+pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, images: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>, stream: bool) -> Result<()> {
     // For piped input, we need to determine if there's a prompt in the arguments
     // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
     // But we should provide a way to specify a prompt when piping content
@@ -2129,6 +2196,41 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     // Determine if streaming should be used (CLI flag takes precedence over config)
     let use_streaming = stream || config.stream.unwrap_or(false);
     
+    // Process images if provided
+    let processed_images = if !images.is_empty() {
+        crate::image_utils::process_images(&images)?
+    } else {
+        Vec::new()
+    };
+    
+    // Create the appropriate message based on whether images are included
+    let messages = if !processed_images.is_empty() {
+        // Create multimodal message with text and images
+        let mut content_parts = vec![
+            crate::provider::ContentPart::Text { text: enhanced_prompt.clone() }
+        ];
+        
+        // Add each image as a content part
+        for image_url in processed_images {
+            content_parts.push(crate::provider::ContentPart::ImageUrl {
+                image_url: crate::provider::ImageUrl {
+                    url: image_url,
+                    detail: Some("auto".to_string()),
+                },
+            });
+        }
+        
+        vec![crate::provider::Message {
+            role: "user".to_string(),
+            content_type: crate::provider::MessageContent::Multimodal { content: content_parts },
+            tool_calls: None,
+            tool_call_id: None,
+        }]
+    } else {
+        // Regular text message
+        vec![]
+    };
+    
     // Send the prompt
     if use_streaming {
         // Use streaming
@@ -2161,7 +2263,13 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
             }
         } else {
             // Use streaming chat - content is streamed directly to stdout
-            match chat::send_chat_request_with_streaming(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await {
+            let result = if !messages.is_empty() {
+                chat::send_chat_request_with_streaming_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, None).await
+            } else {
+                chat::send_chat_request_with_streaming(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+            };
+            
+            match result {
                 Ok(_) => {
                     // Streaming completed successfully, add a newline
                     println!();
@@ -2194,7 +2302,11 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
             chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
         } else {
             // Use regular chat when no tools
-            chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+            if !messages.is_empty() {
+                chat::send_chat_request_with_validation_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, None).await
+            } else {
+                chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+            }
         };
         
         match result {
@@ -2224,13 +2336,16 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
 }
 
 // Interactive chat mode
-pub async fn handle_chat_command(model: Option<String>, provider: Option<String>, cid: Option<String>, tools: Option<String>, database: Option<String>, debug: bool, stream: bool) -> Result<()> {
+pub async fn handle_chat_command(model: Option<String>, provider: Option<String>, cid: Option<String>, tools: Option<String>, database: Option<String>, debug: bool, images: Vec<String>, stream: bool) -> Result<()> {
     // Set debug mode if requested
     if debug {
         set_debug_mode(true);
     }
     let config = config::Config::load()?;
     let db = database::Database::new()?;
+    
+    // Note: We don't enforce vision capability checks here as model metadata may be incomplete.
+    // Let the API/model handle vision support validation and return appropriate errors if needed.
     
     // Determine session ID
     let session_id = cid.unwrap_or_else(|| {
@@ -2260,9 +2375,20 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
     
     let mut current_model = resolved_model.clone();
     
+    // Process initial images if provided
+    let mut processed_images = if !images.is_empty() {
+        println!("{} Processing {} initial image(s)...", "🖼️".blue(), images.len());
+        crate::image_utils::process_images(&images)?
+    } else {
+        Vec::new()
+    };
+    
     println!("\n{} Interactive Chat Mode", "🚀".blue());
     println!("{} Session ID: {}", "📝".blue(), session_id);
     println!("{} Model: {}", "🤖".blue(), current_model);
+    if !processed_images.is_empty() {
+        println!("{} Initial images: {}", "🖼️".blue(), images.len());
+    }
     if mcp_tools.is_some() && !mcp_server_names.is_empty() {
         println!("{} Tools: {} (from MCP servers: {})", "🔧".blue(),
                  mcp_tools.as_ref().unwrap().len(),
@@ -2346,6 +2472,43 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
             }
         }
         
+        // Create messages with images if we have initial images
+        let messages = if !processed_images.is_empty() {
+            // Build history messages first
+            let mut msgs: Vec<crate::provider::Message> = history.iter().flat_map(|entry| {
+                vec![
+                    crate::provider::Message::user(entry.question.clone()),
+                    crate::provider::Message::assistant(entry.response.clone()),
+                ]
+            }).collect();
+            
+            // Add current message with images
+            let mut content_parts = vec![
+                crate::provider::ContentPart::Text { text: enhanced_input.clone() }
+            ];
+            
+            // Add each image as a content part
+            for image_url in &processed_images {
+                content_parts.push(crate::provider::ContentPart::ImageUrl {
+                    image_url: crate::provider::ImageUrl {
+                        url: image_url.clone(),
+                        detail: Some("auto".to_string()),
+                    },
+                });
+            }
+            
+            msgs.push(crate::provider::Message {
+                role: "user".to_string(),
+                content_type: crate::provider::MessageContent::Multimodal { content: content_parts },
+                tool_calls: None,
+                tool_call_id: None,
+            });
+            
+            msgs
+        } else {
+            Vec::new()
+        };
+        
         print!("{} ", "Thinking...".dimmed());
         // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
@@ -2363,7 +2526,13 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Use tool execution loop when tools are available (tools don't support streaming yet)
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            match chat::send_chat_request_with_tool_execution(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await {
+            let result = if !messages.is_empty() {
+                chat::send_chat_request_with_tool_execution_messages(&client, &current_model, &messages, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await
+            } else {
+                chat::send_chat_request_with_tool_execution(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await
+            };
+            
+            match result {
                 Ok((response, input_tokens, output_tokens)) => {
                     print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                     println!("{} {}", "Assistant:".bold().blue(), response);
@@ -2371,6 +2540,11 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
                     // Save to database with token counts
                     if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, &response, input_tokens, output_tokens) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                    
+                    // Clear processed images after first use
+                    if !processed_images.is_empty() {
+                        processed_images.clear();
                     }
                 }
                 Err(e) => {
@@ -2383,7 +2557,13 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
             print!("{} ", "Assistant:".bold().blue());
             // Deliberately flush stdout to show assistant label before streaming
             io::stdout().flush()?;
-            match chat::send_chat_request_with_streaming(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await {
+            let result = if !messages.is_empty() {
+                chat::send_chat_request_with_streaming_messages(&client, &current_model, &messages, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+            } else {
+                chat::send_chat_request_with_streaming(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+            };
+            
+            match result {
                 Ok(_) => {
                     // Streaming completed successfully, add a newline
                     println!();
@@ -2392,6 +2572,11 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
                     if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, "[Streamed Response]", None, None) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
                     }
+                    
+                    // Clear processed images after first use
+                    if !processed_images.is_empty() {
+                        processed_images.clear();
+                    }
                 }
                 Err(e) => {
                     println!("\n{} Error: {}", "✗".red(), e);
@@ -2399,7 +2584,13 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
             }
         } else {
             // Use regular chat when no tools and streaming is disabled
-            match chat::send_chat_request_with_validation(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await {
+            let result = if !messages.is_empty() {
+                chat::send_chat_request_with_validation_messages(&client, &current_model, &messages, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+            } else {
+                chat::send_chat_request_with_validation(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+            };
+            
+            match result {
                 Ok((response, input_tokens, output_tokens)) => {
                     print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                     println!("{} {}", "Assistant:".bold().blue(), response);
@@ -2407,6 +2598,11 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
                     // Save to database with token counts
                     if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, &response, input_tokens, output_tokens) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
+                    }
+                    
+                    // Clear processed images after first use
+                    if !processed_images.is_empty() {
+                        processed_images.clear();
                     }
                 }
                 Err(e) => {

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crate::provider::{OpenAIClient, ChatRequest, Message, GeminiClient, GeminiChatRequest, GeminiContent, GeminiPart, GeminiSystemInstruction, GeminiTool, GeminiFunctionDeclaration, GeminiGenerationConfig, GeminiChatResponse, GeminiResponsePart};
+use crate::provider::{OpenAIClient, ChatRequest, Message, MessageContent, ContentPart, GeminiClient, GeminiChatRequest, GeminiContent, GeminiPart, GeminiInlineData, GeminiSystemInstruction, GeminiTool, GeminiFunctionDeclaration, GeminiGenerationConfig, GeminiChatResponse, GeminiResponsePart};
 use crate::database::ChatEntry;
 use crate::config::Config;
 use crate::token_utils::TokenCounter;
@@ -94,7 +94,7 @@ pub async fn send_chat_request_with_validation(
     if let Some(sys_prompt) = system_prompt {
         messages.push(Message {
             role: "system".to_string(),
-            content: Some(sys_prompt.to_string()),
+            content_type: MessageContent::Text { content: Some(sys_prompt.to_string()) },
             tool_calls: None,
             tool_call_id: None,
         });
@@ -234,7 +234,7 @@ pub async fn send_chat_request_with_streaming(
     if let Some(sys_prompt) = system_prompt {
         messages.push(Message {
             role: "system".to_string(),
-            content: Some(sys_prompt.to_string()),
+            content_type: MessageContent::Text { content: Some(sys_prompt.to_string()) },
             tool_calls: None,
             tool_call_id: None,
         });
@@ -397,24 +397,67 @@ fn convert_to_gemini_request(request: &ChatRequest) -> Result<GeminiChatRequest>
     for message in &request.messages {
         match message.role.as_str() {
             "system" => {
-                if let Some(content) = &message.content {
+                if let Some(content) = message.get_text_content() {
                     system_instruction = Some(GeminiSystemInstruction {
                         parts: GeminiPart::Text { text: content.clone() },
                     });
                 }
             }
             "user" => {
-                if let Some(content) = &message.content {
-                    contents.push(GeminiContent {
-                        role: "user".to_string(),
-                        parts: vec![GeminiPart::Text { text: content.clone() }],
-                    });
+                match &message.content_type {
+                    MessageContent::Text { content } => {
+                        if let Some(text) = content {
+                            contents.push(GeminiContent {
+                                role: "user".to_string(),
+                                parts: vec![GeminiPart::Text { text: text.clone() }],
+                            });
+                        }
+                    }
+                    MessageContent::Multimodal { content } => {
+                        let mut parts = Vec::new();
+                        for part in content {
+                            match part {
+                                ContentPart::Text { text } => {
+                                    parts.push(GeminiPart::Text { text: text.clone() });
+                                }
+                                ContentPart::ImageUrl { image_url } => {
+                                    // Convert image URL to Gemini inline data format
+                                    if image_url.url.starts_with("data:") {
+                                        // Extract mime type and base64 data from data URL
+                                        if let Some(comma_pos) = image_url.url.find(',') {
+                                            let header = &image_url.url[5..comma_pos]; // Skip "data:"
+                                            let data = &image_url.url[comma_pos + 1..];
+                                            
+                                            let mime_type = if let Some(semi_pos) = header.find(';') {
+                                                header[..semi_pos].to_string()
+                                            } else {
+                                                header.to_string()
+                                            };
+                                            
+                                            parts.push(GeminiPart::InlineData {
+                                                inline_data: GeminiInlineData {
+                                                    mime_type,
+                                                    data: data.to_string(),
+                                                },
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if !parts.is_empty() {
+                            contents.push(GeminiContent {
+                                role: "user".to_string(),
+                                parts,
+                            });
+                        }
+                    }
                 }
             }
             "assistant" => {
                 let mut parts = Vec::new();
                 
-                if let Some(content) = &message.content {
+                if let Some(content) = message.get_text_content() {
                     parts.push(GeminiPart::Text { text: content.clone() });
                 }
                 
@@ -438,7 +481,7 @@ fn convert_to_gemini_request(request: &ChatRequest) -> Result<GeminiChatRequest>
                 }
             }
             "tool" => {
-                if let (Some(content), Some(tool_call_id)) = (&message.content, &message.tool_call_id) {
+                if let (Some(content), Some(tool_call_id)) = (message.get_text_content(), &message.tool_call_id) {
                     // For Gemini, we need to find the function name from the tool_call_id
                     // This is a simplified approach - in practice, you might need to track this
                     let response_value: serde_json::Value = serde_json::from_str(content)
@@ -621,7 +664,7 @@ pub async fn send_chat_request_with_tool_execution(
     if let Some(sys_prompt) = system_prompt {
         conversation_messages.push(Message {
             role: "system".to_string(),
-            content: Some(sys_prompt.to_string()),
+            content_type: MessageContent::Text { content: Some(sys_prompt.to_string()) },
             tool_calls: None,
             tool_call_id: None,
         });
@@ -795,4 +838,194 @@ fn format_tool_result(result: &serde_json::Value) -> String {
     
     // Fallback to pretty-printed JSON
     serde_json::to_string_pretty(result).unwrap_or_else(|_| "Error formatting result".to_string())
+}
+
+// Message-based versions of the chat functions for handling multimodal content
+
+pub async fn send_chat_request_with_validation_messages(
+    client: &LLMClient,
+    model: &str,
+    messages: &[Message],
+    system_prompt: Option<&str>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
+    provider_name: &str,
+    tools: Option<Vec<crate::provider::Tool>>,
+) -> Result<(String, Option<i32>, Option<i32>)> {
+    crate::debug_log!("Sending chat request with messages - provider: '{}', model: '{}', messages: {}",
+                      provider_name, model, messages.len());
+    
+    // Build final messages including system prompt if needed
+    let mut final_messages = Vec::new();
+    
+    // Add system prompt if provided and not already in messages
+    if let Some(sys_prompt) = system_prompt {
+        let has_system = messages.iter().any(|m| m.role == "system");
+        if !has_system {
+            final_messages.push(Message {
+                role: "system".to_string(),
+                content_type: MessageContent::Text { content: Some(sys_prompt.to_string()) },
+                tool_calls: None,
+                tool_call_id: None,
+            });
+        }
+    }
+    
+    // Add all provided messages
+    final_messages.extend_from_slice(messages);
+    
+    let request = ChatRequest {
+        model: model.to_string(),
+        messages: final_messages,
+        max_tokens: max_tokens.or(Some(1024)),
+        temperature: temperature.or(Some(0.7)),
+        tools,
+        stream: None,
+    };
+    
+    let response = client.chat(&request, model).await?;
+    
+    // For now, return None for token counts as we'd need to implement multimodal token counting
+    Ok((response, None, None))
+}
+
+pub async fn send_chat_request_with_streaming_messages(
+    client: &LLMClient,
+    model: &str,
+    messages: &[Message],
+    system_prompt: Option<&str>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
+    provider_name: &str,
+    tools: Option<Vec<crate::provider::Tool>>,
+) -> Result<()> {
+    crate::debug_log!("Sending streaming chat request with messages - provider: '{}', model: '{}', messages: {}",
+                      provider_name, model, messages.len());
+    
+    // Build final messages including system prompt if needed
+    let mut final_messages = Vec::new();
+    
+    // Add system prompt if provided and not already in messages
+    if let Some(sys_prompt) = system_prompt {
+        let has_system = messages.iter().any(|m| m.role == "system");
+        if !has_system {
+            final_messages.push(Message {
+                role: "system".to_string(),
+                content_type: MessageContent::Text { content: Some(sys_prompt.to_string()) },
+                tool_calls: None,
+                tool_call_id: None,
+            });
+        }
+    }
+    
+    // Add all provided messages
+    final_messages.extend_from_slice(messages);
+    
+    let request = ChatRequest {
+        model: model.to_string(),
+        messages: final_messages,
+        max_tokens: max_tokens.or(Some(1024)),
+        temperature: temperature.or(Some(0.7)),
+        tools,
+        stream: Some(true),
+    };
+    
+    client.chat_stream(&request, model).await?;
+    
+    Ok(())
+}
+
+pub async fn send_chat_request_with_tool_execution_messages(
+    client: &LLMClient,
+    model: &str,
+    messages: &[Message],
+    system_prompt: Option<&str>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
+    provider_name: &str,
+    tools: Option<Vec<crate::provider::Tool>>,
+    mcp_server_names: &[&str],
+) -> Result<(String, Option<i32>, Option<i32>)> {
+    crate::debug_log!("Sending chat request with tool execution and messages - provider: '{}', model: '{}', messages: {}",
+                      provider_name, model, messages.len());
+    
+    let mut conversation_messages = Vec::new();
+    
+    // Add system prompt if provided and not already in messages
+    if let Some(sys_prompt) = system_prompt {
+        let has_system = messages.iter().any(|m| m.role == "system");
+        if !has_system {
+            conversation_messages.push(Message {
+                role: "system".to_string(),
+                content_type: MessageContent::Text { content: Some(sys_prompt.to_string()) },
+                tool_calls: None,
+                tool_call_id: None,
+            });
+        }
+    }
+    
+    // Add all provided messages
+    conversation_messages.extend_from_slice(messages);
+    
+    let max_iterations = 10;
+    let mut iteration = 0;
+    
+    loop {
+        iteration += 1;
+        if iteration > max_iterations {
+            anyhow::bail!("Maximum tool execution iterations reached ({})", max_iterations);
+        }
+        
+        let request = ChatRequest {
+            model: model.to_string(),
+            messages: conversation_messages.clone(),
+            max_tokens: max_tokens.or(Some(1024)),
+            temperature: temperature.or(Some(0.7)),
+            tools: tools.clone(),
+            stream: None,
+        };
+        
+        let response = client.chat_with_tools(&request, model).await?;
+        
+        if let Some(choice) = response.choices.first() {
+            if let Some(tool_calls) = &choice.message.tool_calls {
+                if !tool_calls.is_empty() {
+                    conversation_messages.push(Message::assistant_with_tool_calls(tool_calls.clone()));
+                    
+                    for tool_call in tool_calls {
+                        let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
+                        let mut tool_result = None;
+                        
+                        for server_name in mcp_server_names {
+                            let args_value: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)?;
+                            match daemon_client.call_tool(server_name, &tool_call.function.name, args_value).await {
+                                Ok(result) => {
+                                    tool_result = Some(format_tool_result(&result));
+                                    break;
+                                }
+                                Err(_) => continue,
+                            }
+                        }
+                        
+                        let result_content = tool_result.unwrap_or_else(|| {
+                            format!("Error: Function '{}' not found on any MCP server", tool_call.function.name)
+                        });
+                        
+                        conversation_messages.push(Message::tool_result(
+                            tool_call.id.clone(),
+                            result_content
+                        ));
+                    }
+                    
+                    continue;
+                }
+            }
+            
+            if let Some(content) = &choice.message.content {
+                return Ok((content.clone(), None, None));
+            }
+        }
+        
+        anyhow::bail!("No response from API");
+    }
 }

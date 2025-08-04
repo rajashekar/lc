@@ -16,6 +16,7 @@ mod webchatproxy;
 mod sync;
 mod search;
 mod readers;
+mod image_utils;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
@@ -106,10 +107,10 @@ async fn main() -> Result<()> {
                     if cli.prompt.len() > 1 {
                         // Use template as system prompt and remaining args as user prompt
                         let user_prompt = cli.prompt[1..].join(" ");
-                        handle_prompt_with_optional_piped_input(user_prompt, Some(template_content.clone()), piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id, cli.use_search, cli.stream).await?;
+                        handle_prompt_with_optional_piped_input(user_prompt, Some(template_content.clone()), piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.images, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id, cli.use_search, cli.stream).await?;
                     } else {
                         // Use template content as the prompt (no additional user prompt)
-                        handle_prompt_with_optional_piped_input(template_content.clone(), cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id, cli.use_search, cli.stream).await?;
+                        handle_prompt_with_optional_piped_input(template_content.clone(), cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.images, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id, cli.use_search, cli.stream).await?;
                     }
                 } else {
                     anyhow::bail!("Template '{}' not found", template_name);
@@ -117,7 +118,7 @@ async fn main() -> Result<()> {
             } else {
                 // Regular direct prompt - join all arguments
                 let prompt = cli.prompt.join(" ");
-                handle_prompt_with_optional_piped_input(prompt, cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id, cli.use_search, cli.stream).await?;
+                handle_prompt_with_optional_piped_input(prompt, cli.system_prompt, piped_input, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.images, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id, cli.use_search, cli.stream).await?;
             }
         }
         (true, Some(Commands::Providers { command })) => {
@@ -132,8 +133,8 @@ async fn main() -> Result<()> {
         (true, Some(Commands::Config { command })) => {
             cli::handle_config_command(command).await?;
         }
-        (true, Some(Commands::Chat { model, provider, cid, tools, database, debug })) => {
-            cli::handle_chat_command(model, provider, cid, tools, database, debug, cli.stream).await?;
+        (true, Some(Commands::Chat { model, provider, cid, tools, database, debug, images })) => {
+            cli::handle_chat_command(model, provider, cid, tools, database, debug, images, cli.stream).await?;
         }
         (true, Some(Commands::Models { command, query, tools, reasoning, vision, audio, code, context_length, input_length, output_length, input_price, output_price })) => {
             cli::handle_models_command(command, query, tools, reasoning, vision, audio, code, context_length, input_length, output_length, input_price, output_price).await?;
@@ -173,7 +174,7 @@ async fn main() -> Result<()> {
             if let Some(piped_content) = piped_input {
                 // Input was piped, use it as a direct prompt
                 if !piped_content.trim().is_empty() {
-                    handle_prompt_with_optional_piped_input_continue(piped_content, cli.system_prompt, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id, cli.use_search, cli.stream).await?;
+                    handle_prompt_with_optional_piped_input_continue(piped_content, cli.system_prompt, cli.provider, cli.model, cli.max_tokens, cli.temperature, cli.attachments, cli.images, cli.tools, cli.vectordb, cli.continue_session, cli.chat_id, cli.use_search, cli.stream).await?;
                 } else {
                     use clap::CommandFactory;
                     let mut cmd = Cli::command();
@@ -226,6 +227,7 @@ async fn handle_prompt_with_optional_piped_input(
     max_tokens: Option<String>,
     temperature: Option<String>,
     attachments: Vec<String>,
+    images: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
     continue_session: bool,
@@ -236,10 +238,10 @@ async fn handle_prompt_with_optional_piped_input(
     if let Some(piped_content) = piped_input {
         // Combine prompt with piped input
         let combined_prompt = format!("{}\n\n=== Piped Input ===\n{}", prompt, piped_content);
-        handle_direct_prompt_with_session(combined_prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, continue_session, chat_id, use_search, stream).await
+        handle_direct_prompt_with_session(combined_prompt, provider, model, system_prompt, max_tokens, temperature, attachments, images, tools, vectordb, continue_session, chat_id, use_search, stream).await
     } else {
         // No piped input, use regular prompt handling
-        handle_direct_prompt_with_session(prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, continue_session, chat_id, use_search, stream).await
+        handle_direct_prompt_with_session(prompt, provider, model, system_prompt, max_tokens, temperature, attachments, images, tools, vectordb, continue_session, chat_id, use_search, stream).await
     }
 }
 
@@ -252,6 +254,7 @@ async fn handle_prompt_with_optional_piped_input_continue(
     max_tokens: Option<String>,
     temperature: Option<String>,
     attachments: Vec<String>,
+    images: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
     continue_session: bool,
@@ -261,10 +264,10 @@ async fn handle_prompt_with_optional_piped_input_continue(
 ) -> Result<()> {
     if continue_session || chat_id.is_some() {
         // Use piped content as prompt with session continuation
-        handle_direct_prompt_with_session(piped_content, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, continue_session, chat_id, use_search, stream).await
+        handle_direct_prompt_with_session(piped_content, provider, model, system_prompt, max_tokens, temperature, attachments, images, tools, vectordb, continue_session, chat_id, use_search, stream).await
     } else {
         // Use existing piped input handler
-        cli::handle_direct_prompt_with_piped_input(piped_content, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, use_search, stream).await
+        cli::handle_direct_prompt_with_piped_input(piped_content, provider, model, system_prompt, max_tokens, temperature, attachments, images, tools, vectordb, use_search, stream).await
     }
 }
 
@@ -276,6 +279,7 @@ async fn handle_direct_prompt_with_session(
     max_tokens: Option<String>,
     temperature: Option<String>,
     attachments: Vec<String>,
+    images: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
     continue_session: bool,
@@ -345,10 +349,10 @@ async fn handle_direct_prompt_with_session(
             return Ok(());
         }
 
-        handle_session_prompt(prompt, final_provider, final_model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, session_id, history, use_search, stream).await
+        handle_session_prompt(prompt, final_provider, final_model, system_prompt, max_tokens, temperature, attachments, images, tools, vectordb, session_id, history, use_search, stream).await
     } else {
         // Use regular prompt handling
-        cli::handle_direct_prompt(prompt, provider, model, system_prompt, max_tokens, temperature, attachments, tools, vectordb, use_search, stream).await
+        cli::handle_direct_prompt(prompt, provider, model, system_prompt, max_tokens, temperature, attachments, images, tools, vectordb, use_search, stream).await
     }
 }
 
@@ -360,6 +364,7 @@ async fn handle_session_prompt(
     max_tokens: Option<String>,
     temperature: Option<String>,
     _attachments: Vec<String>,
+    _images: Vec<String>,
     _tools: Option<String>,
     _vectordb: Option<String>,
     _session_id: String,

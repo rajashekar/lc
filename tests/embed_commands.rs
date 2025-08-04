@@ -139,6 +139,7 @@ mod embed_model_resolution_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add OpenAI provider with embedding models
@@ -328,6 +329,7 @@ mod embed_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test with non-existent provider
@@ -346,6 +348,7 @@ mod embed_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add provider without API key
@@ -376,6 +379,7 @@ mod embed_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add provider
@@ -413,6 +417,7 @@ mod embed_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         let text = "Machine learning is a subset of artificial intelligence";
@@ -461,6 +466,7 @@ mod embed_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add multiple providers

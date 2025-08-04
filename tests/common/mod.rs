@@ -21,6 +21,7 @@ pub fn create_test_config() -> (Config, TempDir) {
         templates: HashMap::new(),
         max_tokens: None,
         temperature: None,
+        stream: None,
     };
     
     (config, temp_dir)
@@ -53,6 +54,7 @@ pub fn create_config_with_providers() -> Config {
         templates: HashMap::new(),
         max_tokens: None,
         temperature: None,
+        stream: None,
     };
     
     // Add test providers

@@ -41,7 +41,8 @@ lc "What is the capital of France?"
 - 🧠 **Smart** - Built-in vector database and RAG support
 - 🛠️ **Tools** - Model Context Protocol (MCP) support for extending LLM capabilities
 - 🔍 **Web Search** - Integrated web search with multiple providers (Brave, Exa, Serper) for enhanced context
-- 📄 **PDF Support** - Read and process PDF files with optional dependency
+- 👁️ **Vision Support** - Process and analyze images with vision-capable models
+- � **PDF Support** - Read and process PDF files with optional dependency
 - 🔐 **Secure** - Encrypted configuration sync
 - 💬 **Intuitive** - Simple commands with short aliases
 
@@ -172,6 +173,32 @@ lc --use-search "exa:neural networks 2024" "Summarize recent advances"
 lc --use-search "serper:GPT-4 alternatives 2024" "Compare the latest language models"
 ```
 
+### Vision/Image Support
+
+`lc` supports image inputs for vision-capable models across multiple providers:
+
+```bash
+# Single image analysis
+lc -m gpt-4-vision-preview -i photo.jpg "What's in this image?"
+
+# Multiple images
+lc -m claude-3-opus-20240229 -i before.jpg -i after.jpg "Compare these images"
+
+# Image from URL
+lc -m gemini-pro-vision -i https://example.com/image.jpg "Describe this image"
+
+# Interactive chat with images
+lc chat -m gpt-4-vision-preview -i screenshot.png
+
+# Find vision-capable models
+lc models --vision
+
+# Combine with other features
+lc -m gpt-4-vision-preview -i diagram.png -a notes.txt "Explain this diagram with the context from my notes"
+```
+
+Supported formats: JPG, PNG, GIF, WebP (max 20MB per image)
+
 ### Model Context Protocol (MCP)
 
 `lc` supports MCP servers to extend LLM capabilities with external tools:
@@ -208,6 +235,9 @@ lc -a file1.txt -a data.pdf -a config.json "Analyze these files"
 
 # Combine with other features
 lc -a research.pdf -v knowledge "Compare this with existing knowledge"
+
+# Combine images with text attachments
+lc -m gpt-4-vision-preview -i chart.png -a data.csv "Analyze this chart against the CSV data"
 ```
 
 **Note:** PDF support requires the `pdf` feature (enabled by default). To build without PDF support:

@@ -16,6 +16,7 @@ fn create_comprehensive_config() -> Config {
         templates: HashMap::new(),
         max_tokens: None,
         temperature: None,
+        stream: None,
     };
     
     // Add multiple providers
@@ -228,6 +229,7 @@ mod prompt_model_resolution_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         // Add test providers
@@ -626,6 +628,7 @@ mod prompt_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         
         let result = resolve_model_and_provider(
@@ -649,6 +652,7 @@ mod prompt_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
         config.providers.insert("test".to_string(), ProviderConfig {
             endpoint: "https://test.com".to_string(),

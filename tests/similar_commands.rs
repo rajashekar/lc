@@ -190,6 +190,7 @@ mod similar_model_resolution_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Add OpenAI provider
@@ -462,6 +463,7 @@ mod similar_error_handling_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Test with empty config (no providers)
@@ -558,6 +560,7 @@ mod similar_integration_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         let db_name = "similarity_workflow_test";

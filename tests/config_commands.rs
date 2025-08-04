@@ -102,6 +102,7 @@ mod config_get_tests {
             templates: HashMap::new(),
             max_tokens: None,
             temperature: None,
+            stream: None,
         };
 
         // Verify all values are None
