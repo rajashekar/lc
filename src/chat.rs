@@ -377,6 +377,17 @@ impl LLMClient {
         }
     }
     
+    pub async fn generate_images(&self, request: &crate::provider::ImageGenerationRequest) -> Result<crate::provider::ImageGenerationResponse> {
+        match self {
+            LLMClient::OpenAI(client) => client.generate_images(request).await,
+            LLMClient::Gemini(_client) => {
+                // Gemini doesn't support image generation through the same API
+                // For now, return an error - this could be extended later
+                anyhow::bail!("Image generation not supported for Gemini provider. Use a dedicated image generation model.")
+            }
+        }
+    }
+    
     pub async fn chat_stream(&self, request: &ChatRequest, model: &str) -> Result<()> {
         match self {
             LLMClient::OpenAI(client) => client.chat_stream(request).await,

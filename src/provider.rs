@@ -25,6 +25,38 @@ pub struct EmbeddingRequest {
     pub encoding_format: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ImageGenerationRequest {
+    pub prompt: String,
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub n: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ImageGenerationResponse {
+    pub created: u64,
+    pub data: Vec<ImageData>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ImageData {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub b64_json: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revised_prompt: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct EmbeddingResponse {
     pub data: Vec<EmbeddingData>,
@@ -591,6 +623,38 @@ impl OpenAIClient {
         
         let embedding_response: EmbeddingResponse = response.json().await?;
         Ok(embedding_response)
+    }
+    
+    pub async fn generate_images(&self, request: &ImageGenerationRequest) -> Result<ImageGenerationResponse> {
+        let url = format!("{}/images/generations", self.base_url);
+        
+        let mut req = self.client
+            .post(&url)
+            .header("Content-Type", "application/json");
+        
+        // Add Authorization header only if no custom headers are present
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
+        
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        
+        let response = req
+            .json(request)
+            .send()
+            .await?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Image generation API request failed with status {}: {}", status, text);
+        }
+        
+        let image_response: ImageGenerationResponse = response.json().await?;
+        Ok(image_response)
     }
     
     pub async fn chat_stream(&self, request: &ChatRequest) -> Result<()> {

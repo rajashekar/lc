@@ -1,4 +1,5 @@
 - Make sure documentation works
+- give option to list paths for each provider and also set different paths for each provider
 - Support Amazon, alibaba, azure, vertex ai models
 - Support lc serve
 - Check images

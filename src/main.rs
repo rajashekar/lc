@@ -169,6 +169,9 @@ async fn main() -> Result<()> {
         (true, Some(Commands::Search { command })) => {
             cli::handle_search_command(command).await?;
         }
+        (true, Some(Commands::Image { prompt, model, provider, size, count, output, debug })) => {
+            cli::handle_image_command(prompt, model, provider, size, count, output, debug).await?;
+        }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped
             if let Some(piped_content) = piped_input {

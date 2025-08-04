@@ -135,6 +135,10 @@ lc --use-search brave "What are the latest developments in quantum computing?"
 
 # Search with specific query
 lc --use-search "brave:quantum computing 2024" "Summarize the findings"
+
+# Generate images from text prompts
+lc image "A futuristic city with flying cars" -m dall-e-3 -s 1024x1024
+lc img "Abstract art with vibrant colors" -c 2 -o ./generated_images
 ```
 
 ### Web Search Integration
@@ -172,6 +176,43 @@ lc --use-search "brave:specific search terms" "Analyze these results"
 lc --use-search "exa:neural networks 2024" "Summarize recent advances"
 lc --use-search "serper:GPT-4 alternatives 2024" "Compare the latest language models"
 ```
+
+### Image Generation
+
+`lc` supports text-to-image generation using compatible providers:
+
+```bash
+# Basic image generation
+lc image "A beautiful sunset over mountains"
+
+# Generate with specific model and size
+lc image "A futuristic robot" -m dall-e-3 -s 1024x1024
+
+# Generate multiple images
+lc image "Abstract geometric patterns" -c 4
+
+# Save to specific directory
+lc image "A cozy coffee shop" -o ./my_images
+
+# Use short alias
+lc img "A magical forest" -m dall-e-2 -s 512x512
+
+# Generate with specific provider
+lc image "Modern architecture" -p openai -m dall-e-3
+
+# Debug mode to see API requests
+lc image "Space exploration" --debug
+```
+
+**Supported Parameters:**
+- `-m, --model`: Image generation model (e.g., dall-e-2, dall-e-3)
+- `-p, --provider`: Provider to use (openai, etc.)
+- `-s, --size`: Image size (256x256, 512x512, 1024x1024, 1792x1024, 1024x1792)
+- `-c, --count`: Number of images to generate (1-10, default: 1)
+- `-o, --output`: Output directory for saved images (default: current directory)
+- `--debug`: Enable debug mode to see API requests
+
+**Note:** Image generation is currently supported by OpenAI-compatible providers. Generated images are automatically saved with timestamps and descriptive filenames.
 
 ### Vision/Image Support
 
