@@ -41,13 +41,13 @@ fn cleanup_config() -> Result<()> {
 
 #[test]
 fn test_search_provider_add() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add a search provider with type
+    // Add a search provider (type auto-detected from URL)
     let output = Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     assert!(output.status.success(), "Failed to add search provider: {}", String::from_utf8_lossy(&output.stderr));
@@ -66,13 +66,13 @@ fn test_search_provider_add() -> Result<()> {
 
 #[test]
 fn test_search_provider_list() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add a provider first with type
+    // Add a provider first (type auto-detected from URL)
     let add_output = Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave_list_test", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave_list_test", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     assert!(add_output.status.success(), "Failed to add provider: {}", String::from_utf8_lossy(&add_output.stderr));
@@ -95,13 +95,13 @@ fn test_search_provider_list() -> Result<()> {
 
 #[test]
 fn test_search_provider_delete() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add a provider first with type
+    // Add a provider first (type auto-detected from URL)
     let add_output = Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave_delete_test", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave_delete_test", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     assert!(add_output.status.success(), "Failed to add provider: {}", String::from_utf8_lossy(&add_output.stderr));
@@ -131,13 +131,13 @@ fn test_search_provider_delete() -> Result<()> {
 
 #[test]
 fn test_search_provider_set_header() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add a provider first with type
+    // Add a provider first (type auto-detected from URL)
     Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     // Set a header
@@ -157,19 +157,19 @@ fn test_search_provider_set_header() -> Result<()> {
 
 #[test]
 fn test_default_search_provider_config() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add providers with type
+    // Add providers (type auto-detected from URL)
     let add1 = Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave_config_test", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave_config_test", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     assert!(add1.status.success(), "Failed to add first provider: {}", String::from_utf8_lossy(&add1.stderr));
     
     let add2 = Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "test_config", "https://test.com/search", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "test_config", "https://api.search.brave.com/res/v1/test"])
         .output()?;
     
     assert!(add2.status.success(), "Failed to add second provider: {}", String::from_utf8_lossy(&add2.stderr));
@@ -208,7 +208,7 @@ fn test_default_search_provider_config() -> Result<()> {
 
 #[test]
 fn test_search_query_missing_provider() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
@@ -228,13 +228,13 @@ fn test_search_query_missing_provider() -> Result<()> {
 
 #[test]
 fn test_search_integration_flag() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add a provider with type
+    // Add a provider (type auto-detected from URL)
     Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     // Test that --use-search flag is accepted (won't actually search without API key)
@@ -255,20 +255,20 @@ fn test_search_integration_flag() -> Result<()> {
 
 #[test]
 fn test_search_provider_duplicate_add() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add a provider with type
+    // Add a provider (type auto-detected from URL)
     let add1 = Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave_dup_test", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave_dup_test", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     assert!(add1.status.success(), "Failed to add provider first time: {}", String::from_utf8_lossy(&add1.stderr));
     
-    // Try to add the same provider again with type
+    // Try to add the same provider again (with different URL that will be auto-detected)
     let output = Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave_dup_test", "https://different-url.com", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave_dup_test", "https://api.search.brave.com/res/v1/different"])
         .output()?;
     
     assert!(output.status.success(), "Failed to update provider: {}", String::from_utf8_lossy(&output.stderr));
@@ -281,7 +281,7 @@ fn test_search_provider_duplicate_add() -> Result<()> {
     assert!(list_output.status.success(), "Failed to list providers: {}", String::from_utf8_lossy(&list_output.stderr));
     
     let stdout = String::from_utf8_lossy(&list_output.stdout);
-    assert!(stdout.contains("https://different-url.com"), "Updated URL not found in list output");
+    assert!(stdout.contains("https://api.search.brave.com/res/v1/different"), "Updated URL not found in list output");
     
     cleanup_config()?;
     restore_config()?;
@@ -290,13 +290,13 @@ fn test_search_provider_duplicate_add() -> Result<()> {
 
 #[test]
 fn test_search_output_formats() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add a provider with type
+    // Add a provider (type auto-detected from URL)
     Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     // Set a dummy API key
@@ -324,13 +324,13 @@ fn test_search_output_formats() -> Result<()> {
 
 #[test]
 fn test_search_result_count() -> Result<()> {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     backup_config()?;
     cleanup_config()?;
     
-    // Add a provider with type
+    // Add a provider (type auto-detected from URL)
     Command::new("cargo")
-        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1", "-t", "brave"])
+        .args(&["run", "--", "search", "provider", "add", "brave", "https://api.search.brave.com/res/v1"])
         .output()?;
     
     // Test custom result count
