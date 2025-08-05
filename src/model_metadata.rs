@@ -290,9 +290,14 @@ impl ModelMetadataExtractor {
         
         for path in &self.model_paths.paths {
             if let Ok(extracted) = self.extract_with_jq_path(response, path) {
-                match extracted {
-                    Value::Array(arr) => models.extend(arr),
-                    Value::Object(_) => models.push(extracted),
+                match &extracted {
+                    Value::Array(arr) => models.extend(arr.clone()),
+                    Value::Object(obj) => {
+                        // Only add objects that look like models (have id, name, or model field)
+                        if obj.contains_key("id") || obj.contains_key("name") || obj.contains_key("model") {
+                            models.push(extracted);
+                        }
+                    },
                     _ => {}
                 }
             }
@@ -434,12 +439,27 @@ impl ModelMetadataExtractor {
         let mut metadata = ModelMetadata::default();
         
         // Extract ID - try 'id' first, then fall back to 'name'
-        if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
-            metadata.id = id.to_string();
+        let base_id = if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
+            id.to_string()
         } else if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
-            metadata.id = name.to_string();
+            name.to_string()
         } else {
             anyhow::bail!("Model missing required 'id' or 'name' field");
+        };
+        
+        // For HuggingFace models, append the provider suffix from the expanded provider object
+        if (provider.provider == "hf" || provider.provider == "huggingface") && model.get("provider").is_some() {
+            if let Some(provider_obj) = model.get("provider") {
+                if let Some(provider_name) = provider_obj.get("provider").and_then(|v| v.as_str()) {
+                    metadata.id = format!("{}:{}", base_id, provider_name);
+                } else {
+                    metadata.id = base_id;
+                }
+            } else {
+                metadata.id = base_id;
+            }
+        } else {
+            metadata.id = base_id;
         }
         
         metadata.provider = provider.provider.clone();
@@ -478,6 +498,40 @@ impl ModelMetadataExtractor {
         let mut found_false = false;
         
         for path in &rule.paths {
+            // Handle special name-based patterns
+            if path.starts_with("@name_contains(") && path.ends_with(")") {
+                let pattern = &path[15..path.len()-1]; // Remove "@name_contains(" and ")"
+                let pattern = pattern.trim_matches('"'); // Remove quotes if present
+                
+                if let Some(result) = self.check_name_contains(model, pattern) {
+                    if is_bool_field && result {
+                        return Some(Value::Bool(true));
+                    } else if !is_bool_field {
+                        return Some(Value::Bool(result));
+                    } else if result == false {
+                        found_false = true;
+                    }
+                }
+                continue;
+            }
+            
+            if path.starts_with("@name_matches(") && path.ends_with(")") {
+                let pattern = &path[14..path.len()-1]; // Remove "@name_matches(" and ")"
+                let pattern = pattern.trim_matches('"'); // Remove quotes if present
+                
+                if let Some(result) = self.check_name_matches(model, pattern) {
+                    if is_bool_field && result {
+                        return Some(Value::Bool(true));
+                    } else if !is_bool_field {
+                        return Some(Value::Bool(result));
+                    } else if result == false {
+                        found_false = true;
+                    }
+                }
+                continue;
+            }
+            
+            // Regular JQ path extraction
             if let Ok(value) = self.extract_with_jq_path(model, path) {
                 if !value.is_null() {
                     // For boolean fields, continue searching if we found false, but return immediately if we found true
@@ -644,6 +698,68 @@ impl ModelMetadataExtractor {
             Value::String(s) => Ok(s.parse::<f64>().ok()),
             _ => Ok(None),
         }
+    }
+    
+    /// Check if model name contains a specific pattern (case-insensitive)
+    fn check_name_contains(&self, model: &Value, pattern: &str) -> Option<bool> {
+        let pattern_lower = pattern.to_lowercase();
+        
+        // Check model ID
+        if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
+            if id.to_lowercase().contains(&pattern_lower) {
+                return Some(true);
+            }
+        }
+        
+        // Check model name
+        if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
+            if name.to_lowercase().contains(&pattern_lower) {
+                return Some(true);
+            }
+        }
+        
+        // Check display_name
+        if let Some(display_name) = model.get("display_name").and_then(|v| v.as_str()) {
+            if display_name.to_lowercase().contains(&pattern_lower) {
+                return Some(true);
+            }
+        }
+        
+        Some(false)
+    }
+    
+    /// Check if model name matches a specific pattern using regex (case-insensitive)
+    fn check_name_matches(&self, model: &Value, pattern: &str) -> Option<bool> {
+        use regex::RegexBuilder;
+        
+        // Create case-insensitive regex
+        let regex = match RegexBuilder::new(pattern).case_insensitive(true).build() {
+            Ok(r) => r,
+            Err(_) => return Some(false), // Invalid regex pattern
+        };
+        
+        // Check model ID
+        if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
+            if regex.is_match(id) {
+                return Some(true);
+            }
+        }
+        
+        // Check model name
+        if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
+            if regex.is_match(name) {
+                return Some(true);
+            }
+        }
+        
+        // Check display_name
+        if let Some(display_name) = model.get("display_name").and_then(|v| v.as_str()) {
+            if regex.is_match(display_name) {
+                return Some(true);
+            }
+        }
+        
+        Some(false)
     }
 }
 

@@ -39,6 +39,7 @@ atty = "0.2"
 tiktoken-rs = "0.5"
 glob = "0.3"
 lazy_static = "1.4"
+regex = "1.10"
 rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk.git", features = ["client", "transport-child-process", "transport-sse-client", "reqwest"] }
 scraper = "0.18"
 urlencoding = "2.1"
