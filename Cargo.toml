@@ -70,3 +70,10 @@ nix = { version = "0.27", features = ["fs", "signal", "process"] }
 tempfile = "3.8"
 criterion = { version = "0.5", features = ["html_reports"] }
 warp = "0.3"
+
+# Enable debug symbols
+[profile.dev]
+debug = true
+
+[profile.release]
+debug = true

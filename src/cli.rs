@@ -312,6 +312,15 @@ pub enum Commands {
         #[arg(short = 'd', long = "debug")]
         debug: bool,
     },
+    /// Dump metadata JSON from models cache (alias: dump)
+    #[command(alias = "dump")]
+    DumpMetadata {
+        /// Specific provider to dump (optional - dumps all if not specified)
+        provider: Option<String>,
+        /// List available cached metadata files
+        #[arg(short, long)]
+        list: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -328,6 +337,59 @@ pub enum ModelsCommands {
     /// List embedding models (alias: e)
     #[command(alias = "e")]
     Embed,
+    /// Manage model paths for extraction (alias: p)
+    #[command(alias = "p")]
+    Path {
+        #[command(subcommand)]
+        command: ModelsPathCommands,
+    },
+    /// Manage model tags and extraction rules (alias: t)
+    #[command(alias = "t")]
+    Tags {
+        #[command(subcommand)]
+        command: ModelsTagsCommands,
+    },
+    /// Filter models by tags (alias: f)
+    #[command(alias = "f")]
+    Filter {
+        /// Tags to filter by (comma-separated)
+        #[arg(short = 't', long = "tag")]
+        tags: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ModelsPathCommands {
+    /// List all model extraction paths (alias: l)
+    #[command(alias = "l")]
+    List,
+    /// Add a new model extraction path (alias: a)
+    #[command(alias = "a")]
+    Add {
+        /// JQ-style path to add
+        path: String,
+    },
+    /// Delete a model extraction path (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Path to delete
+        path: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ModelsTagsCommands {
+    /// List all tags and their rules (alias: l)
+    #[command(alias = "l")]
+    List,
+    /// Add a rule to a tag (alias: a)
+    #[command(alias = "a")]
+    Add {
+        /// Tag name
+        tag: String,
+        /// Extraction rule (JQ-style path or search pattern)
+        rule: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2646,11 +2708,7 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
 pub async fn handle_models_command(
     command: Option<ModelsCommands>,
     query: Option<String>,
-    tools: bool,
-    reasoning: bool,
-    vision: bool,
-    audio: bool,
-    code: bool,
+    tags: Option<String>,
     context_length: Option<String>,
     input_length: Option<String>,
     output_length: Option<String>,
@@ -2789,6 +2847,115 @@ pub async fn handle_models_command(
             debug_log!("Displaying {} embedding models", embedding_models.len());
             display_embedding_models(&embedding_models)?;
         }
+        Some(ModelsCommands::Path { command }) => {
+            match command {
+                ModelsPathCommands::List => {
+                    crate::model_metadata::list_model_paths()?;
+                }
+                ModelsPathCommands::Add { path } => {
+                    crate::model_metadata::add_model_path(path)?;
+                }
+                ModelsPathCommands::Delete { path } => {
+                    crate::model_metadata::remove_model_path(path)?;
+                }
+            }
+        }
+        Some(ModelsCommands::Tags { command }) => {
+            match command {
+                ModelsTagsCommands::List => {
+                    crate::model_metadata::list_tags()?;
+                }
+                ModelsTagsCommands::Add { tag, rule } => {
+                    // For simplicity, we'll add a single path rule
+                    crate::model_metadata::add_tag(tag, vec![rule], "string".to_string(), None)?;
+                }
+            }
+        }
+        Some(ModelsCommands::Filter { tags: filter_tags }) => {
+            // Load all models
+            let models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
+            
+            // Parse tags
+            let required_tags: Vec<&str> = filter_tags.split(',').map(|s| s.trim()).collect();
+            
+            // Filter models based on tags
+            let filtered: Vec<_> = models.into_iter().filter(|model| {
+                for tag in &required_tags {
+                    match *tag {
+                        "tools" => if !model.supports_tools && !model.supports_function_calling { return false; }
+                        "vision" => if !model.supports_vision { return false; }
+                        "audio" => if !model.supports_audio { return false; }
+                        "reasoning" => if !model.supports_reasoning { return false; }
+                        "code" => if !model.supports_code { return false; }
+                        _ => {
+                            // Check for context length filters like "ctx>100k"
+                            if tag.starts_with("ctx") {
+                                if let Some(ctx) = model.context_length {
+                                    if tag.contains('>') {
+                                        if let Some(min_str) = tag.split('>').nth(1) {
+                                            if let Ok(min_ctx) = parse_token_count(min_str) {
+                                                if ctx < min_ctx { return false; }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                true
+            }).collect();
+            
+            if filtered.is_empty() {
+                println!("No models found with tags: {}", filter_tags);
+            } else {
+                println!("\n{} Models with tags [{}] ({} found):", "Filtered Results:".bold().blue(), filter_tags, filtered.len());
+                
+                let mut current_provider = String::new();
+                for model in filtered {
+                    if model.provider != current_provider {
+                        current_provider = model.provider.clone();
+                        println!("\n{}", format!("{}:", current_provider).bold().green());
+                    }
+                    
+                    print!("  {} {}", "•".blue(), model.id.bold());
+                    
+                    // Show capabilities
+                    let mut capabilities = Vec::new();
+                    if model.supports_tools || model.supports_function_calling {
+                        capabilities.push("🔧 tools".blue());
+                    }
+                    if model.supports_vision {
+                        capabilities.push("👁 vision".magenta());
+                    }
+                    if model.supports_audio {
+                        capabilities.push("🔊 audio".yellow());
+                    }
+                    if model.supports_reasoning {
+                        capabilities.push("🧠 reasoning".cyan());
+                    }
+                    if model.supports_code {
+                        capabilities.push("💻 code".green());
+                    }
+                    
+                    if !capabilities.is_empty() {
+                        let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+                        print!(" [{}]", capability_strings.join(" "));
+                    }
+                    
+                    // Show context info
+                    if let Some(ctx) = model.context_length {
+                        if ctx >= 1000 {
+                            print!(" ({}k ctx)", ctx / 1000);
+                        } else {
+                            print!(" ({} ctx)", ctx);
+                        }
+                    }
+                    
+                    println!();
+                }
+            }
+        }
         None => {
             debug_log!("Handling global models command");
             
@@ -2815,18 +2982,20 @@ pub async fn handle_models_command(
             }
             
             debug_log!("Applying filters to {} models", enhanced_models.len());
-            debug_log!("Filters - query: {:?}, tools: {}, reasoning: {}, vision: {}, audio: {}, code: {}",
-                      query, tools, reasoning, vision, audio, code);
+            
+            // Parse tags if provided
+            let tag_filters = if let Some(ref tag_str) = tags {
+                let tags_vec: Vec<String> = tag_str.split(',').map(|s| s.trim().to_string()).collect();
+                Some(tags_vec)
+            } else {
+                None
+            };
             
             // Apply filters
-            let filtered_models = apply_model_filters(
+            let filtered_models = apply_model_filters_with_tags(
                 enhanced_models,
                 &query,
-                tools,
-                reasoning,
-                vision,
-                audio,
-                code,
+                tag_filters,
                 &context_length,
                 &input_length,
                 &output_length,
@@ -3047,14 +3216,10 @@ async fn dump_models_data() -> Result<()> {
 }
 
 
-fn apply_model_filters(
+fn apply_model_filters_with_tags(
     models: Vec<crate::model_metadata::ModelMetadata>,
     query: &Option<String>,
-    tools: bool,
-    reasoning: bool,
-    vision: bool,
-    audio: bool,
-    code: bool,
+    tag_filters: Option<Vec<String>>,
     context_length: &Option<String>,
     input_length: &Option<String>,
     output_length: &Option<String>,
@@ -3073,25 +3238,30 @@ fn apply_model_filters(
         });
     }
     
-    // Apply capability filters
-    if tools {
-        filtered.retain(|model| model.supports_tools || model.supports_function_calling);
-    }
-    
-    if reasoning {
-        filtered.retain(|model| model.supports_reasoning);
-    }
-    
-    if vision {
-        filtered.retain(|model| model.supports_vision);
-    }
-    
-    if audio {
-        filtered.retain(|model| model.supports_audio);
-    }
-    
-    if code {
-        filtered.retain(|model| model.supports_code);
+    // Apply tag filters if provided
+    if let Some(tags) = tag_filters {
+        for tag in tags {
+            match tag.as_str() {
+                "tools" => {
+                    filtered.retain(|model| model.supports_tools || model.supports_function_calling);
+                }
+                "reasoning" => {
+                    filtered.retain(|model| model.supports_reasoning);
+                }
+                "vision" => {
+                    filtered.retain(|model| model.supports_vision);
+                }
+                "audio" => {
+                    filtered.retain(|model| model.supports_audio);
+                }
+                "code" => {
+                    filtered.retain(|model| model.supports_code);
+                }
+                _ => {
+                    // Ignore unknown tags
+                }
+            }
+        }
     }
     
     // Apply context length filter
@@ -3139,6 +3309,7 @@ fn apply_model_filters(
     
     Ok(filtered)
 }
+
 
 fn parse_token_count(input: &str) -> Result<u32> {
     let input = input.to_lowercase();
@@ -4859,6 +5030,24 @@ fn save_base64_image(b64_data: &str, filepath: &std::path::Path) -> Result<()> {
     
     let image_bytes = general_purpose::STANDARD.decode(b64_data)?;
     std::fs::write(filepath, image_bytes)?;
+    
+    Ok(())
+}
+
+// Dump metadata command handler
+pub async fn handle_dump_metadata_command(provider: Option<String>, list: bool) -> Result<()> {
+    use crate::dump_metadata::MetadataDumper;
+    
+    if list {
+        // List available cached metadata files
+        MetadataDumper::list_cached_metadata().await?;
+    } else if let Some(provider_name) = provider {
+        // Dump metadata for specific provider
+        MetadataDumper::dump_provider_by_name(&provider_name).await?;
+    } else {
+        // Dump metadata for all providers
+        MetadataDumper::dump_all_metadata().await?;
+    }
     
     Ok(())
 }

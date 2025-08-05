@@ -1,4 +1,10 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+use anyhow::{Result, Context};
+use crate::provider::Provider;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelMetadata {
@@ -88,1110 +94,719 @@ impl Default for ModelMetadata {
     }
 }
 
+// Configuration structures
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelPaths {
+    pub paths: Vec<String>,
+}
+
+impl Default for ModelPaths {
+    fn default() -> Self {
+        Self {
+            paths: vec![
+                ".data[]".to_string(),
+                ".models[]".to_string(),
+                ".".to_string(),
+            ],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagConfig {
+    pub tags: HashMap<String, TagRule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagRule {
+    pub paths: Vec<String>,
+    pub value_type: String,
+    pub transform: Option<String>,
+}
+
+impl Default for TagConfig {
+    fn default() -> Self {
+        let mut tags = HashMap::new();
+        
+        // Context length
+        tags.insert("context_length".to_string(), TagRule {
+            paths: vec![
+                ".context_length".to_string(),
+                ".context_window".to_string(),
+                ".max_context_length".to_string(),
+                ".input_token_limit".to_string(),
+            ],
+            value_type: "u32".to_string(),
+            transform: None,
+        });
+        
+        // Vision support
+        tags.insert("supports_vision".to_string(), TagRule {
+            paths: vec![
+                ".supports_vision".to_string(),
+                ".supports_image_input".to_string(),
+                ".capabilities.vision".to_string(),
+                ".architecture.input_modalities[] | select(. == \"image\")".to_string(),
+            ],
+            value_type: "bool".to_string(),
+            transform: None,
+        });
+        
+        // Tools/Function calling
+        tags.insert("supports_tools".to_string(), TagRule {
+            paths: vec![
+                ".supports_tools".to_string(),
+                ".capabilities.function_calling".to_string(),
+                ".features[] | select(. == \"tools\")".to_string(),
+                ".supported_parameters[] | select(. == \"tools\")".to_string(),
+            ],
+            value_type: "bool".to_string(),
+            transform: None,
+        });
+        
+        // Pricing
+        tags.insert("input_price_per_m".to_string(), TagRule {
+            paths: vec![
+                ".pricing.prompt".to_string(),
+                ".pricing.input.usd".to_string(),
+                ".input_price".to_string(),
+            ],
+            value_type: "f64".to_string(),
+            transform: Some("multiply_million".to_string()),
+        });
+        
+        Self { tags }
+    }
+}
+
+// Main extractor
+pub struct ModelMetadataExtractor {
+    model_paths: ModelPaths,
+    tag_config: TagConfig,
+}
+
+impl ModelMetadataExtractor {
+    pub fn new() -> Result<Self> {
+        // Ensure configuration files exist on first run
+        if let Err(e) = Self::ensure_config_files_exist() {
+            eprintln!("Warning: Failed to ensure model metadata config files exist: {}", e);
+        }
+        
+        let model_paths = Self::load_model_paths()?;
+        let tag_config = Self::load_tag_config()?;
+        
+        Ok(Self {
+            model_paths,
+            tag_config,
+        })
+    }
+    
+    /// Ensures that tags.toml and model_paths.toml exist with default values
+    fn ensure_config_files_exist() -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        
+        // Ensure directory exists
+        fs::create_dir_all(&config_dir)?;
+        
+        // Check and create model_paths.toml if it doesn't exist
+        let model_paths_file = config_dir.join("model_paths.toml");
+        if !model_paths_file.exists() {
+            let default_paths = ModelPaths::default();
+            let content = toml::to_string_pretty(&default_paths)?;
+            fs::write(&model_paths_file, content)?;
+        }
+        
+        // Check and create tags.toml if it doesn't exist
+        let tags_file = config_dir.join("tags.toml");
+        if !tags_file.exists() {
+            let default_tags = TagConfig::default();
+            let content = toml::to_string_pretty(&default_tags)?;
+            fs::write(&tags_file, content)?;
+        }
+        
+        Ok(())
+    }
+    
+    fn get_config_dir() -> Result<PathBuf> {
+        // Check for test environment variables first
+        if let Ok(xdg_config) = std::env::var("XDG_CONFIG_HOME") {
+            return Ok(std::path::PathBuf::from(xdg_config).join("lc"));
+        }
+        
+        if let Ok(home) = std::env::var("HOME") {
+            // Check if this looks like a test environment (temp directory)
+            if home.contains("tmp") || home.contains("temp") {
+                return Ok(std::path::PathBuf::from(home).join(".config").join("lc"));
+            }
+        }
+        
+        // Default behavior for production
+        let config_dir = dirs::config_dir()
+            .context("Failed to get config directory")?
+            .join("lc");
+        Ok(config_dir)
+    }
+    
+    fn load_model_paths() -> Result<ModelPaths> {
+        let config_dir = Self::get_config_dir()?;
+        let path = config_dir.join("model_paths.toml");
+        
+        // Ensure directory exists
+        fs::create_dir_all(&config_dir)?;
+        
+        if path.exists() {
+            let content = fs::read_to_string(&path)?;
+            toml::from_str(&content).context("Failed to parse model_paths.toml")
+        } else {
+            // Create default file
+            let default = ModelPaths::default();
+            let content = toml::to_string_pretty(&default)?;
+            fs::write(&path, content)?;
+            Ok(default)
+        }
+    }
+    
+    fn load_tag_config() -> Result<TagConfig> {
+        let config_dir = Self::get_config_dir()?;
+        let path = config_dir.join("tags.toml");
+        
+        // Ensure directory exists
+        fs::create_dir_all(&config_dir)?;
+        
+        if path.exists() {
+            let content = fs::read_to_string(&path)?;
+            toml::from_str(&content).context("Failed to parse tags.toml")
+        } else {
+            // Create default file
+            let default = TagConfig::default();
+            let content = toml::to_string_pretty(&default)?;
+            fs::write(&path, content)?;
+            Ok(default)
+        }
+    }
+    
+    pub fn extract_models(&self, provider: &Provider, response: &Value) -> Result<Vec<Value>> {
+        let mut models = Vec::new();
+        
+        for path in &self.model_paths.paths {
+            if let Ok(extracted) = self.extract_with_jq_path(response, path) {
+                match extracted {
+                    Value::Array(arr) => models.extend(arr),
+                    Value::Object(_) => models.push(extracted),
+                    _ => {}
+                }
+            }
+        }
+        
+        // Special handling for HuggingFace
+        if provider.provider == "hf" || provider.provider == "huggingface" {
+            models = self.expand_huggingface_models(models)?;
+        }
+        
+        Ok(models)
+    }
+    
+    pub fn extract_with_jq_path(&self, data: &Value, path: &str) -> Result<Value> {
+        // Simple JQ path implementation
+        if path == "." {
+            return Ok(data.clone());
+        }
+        
+        // Handle complex JQ expressions with pipes
+        if path.contains(" | ") {
+            return self.extract_with_jq_filter(data, path);
+        }
+        
+        let parts: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
+        let mut current = data;
+        
+        for part in parts {
+            if part.ends_with("[]") {
+                let field = &part[..part.len()-2];
+                current = current.get(field)
+                    .context(format!("Field {} not found", field))?;
+                if !current.is_array() {
+                    anyhow::bail!("Expected array at {}", field);
+                }
+            } else {
+                current = current.get(part)
+                    .context(format!("Field {} not found", part))?;
+            }
+        }
+        
+        Ok(current.clone())
+    }
+    
+    fn extract_with_jq_filter(&self, data: &Value, path: &str) -> Result<Value> {
+        let parts: Vec<&str> = path.split(" | ").collect();
+        if parts.len() != 2 {
+            anyhow::bail!("Complex JQ filters not supported: {}", path);
+        }
+        
+        let array_path = parts[0].trim();
+        let filter = parts[1].trim();
+        
+        // Extract the array first
+        let array_value = self.extract_with_jq_path(data, array_path)?;
+        
+        // Handle select filters
+        if filter.starts_with("select(") && filter.ends_with(")") {
+            let condition = &filter[7..filter.len()-1]; // Remove "select(" and ")"
+            
+            if let Value::Array(arr) = array_value {
+                // Check if any element in the array matches the condition
+                for item in arr {
+                    if self.evaluate_select_condition(&item, condition)? {
+                        return Ok(Value::Bool(true));
+                    }
+                }
+                return Ok(Value::Bool(false));
+            } else {
+                // For non-arrays, evaluate the condition directly
+                if self.evaluate_select_condition(&array_value, condition)? {
+                    return Ok(array_value);
+                } else {
+                    return Ok(Value::Null);
+                }
+            }
+        }
+        
+        anyhow::bail!("Unsupported JQ filter: {}", filter)
+    }
+    
+    fn evaluate_select_condition(&self, value: &Value, condition: &str) -> Result<bool> {
+        // Handle equality conditions like '. == "tool-calling"'
+        if condition.starts_with(". == ") {
+            let expected = condition[5..].trim();
+            
+            // Remove quotes if present
+            let expected = if expected.starts_with('"') && expected.ends_with('"') {
+                &expected[1..expected.len()-1]
+            } else {
+                expected
+            };
+            
+            match value {
+                Value::String(s) => Ok(s == expected),
+                Value::Number(n) => {
+                    if let Ok(num) = expected.parse::<f64>() {
+                        Ok(n.as_f64() == Some(num))
+                    } else {
+                        Ok(false)
+                    }
+                }
+                Value::Bool(b) => {
+                    if let Ok(bool_val) = expected.parse::<bool>() {
+                        Ok(*b == bool_val)
+                    } else {
+                        Ok(false)
+                    }
+                }
+                _ => Ok(false),
+            }
+        } else {
+            anyhow::bail!("Unsupported select condition: {}", condition)
+        }
+    }
+    
+    fn expand_huggingface_models(&self, models: Vec<Value>) -> Result<Vec<Value>> {
+        let mut expanded = Vec::new();
+        
+        for model in models {
+            if let Some(providers) = model.get("providers").and_then(|p| p.as_array()) {
+                for provider in providers {
+                    let mut new_model = model.clone();
+                    if let Some(obj) = new_model.as_object_mut() {
+                        obj.insert("provider".to_string(), provider.clone());
+                        obj.remove("providers");
+                    }
+                    expanded.push(new_model);
+                }
+            } else {
+                expanded.push(model);
+            }
+        }
+        
+        Ok(expanded)
+    }
+    
+    pub fn extract_metadata(&self, provider: &Provider, model: &Value) -> Result<ModelMetadata> {
+        let mut metadata = ModelMetadata::default();
+        
+        // Extract ID - try 'id' first, then fall back to 'name'
+        if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
+            metadata.id = id.to_string();
+        } else if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
+            metadata.id = name.to_string();
+        } else {
+            anyhow::bail!("Model missing required 'id' or 'name' field");
+        }
+        
+        metadata.provider = provider.provider.clone();
+        metadata.raw_data = model.clone();
+        
+        // Extract basic fields
+        if let Some(name) = model.get("display_name").or_else(|| model.get("name")).and_then(|v| v.as_str()) {
+            metadata.display_name = Some(name.to_string());
+        }
+        
+        if let Some(desc) = model.get("description").and_then(|v| v.as_str()) {
+            metadata.description = Some(desc.to_string());
+        }
+        
+        if let Some(owner) = model.get("owned_by").and_then(|v| v.as_str()) {
+            metadata.owned_by = Some(owner.to_string());
+        }
+        
+        if let Some(created) = model.get("created").and_then(|v| v.as_i64()) {
+            metadata.created = Some(created);
+        }
+        
+        // Extract tags using configured rules
+        for (tag_name, rule) in &self.tag_config.tags {
+            if let Some(value) = self.extract_tag_value(model, rule) {
+                self.apply_tag_value(&mut metadata, tag_name, value, &rule.value_type)?;
+            }
+        }
+        
+        Ok(metadata)
+    }
+    
+    fn extract_tag_value(&self, model: &Value, rule: &TagRule) -> Option<Value> {
+        // For boolean fields, we want to find the first "true" value, not just the first non-null value
+        let is_bool_field = rule.value_type == "bool";
+        let mut found_false = false;
+        
+        for path in &rule.paths {
+            if let Ok(value) = self.extract_with_jq_path(model, path) {
+                if !value.is_null() {
+                    // For boolean fields, continue searching if we found false, but return immediately if we found true
+                    if is_bool_field {
+                        if let Some(bool_val) = value.as_bool() {
+                            if bool_val {
+                                // Found true, return immediately
+                                if let Some(transform) = &rule.transform {
+                                    return self.apply_transform(value, transform);
+                                }
+                                return Some(value);
+                            } else {
+                                // Found false, remember it but continue searching
+                                found_false = true;
+                            }
+                        }
+                    } else {
+                        // For non-boolean fields, return the first non-null value
+                        if let Some(transform) = &rule.transform {
+                            return self.apply_transform(value, transform);
+                        }
+                        return Some(value);
+                    }
+                }
+            }
+        }
+        
+        // If we're dealing with a boolean field and found at least one false, return false
+        // Otherwise return None
+        if is_bool_field && found_false {
+            Some(Value::Bool(false))
+        } else {
+            None
+        }
+    }
+    
+    fn apply_transform(&self, value: Value, transform: &str) -> Option<Value> {
+        match transform {
+            "multiply_million" => {
+                if let Some(num) = value.as_f64() {
+                    Some(Value::from(num * 1_000_000.0))
+                } else {
+                    None
+                }
+            }
+            _ => Some(value),
+        }
+    }
+    
+    fn apply_tag_value(&self, metadata: &mut ModelMetadata, tag_name: &str, value: Value, value_type: &str) -> Result<()> {
+        match tag_name {
+            "context_length" => {
+                if let Some(v) = self.parse_value_as_u32(&value, value_type)? {
+                    metadata.context_length = Some(v);
+                }
+            }
+            "max_input_tokens" => {
+                if let Some(v) = self.parse_value_as_u32(&value, value_type)? {
+                    metadata.max_input_tokens = Some(v);
+                }
+            }
+            "max_output_tokens" | "output" => {
+                if let Some(v) = self.parse_value_as_u32(&value, value_type)? {
+                    metadata.max_output_tokens = Some(v);
+                }
+            }
+            "input_price_per_m" | "input_price_per_m_direct" => {
+                if let Some(v) = self.parse_value_as_f64(&value, value_type)? {
+                    metadata.input_price_per_m = Some(v);
+                }
+            }
+            "output_price_per_m" | "output_price_per_m_direct" => {
+                if let Some(v) = self.parse_value_as_f64(&value, value_type)? {
+                    metadata.output_price_per_m = Some(v);
+                }
+            }
+            "supports_tools" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.supports_tools = v;
+                }
+            }
+            "supports_vision" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.supports_vision = v;
+                }
+            }
+            "supports_audio" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.supports_audio = v;
+                }
+            }
+            "supports_reasoning" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.supports_reasoning = v;
+                }
+            }
+            "supports_code" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.supports_code = v;
+                }
+            }
+            "supports_function_calling" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.supports_function_calling = v;
+                }
+            }
+            "supports_json_mode" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.supports_json_mode = v;
+                }
+            }
+            "supports_streaming" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.supports_streaming = v;
+                }
+            }
+            "is_deprecated" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.is_deprecated = v;
+                }
+            }
+            "is_fine_tunable" => {
+                if let Some(v) = self.parse_value_as_bool(&value, value_type)? {
+                    metadata.is_fine_tunable = v;
+                }
+            }
+            _ => {
+                // Unknown tag, ignore
+            }
+        }
+        Ok(())
+    }
+    
+    fn parse_value_as_bool(&self, value: &Value, _value_type: &str) -> Result<Option<bool>> {
+        match value {
+            Value::Bool(b) => Ok(Some(*b)),
+            Value::String(s) => Ok(Some(s == "true" || s == "yes" || s == "1")),
+            Value::Number(n) => Ok(Some(n.as_i64().unwrap_or(0) != 0)),
+            _ => Ok(None),
+        }
+    }
+    
+    fn parse_value_as_u32(&self, value: &Value, _value_type: &str) -> Result<Option<u32>> {
+        match value {
+            Value::Number(n) => {
+                if let Some(v) = n.as_u64() {
+                    Ok(Some(v as u32))
+                } else if let Some(v) = n.as_i64() {
+                    Ok(Some(v as u32))
+                } else {
+                    Ok(None)
+                }
+            }
+            Value::String(s) => {
+                Ok(s.parse::<u32>().ok())
+            }
+            _ => Ok(None),
+        }
+    }
+    
+    fn parse_value_as_f64(&self, value: &Value, _value_type: &str) -> Result<Option<f64>> {
+        match value {
+            Value::Number(n) => Ok(n.as_f64()),
+            Value::String(s) => Ok(s.parse::<f64>().ok()),
+            _ => Ok(None),
+        }
+    }
+}
+
+// Public API function
+pub fn extract_models_from_provider(provider: &Provider, raw_json: &str) -> Result<Vec<ModelMetadata>> {
+    let response: Value = serde_json::from_str(raw_json)?;
+    let extractor = ModelMetadataExtractor::new()?;
+    
+    let models = extractor.extract_models(provider, &response)?;
+    let mut metadata_list = Vec::new();
+    
+    for model in models {
+        match extractor.extract_metadata(provider, &model) {
+            Ok(metadata) => metadata_list.push(metadata),
+            Err(e) => {
+                eprintln!("Warning: Failed to extract metadata for model: {}", e);
+            }
+        }
+    }
+    
+    Ok(metadata_list)
+}
+
+// CLI command handlers
+pub fn add_model_path(path: String) -> Result<()> {
+    let config_dir = ModelMetadataExtractor::get_config_dir()?;
+    let file_path = config_dir.join("model_paths.toml");
+    
+    let mut paths = if file_path.exists() {
+        let content = fs::read_to_string(&file_path)?;
+        toml::from_str(&content)?
+    } else {
+        ModelPaths::default()
+    };
+    
+    if !paths.paths.contains(&path) {
+        paths.paths.push(path);
+        let content = toml::to_string_pretty(&paths)?;
+        fs::write(&file_path, content)?;
+        println!("Added model path");
+    } else {
+        println!("Path already exists");
+    }
+    
+    Ok(())
+}
+
+pub fn remove_model_path(path: String) -> Result<()> {
+    let config_dir = ModelMetadataExtractor::get_config_dir()?;
+    let file_path = config_dir.join("model_paths.toml");
+    
+    if !file_path.exists() {
+        anyhow::bail!("No model paths configured");
+    }
+    
+    let mut paths: ModelPaths = {
+        let content = fs::read_to_string(&file_path)?;
+        toml::from_str(&content)?
+    };
+    
+    if let Some(pos) = paths.paths.iter().position(|p| p == &path) {
+        paths.paths.remove(pos);
+        let content = toml::to_string_pretty(&paths)?;
+        fs::write(&file_path, content)?;
+        println!("Removed model path");
+    } else {
+        println!("Path not found");
+    }
+    
+    Ok(())
+}
+
+pub fn list_model_paths() -> Result<()> {
+    let config_dir = ModelMetadataExtractor::get_config_dir()?;
+    let file_path = config_dir.join("model_paths.toml");
+    
+    let paths = if file_path.exists() {
+        let content = fs::read_to_string(&file_path)?;
+        toml::from_str(&content)?
+    } else {
+        ModelPaths::default()
+    };
+    
+    println!("Model paths:");
+    for path in &paths.paths {
+        println!("  - {}", path);
+    }
+    
+    Ok(())
+}
+
+pub fn add_tag(name: String, paths: Vec<String>, value_type: String, transform: Option<String>) -> Result<()> {
+    let config_dir = ModelMetadataExtractor::get_config_dir()?;
+    let file_path = config_dir.join("tags.toml");
+    
+    let mut config = if file_path.exists() {
+        let content = fs::read_to_string(&file_path)?;
+        toml::from_str(&content)?
+    } else {
+        TagConfig::default()
+    };
+    
+    config.tags.insert(name.clone(), TagRule {
+        paths,
+        value_type,
+        transform,
+    });
+    
+    let content = toml::to_string_pretty(&config)?;
+    fs::write(&file_path, content)?;
+    println!("Added tag: {}", name);
+    
+    Ok(())
+}
+
+
+/// Initialize model metadata configuration files
+/// This should be called once during application startup to ensure
+/// tags.toml and model_paths.toml exist with default values
+pub fn initialize_model_metadata_config() -> Result<()> {
+    ModelMetadataExtractor::ensure_config_files_exist()
+}
+
+pub fn list_tags() -> Result<()> {
+    let config_dir = ModelMetadataExtractor::get_config_dir()?;
+    let file_path = config_dir.join("tags.toml");
+    
+    let config = if file_path.exists() {
+        let content = fs::read_to_string(&file_path)?;
+        toml::from_str(&content)?
+    } else {
+        TagConfig::default()
+    };
+    
+    println!("Tags:");
+    for (name, rule) in &config.tags {
+        println!("  {}:", name);
+        println!("    Type: {}", rule.value_type);
+        println!("    Paths:");
+        for path in &rule.paths {
+            println!("      - {}", path);
+        }
+        if let Some(transform) = &rule.transform {
+            println!("    Transform: {}", transform);
+        }
+    }
+    
+    Ok(())
+}
+
+// Compatibility layer for existing code
 pub struct MetadataExtractor;
 
 impl MetadataExtractor {
     pub fn extract_from_provider(provider: &str, raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        match provider {
-            "openai" => Self::extract_openai(raw_json),
-            "groq" => Self::extract_groq(raw_json),
-            "claude" => Self::extract_claude(raw_json),
-            "cohere" => Self::extract_cohere(raw_json),
-            "mistral" => Self::extract_mistral(raw_json),
-            "fireworks" => Self::extract_fireworks(raw_json),
-            "nvidia" => Self::extract_nvidia(raw_json),
-            "openrouter" => Self::extract_openrouter(raw_json),
-            "kilo" => Self::extract_kilo(raw_json),
-            "venice" => Self::extract_venice(raw_json),
-            "requesty" => Self::extract_requesty(raw_json),
-            "chutes" => Self::extract_chutes(raw_json),
-            "github" => Self::extract_github(raw_json),
-            "together" => Self::extract_together(raw_json),
-            "gemini" => Self::extract_gemini(raw_json),
-            "ollama" => Self::extract_ollama(raw_json),
-            _ => Self::extract_generic(provider, raw_json),
-        }
-    }
-    
-    fn extract_openai(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-    #[derive(Deserialize)]
-    struct OpenAIResponse {
-        data: Vec<OpenAIModel>,
-    }
-    
-    #[derive(Deserialize, Serialize)]
-    struct OpenAIModel {
-        id: String,
-        object: String,
-        owned_by: String,
-        created: i64,
-        capabilities: Option<Vec<String>>, // Expect potential capabilities array
-    }
-    
-    let response: OpenAIResponse = serde_json::from_str(raw_json)?;
-    let mut models = Vec::new();
-    
-    for model in response.data {
-        let raw_data = serde_json::to_value(&model)?;
-        let mut metadata = ModelMetadata {
-            id: model.id.clone(),
-            provider: "openai".to_string(),
-            owned_by: Some(model.owned_by),
-            created: Some(model.created),
-            raw_data,
-            ..Default::default()
+        let provider_obj = Provider {
+            provider: provider.to_string(),
+            status: "active".to_string(),
+            supports_tools: false,
+            supports_structured_output: false,
         };
         
-        // Extract capabilities if present
-        if let Some(ref capabilities) = model.capabilities {
-            capabilities.iter().for_each(|capability| match capability.as_str() {
-                "tools" | "function-calling" => metadata.supports_tools = true,
-                "json-mode" => metadata.supports_json_mode = true,
-                _ => (),
-            });
-        }
-        
-        models.push(metadata);
-    }
-    
-    Ok(models)
-}
-    
-    fn extract_groq(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct GroqResponse {
-            data: Vec<GroqModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct GroqModel {
-            id: String,
-            object: String,
-            owned_by: String,
-            created: i64,
-            active: bool,
-            context_window: u32,
-            max_completion_tokens: u32,
-        }
-        
-        let response: GroqResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "groq".to_string(),
-                owned_by: Some(model.owned_by),
-                created: Some(model.created),
-                context_length: Some(model.context_window),
-                max_output_tokens: Some(model.max_completion_tokens),
-                is_deprecated: !model.active,
-                raw_data,
-                ..Default::default()
-            };
-            
-// Self::infer_groq_capabilities(&mut metadata); (removed call due to lack of explicit capability info)
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_claude(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct ClaudeResponse {
-            data: Vec<ClaudeModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct ClaudeModel {
-            id: String,
-            display_name: String,
-            created_at: String,
-            #[serde(rename = "type")]
-            model_type: String,
-        }
-        
-        let response: ClaudeResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "claude".to_string(),
-                display_name: Some(model.display_name),
-                raw_data,
-                ..Default::default()
-            };
-            
-// Self::infer_claude_capabilities(&mut metadata); (removed call due to lack of explicit capability info)
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_cohere(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct CohereResponse {
-            models: Vec<CohereModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct CohereModel {
-            name: String,
-            context_length: u32,
-            endpoints: Vec<String>,
-            features: Option<Vec<String>>,
-            supports_vision: bool,
-            finetuned: bool,
-        }
-        
-        let response: CohereResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.models {
-            let raw_data = serde_json::to_value(&model)?;
-            let features = model.features.clone().unwrap_or_default();
-            
-            let metadata = ModelMetadata {
-                id: model.name.clone(),
-                provider: "cohere".to_string(),
-                context_length: Some(model.context_length),
-                supports_vision: model.supports_vision,
-                supports_tools: features.contains(&"tools".to_string()),
-                supports_function_calling: features.contains(&"strict_tools".to_string()),
-                supports_json_mode: features.contains(&"json_mode".to_string()) || features.contains(&"json_schema".to_string()),
-                is_fine_tunable: model.finetuned,
-                model_type: Self::infer_cohere_model_type(&model.endpoints),
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_mistral(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct MistralResponse {
-            data: Vec<MistralModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct MistralModel {
-            id: String,
-            name: String,
-            description: String,
-            max_context_length: u32,
-            capabilities: MistralCapabilities,
-            created: i64,
-            owned_by: String,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct MistralCapabilities {
-            completion_chat: bool,
-            completion_fim: bool,
-            function_calling: bool,
-            fine_tuning: bool,
-            vision: bool,
-        }
-        
-        let response: MistralResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "mistral".to_string(),
-                display_name: Some(model.name),
-                description: Some(model.description),
-                owned_by: Some(model.owned_by),
-                created: Some(model.created),
-                context_length: Some(model.max_context_length),
-                supports_function_calling: model.capabilities.function_calling,
-                supports_vision: model.capabilities.vision,
-                supports_code: model.capabilities.completion_fim,
-                is_fine_tunable: model.capabilities.fine_tuning,
-                model_type: if model.capabilities.completion_chat { ModelType::Chat } else { ModelType::Completion },
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_fireworks(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct FireworksResponse {
-            data: Vec<FireworksModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct FireworksModel {
-            id: String,
-            owned_by: String,
-            created: i64,
-            context_length: Option<u32>,
-            supports_chat: bool,
-            supports_image_input: bool,
-            supports_tools: bool,
-        }
-        
-        let response: FireworksResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "fireworks".to_string(),
-                owned_by: Some(model.owned_by),
-                created: Some(model.created),
-                context_length: model.context_length,
-                supports_tools: model.supports_tools,
-                supports_vision: model.supports_image_input,
-                model_type: if model.supports_chat { ModelType::Chat } else { ModelType::Other("generation".to_string()) },
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_nvidia(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        // NVIDIA uses OpenAI-compatible format
-        Self::extract_openai(raw_json).map(|mut models| {
-            for model in &mut models {
-                model.provider = "nvidia".to_string();
-                // Reset all inferred capabilities due to lack of explicit NVIDIA capability info
-                model.supports_tools = false;
-                model.supports_function_calling = false;
-                model.supports_json_mode = false;
-                model.supports_streaming = false;
-                model.supports_vision = false;
-                model.supports_audio = false;
-                model.supports_reasoning = false;
-                model.supports_code = false;
-            }
-            models
-        })
-    }
-    
-    fn extract_openrouter(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct OpenRouterResponse {
-            data: Vec<OpenRouterModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct OpenRouterModel {
-            id: String,
-            name: String,
-            description: Option<String>,
-            context_length: Option<u32>,
-            created: Option<i64>,
-            supported_parameters: Option<Vec<String>>,
-            architecture: Option<OpenRouterArchitecture>,
-            pricing: Option<OpenRouterPricing>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct OpenRouterArchitecture {
-            input_modalities: Option<Vec<String>>,
-            output_modalities: Option<Vec<String>>,
-            modality: Option<String>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct OpenRouterPricing {
-            prompt: Option<String>,
-            completion: Option<String>,
-            image: Option<String>,
-        }
-        
-        let response: OpenRouterResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            
-            // Extract capabilities from supported_parameters
-            let supported_params = model.supported_parameters.unwrap_or_default();
-            let supports_tools = supported_params.contains(&"tools".to_string());
-            let supports_reasoning = supported_params.contains(&"reasoning".to_string());
-            
-            // Extract vision support from architecture
-            let supports_vision = model.architecture
-                .as_ref()
-                .and_then(|arch| arch.input_modalities.as_ref())
-                .map_or(false, |modalities| modalities.contains(&"image".to_string()));
-            
-            // Only use explicit code support fields from JSON - no inference
-            let supports_code = false; // OpenRouter doesn't provide explicit code capability flags
-            
-            // Extract pricing (convert from per-token to per-million-token)
-            let input_price_per_m = model.pricing
-                .as_ref()
-                .and_then(|p| p.prompt.as_ref())
-                .and_then(|price_str| price_str.parse::<f64>().ok())
-                .map(|price| price * 1_000_000.0);
-                
-            let output_price_per_m = model.pricing
-                .as_ref()
-                .and_then(|p| p.completion.as_ref())
-                .and_then(|price_str| price_str.parse::<f64>().ok())
-                .map(|price| price * 1_000_000.0);
-            
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "openrouter".to_string(),
-                display_name: Some(model.name),
-                description: model.description,
-                created: model.created,
-                context_length: model.context_length,
-                input_price_per_m,
-                output_price_per_m,
-                // Capabilities
-                supports_tools,
-                supports_function_calling: supports_tools, // Same as tools for OpenRouter
-                supports_vision,
-                supports_reasoning,
-                supports_code,
-                supports_audio: false, // OpenRouter doesn't seem to have audio models
-                supports_json_mode: supported_params.contains(&"response_format".to_string()),
-                supports_streaming: true, // Most models support streaming
-                model_type: ModelType::Chat,
-                is_deprecated: false,
-                is_fine_tunable: false,
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_kilo(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        // Kilo uses the same format as OpenRouter, so we can reuse the extraction logic
-        Self::extract_openrouter(raw_json).map(|mut models| {
-            for model in &mut models {
-                model.provider = "kilo".to_string();
-            }
-            models
-        })
-    }
-    
-    fn extract_venice(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct VeniceResponse {
-            data: Vec<VeniceModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct VeniceModel {
-            id: String,
-            model_spec: Option<VeniceModelSpec>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct VeniceModelSpec {
-            name: Option<String>,
-            #[serde(rename = "availableContextTokens")]
-            available_context_tokens: Option<u32>,
-            capabilities: Option<VeniceCapabilities>,
-            pricing: Option<VenicePricing>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct VeniceCapabilities {
-            #[serde(rename = "supportsFunctionCalling")]
-            supports_function_calling: Option<bool>,
-            #[serde(rename = "supportsVision")]
-            supports_vision: Option<bool>,
-            #[serde(rename = "optimizedForCode")]
-            optimized_for_code: Option<bool>,
-            #[serde(rename = "supportsReasoning")]
-            supports_reasoning: Option<bool>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct VenicePricing {
-            input: Option<VenicePriceInfo>,
-            output: Option<VenicePriceInfo>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct VenicePriceInfo {
-            usd: Option<f64>,
-        }
-        
-        let response: VeniceResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            let mut metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "venice".to_string(),
-                raw_data,
-                ..Default::default()
-            };
-            
-            // Extract from model_spec if available
-            if let Some(ref model_spec) = model.model_spec {
-                // Extract capabilities from the capabilities object
-                if let Some(ref capabilities) = model_spec.capabilities {
-                    metadata.supports_function_calling = capabilities.supports_function_calling.unwrap_or(false);
-                    metadata.supports_tools = capabilities.supports_function_calling.unwrap_or(false);
-                    metadata.supports_vision = capabilities.supports_vision.unwrap_or(false);
-                    metadata.supports_code = capabilities.optimized_for_code.unwrap_or(false);
-                    metadata.supports_reasoning = capabilities.supports_reasoning.unwrap_or(false);
-                }
-                
-                // Extract context length
-                if let Some(context_tokens) = model_spec.available_context_tokens {
-                    metadata.context_length = Some(context_tokens);
-                }
-                
-                // Extract pricing (convert to per million tokens)
-                if let Some(ref pricing) = model_spec.pricing {
-                    if let Some(ref input) = pricing.input {
-                        if let Some(usd) = input.usd {
-                            metadata.input_price_per_m = Some(usd);
-                        }
-                    }
-                    if let Some(ref output) = pricing.output {
-                        if let Some(usd) = output.usd {
-                            metadata.output_price_per_m = Some(usd);
-                        }
-                    }
-                }
-                
-                // Extract display name
-                if let Some(ref name) = model_spec.name {
-                    metadata.display_name = Some(name.clone());
-                }
-            }
-            
-            // Fallback to model ID if no display name
-            if metadata.display_name.is_none() {
-                metadata.display_name = Some(model.id.clone());
-            }
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_ollama(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct OllamaResponse {
-            data: Vec<OllamaModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct OllamaModel {
-            id: String,
-            object: String,
-            owned_by: String,
-            created: i64,
-        }
-        
-        let response: OllamaResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "ollama".to_string(),
-                owned_by: Some(model.owned_by),
-                created: Some(model.created),
-                raw_data,
-                // Do NOT infer any capabilities - only use explicit JSON data
-                // All capabilities remain false unless explicitly stated in JSON
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_generic(provider: &str, raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        // Try to parse as standard OpenAI format first
-        if let Ok(openai_models) = Self::extract_openai(raw_json) {
-            // For non-OpenAI providers, we need to reset the inferred capabilities
-            // and only use explicit data from the JSON
-            
-            // Re-parse the JSON to get access to the original model objects
-            let value: serde_json::Value = serde_json::from_str(raw_json)?;
-            let mut model_raw_data_map = std::collections::HashMap::new();
-            
-            // Build a map of model ID to its raw JSON data
-            if let Some(data) = value.get("data").and_then(|d| d.as_array()) {
-                for model_value in data {
-                    if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
-                        model_raw_data_map.insert(id.to_string(), model_value.clone());
-                    }
-                }
-            }
-            
-            return Ok(openai_models.into_iter().map(|model| {
-                let mut metadata = ModelMetadata {
-                    id: model.id.clone(),
-                    provider: provider.to_string(),
-                    display_name: model.display_name,
-                    description: model.description,
-                    owned_by: model.owned_by,
-                    created: model.created,
-                    context_length: model.context_length,
-                    max_input_tokens: model.max_input_tokens,
-                    max_output_tokens: model.max_output_tokens,
-                    input_price_per_m: model.input_price_per_m,
-                    output_price_per_m: model.output_price_per_m,
-                    model_type: model.model_type,
-                    raw_data: model_raw_data_map.get(&model.id).unwrap_or(&model.raw_data).clone(),
-                    // Reset all capability flags to false - only set based on explicit JSON data
-                    ..Default::default()
-                };
-                
-                // Only extract explicit capabilities from the raw JSON data
-                if let Some(raw_obj) = metadata.raw_data.as_object() {
-                    // Check for explicit capability fields in the JSON
-                    if let Some(tools) = raw_obj.get("supports_tools").and_then(|v| v.as_bool()) {
-                        metadata.supports_tools = tools;
-                    }
-                    if let Some(vision) = raw_obj.get("supports_vision").and_then(|v| v.as_bool()) {
-                        metadata.supports_vision = vision;
-                    }
-                    // Also check for supports_image_input (used by Hyperbolic and others)
-                    if let Some(image_input) = raw_obj.get("supports_image_input").and_then(|v| v.as_bool()) {
-                        metadata.supports_vision = image_input;
-                    }
-                    if let Some(audio) = raw_obj.get("supports_audio").and_then(|v| v.as_bool()) {
-                        metadata.supports_audio = audio;
-                    }
-                    if let Some(reasoning) = raw_obj.get("supports_reasoning").and_then(|v| v.as_bool()) {
-                        metadata.supports_reasoning = reasoning;
-                    }
-                    if let Some(code) = raw_obj.get("supports_code").and_then(|v| v.as_bool()) {
-                        metadata.supports_code = code;
-                    }
-                    if let Some(func_calling) = raw_obj.get("supports_function_calling").and_then(|v| v.as_bool()) {
-                        metadata.supports_function_calling = func_calling;
-                    }
-                    if let Some(json_mode) = raw_obj.get("supports_json_mode").and_then(|v| v.as_bool()) {
-                        metadata.supports_json_mode = json_mode;
-                    }
-                    if let Some(streaming) = raw_obj.get("supports_streaming").and_then(|v| v.as_bool()) {
-                        metadata.supports_streaming = streaming;
-                    }
-                    if let Some(deprecated) = raw_obj.get("is_deprecated").and_then(|v| v.as_bool()) {
-                        metadata.is_deprecated = deprecated;
-                    }
-                    if let Some(fine_tunable) = raw_obj.get("is_fine_tunable").and_then(|v| v.as_bool()) {
-                        metadata.is_fine_tunable = fine_tunable;
-                    }
-                }
-                
-                metadata
-            }).collect());
-        }
-        
-        // If that fails, try to extract basic model list
-        let value: serde_json::Value = serde_json::from_str(raw_json)?;
-let mut models = Vec::new();
-
-    // First, try to get models from "data" field (wrapped format)
-    if let Some(data) = value.get("data").and_then(|d| d.as_array()) {
-        for model_value in data {
-            if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
-                let mut metadata = ModelMetadata {
-                    id: id.to_string(),
-                    provider: provider.to_string(),
-                    raw_data: model_value.clone(),
-                    ..Default::default()
-                };
-                if let Some(supports_image_input) = model_value.get("supports_image_input").and_then(|v| v.as_bool()) {
-                    metadata.supports_vision = supports_image_input;
-                }
-                models.push(metadata);
-            }
-        }
-    }
-    // If no "data" field, try to parse as direct array (providers like together, github)
-    else if let Some(array) = value.as_array() {
-        for model_value in array {
-            if let Some(id) = model_value.get("id").and_then(|i| i.as_str()) {
-                let mut metadata = ModelMetadata {
-                    id: id.to_string(),
-                    provider: provider.to_string(),
-                    raw_data: model_value.clone(),
-                    ..Default::default()
-                };
-                if let Some(supports_image_input) = model_value.get("supports_image_input").and_then(|v| v.as_bool()) {
-                    metadata.supports_vision = supports_image_input;
-                }
-                models.push(metadata);
-            }
-        }
-    }
-        
-        Ok(models)
-    }
-    
-    fn extract_requesty(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct RequestyResponse {
-            data: Vec<RequestyModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct RequestyModel {
-            id: String,
-            description: Option<String>,
-            context_window: Option<u32>,
-            max_output_tokens: Option<u32>,
-            input_price: Option<f64>,
-            output_price: Option<f64>,
-            supports_reasoning: Option<bool>,
-            supports_vision: Option<bool>,
-            supports_caching: Option<bool>,
-            supports_computer_use: Option<bool>,
-            created: Option<i64>,
-            owned_by: Option<String>,
-        }
-        
-        let response: RequestyResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "requesty".to_string(),
-                description: model.description,
-                owned_by: model.owned_by,
-                created: model.created,
-                context_length: model.context_window,
-                max_output_tokens: model.max_output_tokens,
-                // Convert from per-token to per-million-token pricing
-                input_price_per_m: model.input_price.map(|p| p * 1_000_000.0),
-                output_price_per_m: model.output_price.map(|p| p * 1_000_000.0),
-                // Extract capabilities from explicit fields
-                supports_reasoning: model.supports_reasoning.unwrap_or(false),
-                supports_vision: model.supports_vision.unwrap_or(false),
-                // Requesty doesn't seem to have explicit tools support field
-                // Don't assume tools support unless explicitly stated
-                supports_tools: false,
-                supports_function_calling: false,
-                // Other capabilities
-                supports_audio: false,
-                supports_code: false,
-                supports_json_mode: false,
-                supports_streaming: true, // Most modern models support streaming
-                model_type: ModelType::Chat,
-                is_deprecated: false,
-                is_fine_tunable: false,
-                display_name: Some(model.id.clone()),
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_chutes(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct ChutesResponse {
-            data: Vec<ChutesModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct ChutesModel {
-            id: String,
-            object: String,
-            owned_by: String,
-            created: i64,
-            max_model_len: u32,
-            price: ChutesPrice,
-            root: String,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct ChutesPrice {
-            tao: f64,
-            usd: f64,
-        }
-        
-        let response: ChutesResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.data {
-            let raw_data = serde_json::to_value(&model)?;
-            
-            // Convert single USD price to per-million-token pricing
-            // Treat the USD price as per 1M input tokens, same for output
-            let price_per_m = if model.price.usd > 0.0 {
-                Some(model.price.usd)
-            } else {
-                None
-            };
-            
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "chutes".to_string(),
-                owned_by: Some(model.owned_by),
-                created: Some(model.created),
-                context_length: Some(model.max_model_len),
-                // Use same price for input and output as suggested
-                input_price_per_m: price_per_m,
-                output_price_per_m: price_per_m,
-                // Chutes doesn't specify tools support, so don't assume it
-                supports_tools: false,
-                supports_function_calling: false,
-                supports_vision: false,
-                supports_audio: false,
-                supports_reasoning: false,
-                supports_code: false,
-                supports_json_mode: false,
-                supports_streaming: true, // Most modern models support streaming
-                model_type: ModelType::Chat,
-                is_deprecated: false,
-                is_fine_tunable: false,
-                display_name: Some(model.id.clone()),
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_github(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize, Serialize)]
-        struct GitHubModel {
-            id: String,
-            name: String,
-            publisher: Option<String>,
-            summary: Option<String>,
-            capabilities: Option<Vec<String>>,
-            supported_input_modalities: Option<Vec<String>>,
-            supported_output_modalities: Option<Vec<String>>,
-            limits: Option<GitHubLimits>,
-            tags: Option<Vec<String>>,
-            version: Option<String>,
-            rate_limit_tier: Option<String>,
-            registry: Option<String>,
-            html_url: Option<String>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct GitHubLimits {
-            max_input_tokens: Option<u32>,
-            max_output_tokens: Option<u32>,
-        }
-        
-        // GitHub returns a direct array of models
-        let github_models: Vec<GitHubModel> = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in github_models {
-            let raw_data = serde_json::to_value(&model)?;
-            
-            // Extract capabilities
-            let capabilities = model.capabilities.unwrap_or_default();
-            let supports_tools = capabilities.contains(&"tool-calling".to_string());
-            let supports_function_calling = supports_tools; // Same as tools for GitHub
-            let supports_streaming = capabilities.contains(&"streaming".to_string());
-            let supports_reasoning = capabilities.contains(&"reasoning".to_string());
-            
-            // Extract vision support from input modalities
-            let input_modalities = model.supported_input_modalities.unwrap_or_default();
-            let supports_vision = input_modalities.contains(&"image".to_string());
-            let supports_audio = input_modalities.contains(&"audio".to_string());
-            
-            // Extract context and output limits
-            let context_length = model.limits.as_ref().and_then(|l| l.max_input_tokens);
-            let max_output_tokens = model.limits.as_ref().and_then(|l| l.max_output_tokens);
-            
-            // Infer code support from tags or model name
-            let tags = model.tags.unwrap_or_default();
-            let model_name_lower = model.name.to_lowercase();
-            let supports_code = tags.contains(&"coding".to_string()) ||
-                               model_name_lower.contains("code") ||
-                               model_name_lower.contains("coder");
-            
-            // Determine model type based on output modalities and capabilities
-            let output_modalities = model.supported_output_modalities.unwrap_or_default();
-            let model_type = if output_modalities.contains(&"embeddings".to_string()) {
-                ModelType::Embedding
-            } else if output_modalities.contains(&"text".to_string()) {
-                ModelType::Chat
-            } else {
-                ModelType::Other("unknown".to_string())
-            };
-            
-            // Check if model is deprecated (GitHub doesn't seem to have this info)
-            let is_deprecated = false;
-            
-            // Check if model supports JSON mode (infer from capabilities or tags)
-            let supports_json_mode = tags.contains(&"structured".to_string()) ||
-                                    capabilities.contains(&"structured-output".to_string());
-            
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "github".to_string(),
-                display_name: Some(model.name),
-                description: model.summary,
-                owned_by: model.publisher,
-                created: None, // GitHub doesn't provide creation timestamp
-                context_length,
-                max_input_tokens: context_length,
-                max_output_tokens,
-                input_price_per_m: None, // GitHub doesn't provide pricing info
-                output_price_per_m: None,
-                supports_tools,
-                supports_vision,
-                supports_audio,
-                supports_reasoning,
-                supports_code,
-                supports_function_calling,
-                supports_json_mode,
-                supports_streaming,
-                model_type,
-                is_deprecated,
-                is_fine_tunable: false, // GitHub doesn't provide this info
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_together(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize, Serialize)]
-        struct TogetherModel {
-            id: String,
-            display_name: Option<String>,
-            organization: Option<String>,
-            context_length: Option<u32>,
-            created: Option<i64>,
-            license: Option<String>,
-            link: Option<String>,
-            object: Option<String>,
-            pricing: Option<TogetherPricing>,
-            running: Option<bool>,
-            #[serde(rename = "type")]
-            model_type: Option<String>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct TogetherPricing {
-            base: Option<f64>,
-            finetune: Option<f64>,
-            hourly: Option<f64>,
-            input: Option<f64>,
-            output: Option<f64>,
-        }
-        
-        // Together returns a direct array of models
-        let together_models: Vec<TogetherModel> = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in together_models {
-            let raw_data = serde_json::to_value(&model)?;
-            
-            // Extract pricing (convert from per-token to per-million-token)
-            let input_price_per_m = model.pricing
-                .as_ref()
-                .and_then(|p| p.input)
-                .map(|price| price * 1_000_000.0);
-                
-            let output_price_per_m = model.pricing
-                .as_ref()
-                .and_then(|p| p.output)
-                .map(|price| price * 1_000_000.0);
-            
-            // Determine model type based on Together's type field
-            let model_type = match model.model_type.as_deref() {
-                Some("chat") => ModelType::Chat,
-                Some("completion") => ModelType::Completion,
-                Some("embedding") => ModelType::Embedding,
-                Some("image") => ModelType::ImageGeneration,
-                Some("audio") => ModelType::AudioGeneration,
-                Some("transcribe") => ModelType::Other("transcription".to_string()),
-                Some("moderation") => ModelType::Moderation,
-                Some("rerank") => ModelType::Other("rerank".to_string()),
-                Some("language") => ModelType::Completion,
-                Some(other) => ModelType::Other(other.to_string()),
-                None => ModelType::Chat, // Default to chat if not specified
-            };
-            
-            // Only use explicit capability fields from JSON - no inference from names or types
-            let supports_vision = false; // Together doesn't provide explicit vision capability flags
-            let supports_code = false; // Together doesn't provide explicit code capability flags
-            let supports_reasoning = false; // Together doesn't provide explicit reasoning capability flags
-            let supports_audio = false; // Together doesn't provide explicit audio capability flags
-            let supports_tools = false; // Together doesn't provide explicit tools capability flags
-            let supports_function_calling = false; // Together doesn't provide explicit function calling capability flags
-            let supports_streaming = false; // Together doesn't provide explicit streaming capability flags
-            let supports_json_mode = false; // Together doesn't provide explicit JSON mode capability flags
-            
-            // Check if model is deprecated (not running)
-            let is_deprecated = model.running == Some(false);
-            
-            let metadata = ModelMetadata {
-                id: model.id.clone(),
-                provider: "together".to_string(),
-                display_name: model.display_name.or_else(|| Some(model.id.clone())),
-                description: None, // Together doesn't provide descriptions
-                owned_by: model.organization,
-                created: model.created,
-                context_length: model.context_length,
-                max_input_tokens: model.context_length,
-                max_output_tokens: None, // Together doesn't specify output limits
-                input_price_per_m,
-                output_price_per_m,
-                supports_tools,
-                supports_vision,
-                supports_audio,
-                supports_reasoning,
-                supports_code,
-                supports_function_calling,
-                supports_json_mode,
-                supports_streaming,
-                model_type,
-                is_deprecated,
-                is_fine_tunable: model.pricing.as_ref().map_or(false, |p| p.finetune.unwrap_or(0.0) > 0.0),
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    fn extract_gemini(raw_json: &str) -> Result<Vec<ModelMetadata>, Box<dyn std::error::Error>> {
-        #[derive(Deserialize)]
-        struct GeminiResponse {
-            models: Vec<GeminiModel>,
-        }
-        
-        #[derive(Deserialize, Serialize)]
-        struct GeminiModel {
-            name: String,
-            #[serde(rename = "displayName")]
-            display_name: String,
-            description: Option<String>,
-            #[serde(rename = "inputTokenLimit")]
-            input_token_limit: Option<u32>,
-            #[serde(rename = "outputTokenLimit")]
-            output_token_limit: Option<u32>,
-            #[serde(rename = "supportedGenerationMethods")]
-            supported_generation_methods: Vec<String>,
-            temperature: Option<f32>,
-            #[serde(rename = "topP")]
-            top_p: Option<f32>,
-            #[serde(rename = "topK")]
-            top_k: Option<u32>,
-            #[serde(rename = "maxTemperature")]
-            max_temperature: Option<f32>,
-        }
-        
-        let response: GeminiResponse = serde_json::from_str(raw_json)?;
-        let mut models = Vec::new();
-        
-        for model in response.models {
-            let raw_data = serde_json::to_value(&model)?;
-            
-            // Extract model ID from name (e.g., "models/gemini-1.5-pro-latest" -> "gemini-1.5-pro-latest")
-            let id = model.name.strip_prefix("models/").unwrap_or(&model.name).to_string();
-            
-// Only use explicit capabilities from JSON - no inference from model names
-let supports_tools = false; // Gemini doesn't provide explicit tools capability flags
-let supports_function_calling = false; // Gemini doesn't provide explicit function calling capability flags
-let supports_vision = false; // Gemini doesn't provide explicit vision capability flags
-let supports_code = false; // Gemini doesn't provide explicit code capability flags
-let supports_reasoning = false; // Gemini doesn't provide explicit reasoning capability flags
-let supports_json_mode = false; // Gemini doesn't provide explicit JSON mode capability flags
-let supports_streaming = false; // Gemini doesn't provide explicit streaming capability flags
-let _supports_audio = false; // Gemini doesn't provide explicit audio capability flags
-
-// Check if model is deprecated based only on explicit fields - no name heuristics
-let is_deprecated = false; // Gemini doesn't provide explicit deprecation info
-            
-            let metadata = ModelMetadata {
-                id: id.clone(),
-                provider: "gemini".to_string(),
-                display_name: Some(model.display_name),
-                description: model.description,
-                owned_by: Some("Google".to_string()),
-                created: None, // Gemini doesn't provide creation timestamp
-                context_length: model.input_token_limit,
-                max_input_tokens: model.input_token_limit,
-                max_output_tokens: model.output_token_limit,
-                input_price_per_m: None, // Gemini doesn't provide pricing in models API
-                output_price_per_m: None,
-                supports_tools,
-                supports_vision,
-                supports_audio: _supports_audio,
-                supports_reasoning,
-                supports_code,
-                supports_function_calling,
-                supports_json_mode,
-                supports_streaming,
-                model_type: ModelType::Chat, // All Gemini models are chat models
-                is_deprecated,
-                is_fine_tunable: false, // Gemini doesn't support fine-tuning via API
-                raw_data,
-                ..Default::default()
-            };
-            
-            models.push(metadata);
-        }
-        
-        Ok(models)
-    }
-    
-    
-    fn infer_cohere_model_type(endpoints: &[String]) -> ModelType {
-        if endpoints.contains(&"chat".to_string()) {
-            ModelType::Chat
-        } else if endpoints.contains(&"embed".to_string()) {
-            ModelType::Embedding
-        } else if endpoints.contains(&"rerank".to_string()) {
-            ModelType::Other("rerank".to_string())
-        } else {
-            ModelType::Other("unknown".to_string())
-        }
+        extract_models_from_provider(&provider_obj, raw_json)
+            .map_err(|e| e.into())
     }
 }

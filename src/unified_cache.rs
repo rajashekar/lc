@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::fs;
-use crate::{config::Config, model_metadata::{MetadataExtractor, ModelMetadata}};
+use crate::{config::Config, model_metadata::{ModelMetadata, extract_models_from_provider}, provider::Provider};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedProviderData {
@@ -297,10 +297,18 @@ impl UnifiedCache {
         
         crate::debug_log!("Received raw response from provider '{}' ({} bytes)", provider, raw_response.len());
         
-        // Extract metadata
+        // Extract metadata using the new generic approach
         crate::debug_log!("Extracting metadata from response for provider '{}'", provider);
-        let models = MetadataExtractor::extract_from_provider(provider, &raw_response)
-            .map_err(|e| anyhow::anyhow!("Failed to extract metadata: {}", e))?;
+        
+        // Create a Provider object for the extractor
+        let provider_obj = Provider {
+            provider: provider.to_string(),
+            status: "active".to_string(),
+            supports_tools: false,
+            supports_structured_output: false,
+        };
+        
+        let models = extract_models_from_provider(&provider_obj, &raw_response)?;
         
         crate::debug_log!("Extracted {} models from provider '{}'", models.len(), provider);
         

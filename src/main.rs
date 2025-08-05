@@ -17,6 +17,7 @@ mod sync;
 mod search;
 mod readers;
 mod image_utils;
+mod dump_metadata;
 
 use anyhow::Result;
 use cli::{Cli, Commands};
@@ -76,6 +77,11 @@ async fn get_conversation_history(session_id: &str) -> Result<Vec<ChatMessage>> 
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize model metadata configuration files
+    if let Err(e) = model_metadata::initialize_model_metadata_config() {
+        eprintln!("Warning: Failed to initialize model metadata config: {}", e);
+    }
+    
     // Check for daemon mode first
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && args[1] == "--mcp-daemon" {
@@ -137,7 +143,21 @@ async fn main() -> Result<()> {
             cli::handle_chat_command(model, provider, cid, tools, database, debug, images, cli.stream).await?;
         }
         (true, Some(Commands::Models { command, query, tools, reasoning, vision, audio, code, context_length, input_length, output_length, input_price, output_price })) => {
-            cli::handle_models_command(command, query, tools, reasoning, vision, audio, code, context_length, input_length, output_length, input_price, output_price).await?;
+            // Convert individual boolean flags to tags string
+            let mut tags = Vec::new();
+            if tools { tags.push("tools"); }
+            if reasoning { tags.push("reasoning"); }
+            if vision { tags.push("vision"); }
+            if audio { tags.push("audio"); }
+            if code { tags.push("code"); }
+            
+            let tags_string = if tags.is_empty() {
+                None
+            } else {
+                Some(tags.join(","))
+            };
+            
+            cli::handle_models_command(command, query, tags_string, context_length, input_length, output_length, input_price, output_price).await?;
         }
         (true, Some(Commands::Alias { command })) => {
             cli::handle_alias_command(command).await?;
@@ -171,6 +191,9 @@ async fn main() -> Result<()> {
         }
         (true, Some(Commands::Image { prompt, model, provider, size, count, output, debug })) => {
             cli::handle_image_command(prompt, model, provider, size, count, output, debug).await?;
+        }
+        (true, Some(Commands::DumpMetadata { provider, list })) => {
+            cli::handle_dump_metadata_command(provider, list).await?;
         }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped

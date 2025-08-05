@@ -43,7 +43,6 @@ pub struct ImageGenerationRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct ImageGenerationResponse {
-    pub created: u64,
     pub data: Vec<ImageData>,
 }
 
