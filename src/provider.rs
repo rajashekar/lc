@@ -338,8 +338,11 @@ pub struct CohereContentItem {
 pub struct BedrockChatResponse {
     pub output: BedrockOutput,
     #[serde(rename = "stopReason")]
+    #[allow(dead_code)]
     pub stop_reason: String,
+    #[allow(dead_code)]
     pub usage: BedrockUsage,
+    #[allow(dead_code)]
     pub metrics: BedrockMetrics,
 }
 
@@ -351,6 +354,7 @@ pub struct BedrockOutput {
 #[derive(Debug, Deserialize)]
 pub struct BedrockResponseMessage {
     pub content: Vec<BedrockResponseContentPart>,
+    #[allow(dead_code)]
     pub role: String,
 }
 
@@ -362,16 +366,20 @@ pub struct BedrockResponseContentPart {
 #[derive(Debug, Deserialize)]
 pub struct BedrockUsage {
     #[serde(rename = "inputTokens")]
+    #[allow(dead_code)]
     pub input_tokens: u32,
     #[serde(rename = "outputTokens")]
+    #[allow(dead_code)]
     pub output_tokens: u32,
     #[serde(rename = "totalTokens")]
+    #[allow(dead_code)]
     pub total_tokens: u32,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct BedrockMetrics {
     #[serde(rename = "latencyMs")]
+    #[allow(dead_code)]
     pub latency_ms: u32,
 }
 

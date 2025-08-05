@@ -53,6 +53,7 @@ impl ProviderConfig {
     }
     
     /// Get the chat completions URL, replacing {model_name} if it's a full URL
+    #[allow(dead_code)]
     pub fn get_chat_url(&self, model_name: &str) -> String {
         if self.is_chat_path_full_url() {
             // Replace {model_name} placeholder in the full URL
