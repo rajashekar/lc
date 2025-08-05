@@ -389,8 +389,9 @@ impl ModelMetadataExtractor {
                 match &extracted {
                     Value::Array(arr) => models.extend(arr.clone()),
                     Value::Object(obj) => {
-                        // Only add objects that look like models (have id, name, or model field)
-                        if obj.contains_key("id") || obj.contains_key("name") || obj.contains_key("model") {
+                        // Only add objects that look like models (have id, name, model, modelId, or modelName field)
+                        if obj.contains_key("id") || obj.contains_key("name") || obj.contains_key("model")
+                           || obj.contains_key("modelId") || obj.contains_key("modelName") {
                             models.push(extracted);
                         }
                     },
@@ -534,13 +535,17 @@ impl ModelMetadataExtractor {
     pub fn extract_metadata(&self, provider: &Provider, model: &Value) -> Result<ModelMetadata> {
         let mut metadata = ModelMetadata::default();
         
-        // Extract ID - try 'id' first, then fall back to 'name'
+        // Extract ID - try 'id' first, then 'modelId', then fall back to 'name' or 'modelName'
         let base_id = if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
             id.to_string()
+        } else if let Some(model_id) = model.get("modelId").and_then(|v| v.as_str()) {
+            model_id.to_string()
         } else if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
             name.to_string()
+        } else if let Some(model_name) = model.get("modelName").and_then(|v| v.as_str()) {
+            model_name.to_string()
         } else {
-            anyhow::bail!("Model missing required 'id' or 'name' field");
+            anyhow::bail!("Model missing required 'id', 'modelId', 'name', or 'modelName' field");
         };
         
         // For HuggingFace models, append the provider suffix from the expanded provider object
@@ -562,7 +567,10 @@ impl ModelMetadataExtractor {
         metadata.raw_data = model.clone();
         
         // Extract basic fields
-        if let Some(name) = model.get("display_name").or_else(|| model.get("name")).and_then(|v| v.as_str()) {
+        if let Some(name) = model.get("display_name")
+            .or_else(|| model.get("name"))
+            .or_else(|| model.get("modelName"))
+            .and_then(|v| v.as_str()) {
             metadata.display_name = Some(name.to_string());
         }
         
@@ -807,9 +815,23 @@ impl ModelMetadataExtractor {
             }
         }
         
+        // Check Bedrock modelId
+        if let Some(model_id) = model.get("modelId").and_then(|v| v.as_str()) {
+            if model_id.to_lowercase().contains(&pattern_lower) {
+                return Some(true);
+            }
+        }
+        
         // Check model name
         if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
             if name.to_lowercase().contains(&pattern_lower) {
+                return Some(true);
+            }
+        }
+        
+        // Check Bedrock modelName
+        if let Some(model_name) = model.get("modelName").and_then(|v| v.as_str()) {
+            if model_name.to_lowercase().contains(&pattern_lower) {
                 return Some(true);
             }
         }
@@ -841,9 +863,23 @@ impl ModelMetadataExtractor {
             }
         }
         
+        // Check Bedrock modelId
+        if let Some(model_id) = model.get("modelId").and_then(|v| v.as_str()) {
+            if regex.is_match(model_id) {
+                return Some(true);
+            }
+        }
+        
         // Check model name
         if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
             if regex.is_match(name) {
+                return Some(true);
+            }
+        }
+        
+        // Check Bedrock modelName
+        if let Some(model_name) = model.get("modelName").and_then(|v| v.as_str()) {
+            if regex.is_match(model_name) {
                 return Some(true);
             }
         }

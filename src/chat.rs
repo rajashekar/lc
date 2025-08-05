@@ -599,6 +599,10 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
                       provider_name, provider_config.endpoint, provider_config.models_path, provider_config.chat_path);
     crate::debug_log!("Provider '{}' has {} custom headers", provider_name, provider_config.headers.len());
     
+    if provider_config.is_chat_path_full_url() {
+        crate::debug_log!("Provider '{}' uses full URL chat path: {}", provider_name, provider_config.chat_path);
+    }
+    
     // Check if this is a Gemini provider
     if is_gemini_provider(&provider_config) {
         crate::debug_log!("Detected Gemini provider, creating GeminiClient");

@@ -41,6 +41,29 @@ pub struct ProviderConfig {
     pub cached_token: Option<CachedToken>,
 }
 
+impl ProviderConfig {
+    /// Check if the chat_path is a full URL (starts with https://)
+    pub fn is_chat_path_full_url(&self) -> bool {
+        self.chat_path.starts_with("https://")
+    }
+    
+    /// Get the models endpoint URL
+    pub fn get_models_url(&self) -> String {
+        format!("{}{}", self.endpoint.trim_end_matches('/'), self.models_path)
+    }
+    
+    /// Get the chat completions URL, replacing {model_name} if it's a full URL
+    pub fn get_chat_url(&self, model_name: &str) -> String {
+        if self.is_chat_path_full_url() {
+            // Replace {model_name} placeholder in the full URL
+            self.chat_path.replace("{model_name}", model_name)
+        } else {
+            // Traditional path-based approach
+            format!("{}{}", self.endpoint.trim_end_matches('/'), self.chat_path)
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct CachedToken {
     pub token: String,

@@ -3407,7 +3407,7 @@ pub async fn fetch_raw_models_response(_client: &crate::chat::LLMClient, provide
         .connect_timeout(std::time::Duration::from_secs(10))
         .build()?;
     
-    let url = format!("{}{}", provider_config.endpoint.trim_end_matches('/'), provider_config.models_path);
+    let url = provider_config.get_models_url();
     
     debug_log!("Making API request to: {}", url);
     debug_log!("Request timeout: 60 seconds");

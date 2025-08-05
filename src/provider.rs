@@ -17,6 +17,68 @@ pub struct ChatRequest {
     pub stream: Option<bool>,
 }
 
+// Bedrock-specific request structure
+#[derive(Debug, Serialize)]
+pub struct BedrockChatRequest {
+    pub messages: Vec<BedrockMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BedrockMessage {
+    pub role: String,
+    pub content: Vec<BedrockContentPart>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BedrockContentPart {
+    pub text: String,
+}
+
+impl BedrockMessage {
+    pub fn from_message(message: &Message) -> Self {
+        let text_content = match &message.content_type {
+            MessageContent::Text { content } => {
+                content.as_ref().unwrap_or(&String::new()).clone()
+            }
+            MessageContent::Multimodal { content } => {
+                // Extract text from multimodal content
+                content.iter()
+                    .filter_map(|part| match part {
+                        ContentPart::Text { text } => Some(text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            }
+        };
+
+        Self {
+            role: message.role.clone(),
+            content: vec![BedrockContentPart { text: text_content }],
+        }
+    }
+}
+
+impl BedrockChatRequest {
+    pub fn from_chat_request(request: &ChatRequest) -> Self {
+        Self {
+            messages: request.messages.iter().map(BedrockMessage::from_message).collect(),
+            max_tokens: request.max_tokens,
+            temperature: request.temperature,
+            tools: request.tools.clone(),
+            stream: request.stream,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct EmbeddingRequest {
     pub model: String,
@@ -271,6 +333,48 @@ pub struct CohereContentItem {
     pub text: String,
 }
 
+// Bedrock-specific response structures
+#[derive(Debug, Deserialize)]
+pub struct BedrockChatResponse {
+    pub output: BedrockOutput,
+    #[serde(rename = "stopReason")]
+    pub stop_reason: String,
+    pub usage: BedrockUsage,
+    pub metrics: BedrockMetrics,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BedrockOutput {
+    pub message: BedrockResponseMessage,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BedrockResponseMessage {
+    pub content: Vec<BedrockResponseContentPart>,
+    pub role: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BedrockResponseContentPart {
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BedrockUsage {
+    #[serde(rename = "inputTokens")]
+    pub input_tokens: u32,
+    #[serde(rename = "outputTokens")]
+    pub output_tokens: u32,
+    #[serde(rename = "totalTokens")]
+    pub total_tokens: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BedrockMetrics {
+    #[serde(rename = "latencyMs")]
+    pub latency_ms: u32,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ModelsResponse {
     #[serde(alias = "models")]
@@ -363,8 +467,24 @@ impl OpenAIClient {
         }
     }
     
+    /// Get the chat URL, handling both traditional paths and full URLs with model replacement
+    fn get_chat_url(&self, model: &str) -> String {
+        if self.chat_path.starts_with("https://") {
+            // Full URL with model replacement
+            self.chat_path.replace("{model_name}", model)
+        } else {
+            // Traditional path-based approach
+            format!("{}{}", self.base_url, self.chat_path)
+        }
+    }
+    
+    /// Check if the URL is for Amazon Bedrock
+    fn is_bedrock_url(&self, url: &str) -> bool {
+        url.contains("bedrock") || url.contains("amazonaws.com")
+    }
+    
     pub async fn chat(&self, request: &ChatRequest) -> Result<String> {
-        let url = format!("{}{}", self.base_url, self.chat_path);
+        let url = self.get_chat_url(&request.model);
         
         let mut req = self.client
             .post(&url)
@@ -386,10 +506,13 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
         
-        let response = req
-            .json(request)
-            .send()
-            .await?;
+        // Use Bedrock-specific format if this is a Bedrock URL
+        let response = if self.is_bedrock_url(&url) {
+            let bedrock_request = BedrockChatRequest::from_chat_request(request);
+            req.json(&bedrock_request).send().await?
+        } else {
+            req.json(request).send().await?
+        };
         
         if !response.status().is_success() {
             let status = response.status();
@@ -444,6 +567,15 @@ impl OpenAIClient {
                 return Ok(content_item.text.clone());
             } else {
                 anyhow::bail!("No content in Cohere response");
+            }
+        }
+        
+        // Try to parse as Bedrock format (with "output" and nested message structure)
+        if let Ok(bedrock_response) = serde_json::from_str::<BedrockChatResponse>(&response_text) {
+            if let Some(content_part) = bedrock_response.output.message.content.first() {
+                return Ok(content_part.text.clone());
+            } else {
+                anyhow::bail!("No content in Bedrock response");
             }
         }
         
@@ -525,7 +657,7 @@ impl OpenAIClient {
     
     // New method that returns the full parsed response for tool handling
     pub async fn chat_with_tools(&self, request: &ChatRequest) -> Result<ChatResponse> {
-        let url = format!("{}{}", self.base_url, self.chat_path);
+        let url = self.get_chat_url(&request.model);
         
         let mut req = self.client
             .post(&url)
@@ -546,10 +678,13 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
         
-        let response = req
-            .json(request)
-            .send()
-            .await?;
+        // Use Bedrock-specific format if this is a Bedrock URL
+        let response = if self.is_bedrock_url(&url) {
+            let bedrock_request = BedrockChatRequest::from_chat_request(request);
+            req.json(&bedrock_request).send().await?
+        } else {
+            req.json(request).send().await?
+        };
         
         if !response.status().is_success() {
             let status = response.status();
@@ -659,7 +794,7 @@ impl OpenAIClient {
     pub async fn chat_stream(&self, request: &ChatRequest) -> Result<()> {
         use std::io::{stdout, Write};
         
-        let url = format!("{}{}", self.base_url, self.chat_path);
+        let url = self.get_chat_url(&request.model);
         
         // Use the streaming-optimized client for streaming requests
         let mut req = self.streaming_client
@@ -683,10 +818,13 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
         
-        let response = req
-            .json(request)
-            .send()
-            .await?;
+        // Use Bedrock-specific format if this is a Bedrock URL
+        let response = if self.is_bedrock_url(&url) {
+            let bedrock_request = BedrockChatRequest::from_chat_request(request);
+            req.json(&bedrock_request).send().await?
+        } else {
+            req.json(request).send().await?
+        };
         
         if !response.status().is_success() {
             let status = response.status();

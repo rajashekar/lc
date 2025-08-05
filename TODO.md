@@ -10,3 +10,4 @@
 - provide sample config.toml
 - make sure package works with brew, linux, windows
 - clean up code
+- headers={"HTTP-Referer": "https://lc.viwq.dev/", "X-Title": "lc"}
