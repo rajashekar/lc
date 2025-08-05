@@ -133,38 +133,32 @@ impl Default for TagConfig {
             paths: vec![
                 ".context_length".to_string(),
                 ".context_window".to_string(),
+                ".context_size".to_string(),
                 ".max_context_length".to_string(),
                 ".input_token_limit".to_string(),
+                ".inputTokenLimit".to_string(),
+                ".limits.max_input_tokens".to_string(),
+                ".top_provider.context_length".to_string(),
             ],
             value_type: "u32".to_string(),
             transform: None,
         });
         
-        // Vision support
-        tags.insert("supports_vision".to_string(), TagRule {
+        // Output tokens
+        tags.insert("output".to_string(), TagRule {
             paths: vec![
-                ".supports_vision".to_string(),
-                ".supports_image_input".to_string(),
-                ".capabilities.vision".to_string(),
-                ".architecture.input_modalities[] | select(. == \"image\")".to_string(),
+                ".max_completion_tokens".to_string(),
+                ".outputTokenLimit".to_string(),
+                ".max_output_tokens".to_string(),
+                ".limits.max_output_tokens".to_string(),
+                ".top_provider.max_completion_tokens".to_string(),
+                ".max_tokens".to_string(),
             ],
-            value_type: "bool".to_string(),
+            value_type: "u32".to_string(),
             transform: None,
         });
         
-        // Tools/Function calling
-        tags.insert("supports_tools".to_string(), TagRule {
-            paths: vec![
-                ".supports_tools".to_string(),
-                ".capabilities.function_calling".to_string(),
-                ".features[] | select(. == \"tools\")".to_string(),
-                ".supported_parameters[] | select(. == \"tools\")".to_string(),
-            ],
-            value_type: "bool".to_string(),
-            transform: None,
-        });
-        
-        // Pricing
+        // Input pricing
         tags.insert("input_price_per_m".to_string(), TagRule {
             paths: vec![
                 ".pricing.prompt".to_string(),
@@ -173,6 +167,108 @@ impl Default for TagConfig {
             ],
             value_type: "f64".to_string(),
             transform: Some("multiply_million".to_string()),
+        });
+        
+        // Input pricing direct (no transform)
+        tags.insert("input_price_per_m_direct".to_string(), TagRule {
+            paths: vec![
+                ".input_token_price_per_m".to_string(),
+            ],
+            value_type: "f64".to_string(),
+            transform: None,
+        });
+        
+        // Output pricing
+        tags.insert("output_price_per_m".to_string(), TagRule {
+            paths: vec![
+                ".pricing.completion".to_string(),
+                ".pricing.output.usd".to_string(),
+                ".output_price".to_string(),
+            ],
+            value_type: "f64".to_string(),
+            transform: Some("multiply_million".to_string()),
+        });
+        
+        // Output pricing direct (no transform)
+        tags.insert("output_price_per_m_direct".to_string(), TagRule {
+            paths: vec![
+                ".output_token_price_per_m".to_string(),
+            ],
+            value_type: "f64".to_string(),
+            transform: None,
+        });
+        
+        // Vision support with comprehensive name-based detection
+        tags.insert("supports_vision".to_string(), TagRule {
+            paths: vec![
+                ".supports_vision".to_string(),
+                ".supports_image_input".to_string(),
+                ".capabilities.vision".to_string(),
+                ".architecture.input_modalities[] | select(. == \"image\")".to_string(),
+                ".architecture.output_modalities[] | select(. == \"image\")".to_string(),
+                "@name_contains(\"image\")".to_string(),
+                "@name_contains(\"flux\")".to_string(),
+                "@name_contains(\"dall-e\")".to_string(),
+                "@name_contains(\"midjourney\")".to_string(),
+                "@name_contains(\"stable\")".to_string(),
+                "@name_contains(\"diffusion\")".to_string(),
+                "@name_contains(\"vision\")".to_string(),
+                "@name_contains(\"visual\")".to_string(),
+                "@name_contains(\"photo\")".to_string(),
+                "@name_contains(\"picture\")".to_string(),
+                "@name_contains(\"draw\")".to_string(),
+                "@name_contains(\"paint\")".to_string(),
+                "@name_contains(\"art\")".to_string(),
+                "@name_contains(\"generate\")".to_string(),
+            ],
+            value_type: "bool".to_string(),
+            transform: None,
+        });
+        
+        // Tools/Function calling support
+        tags.insert("supports_tools".to_string(), TagRule {
+            paths: vec![
+                ".supports_tools".to_string(),
+                ".capabilities.function_calling".to_string(),
+                ".features[] | select(. == \"tools\")".to_string(),
+                ".features[] | select(. == \"function-calling\")".to_string(),
+                ".capabilities[] | select(. == \"tool-calling\")".to_string(),
+                ".supported_parameters[] | select(. == \"tools\")".to_string(),
+            ],
+            value_type: "bool".to_string(),
+            transform: None,
+        });
+        
+        // Audio support
+        tags.insert("supports_audio".to_string(), TagRule {
+            paths: vec![
+                ".supports_audio".to_string(),
+                "@name_contains(\"audio\")".to_string(),
+                ".features[] | select(. == \"audio\")".to_string(),
+                ".capabilities[] | select(. == \"audio\")".to_string(),
+                ".supported_input_modalities[] | select(. == \"audio\")".to_string(),
+                ".supported_output_modalities[] | select(. == \"audio\")".to_string(),
+                ".architecture.input_modalities[] | select(. == \"audio\")".to_string(),
+                ".architecture.output_modalities[] | select(. == \"audio\")".to_string(),
+            ],
+            value_type: "bool".to_string(),
+            transform: None,
+        });
+        
+        // Reasoning support
+        tags.insert("supports_reasoning".to_string(), TagRule {
+            paths: vec![
+                ".supports_reasoning".to_string(),
+                ".features[] | select(. == \"think\")".to_string(),
+                ".features[] | select(. == \"reasoning\")".to_string(),
+                ".capabilities[] | select(. == \"reasoning\")".to_string(),
+                ".supported_input_modalities[] | select(. == \"reasoning\")".to_string(),
+                ".supported_output_modalities[] | select(. == \"reasoning\")".to_string(),
+                ".architecture.input_modalities[] | select(. == \"reasoning\")".to_string(),
+                ".architecture.output_modalities[] | select(. == \"reasoning\")".to_string(),
+            ],
+            value_type: "bool".to_string(),
+            transform: None,
         });
         
         Self { tags }
