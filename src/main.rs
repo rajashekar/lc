@@ -5,6 +5,7 @@ mod database;
 mod dump_metadata;
 mod error;
 mod image_utils;
+mod input;
 mod mcp;
 mod mcp_daemon;
 mod model_metadata;

@@ -107,6 +107,23 @@ lc chat -m gpt-4
 # AI: "You can evaluate models using..."
 ```
 
+### Multi-line Input Example
+
+```bash
+# Start chat session
+lc chat -m gpt-4
+
+# Multi-line input example:
+You: Please help me write a function that:
+...  1. Takes a list of numbers
+...  2. Filters out negative values
+...  3. Returns the sum of remaining values
+...
+...  Also include error handling for empty lists.
+
+# Press Shift+Enter or Ctrl+J to add new lines, Enter to send
+```
+
 ### Specialized Chat Sessions
 
 **Code Review**
@@ -158,13 +175,23 @@ lc chat -v docs -t diagnostic -s "Help debug issues"
 - **Solution**: Start new session or use model with larger context
 - **Manage**: Use shorter responses or summarize conversation
 
+### Input Controls
+
+The chat interface supports multi-line input for complex messages:
+
+- **Enter** - Send the current message
+- **Shift+Enter** or **Ctrl+J** - Add a new line (multi-line input)
+- **Ctrl+C** - Cancel current input and return to prompt
+- **Backspace** - Delete characters or move to previous line
+- **Arrow Keys** - Navigate within the current line (basic support)
+
 ### Chat Interface Commands
 
 Within a chat session, you can use these commands:
 
 - `/exit` or `/quit` - End the chat session
 - `/clear` - Clear conversation history
-- `/help` - Show available commands
+- `/help` - Show available commands and input controls
 - `/model <name>` - Switch to different model
 - `/system <prompt>` - Set new system prompt
 

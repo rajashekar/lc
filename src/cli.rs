@@ -1,4 +1,4 @@
-use crate::{chat, config, database, readers};
+use crate::{chat, config, database, input::MultiLineInput, readers};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -2646,7 +2646,7 @@ pub async fn handle_direct_prompt(
         // Use streaming
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // For now, tools don't support streaming, fall back to regular
-            print!("{} ", "Thinking...".dimmed());
+            print!("{}", "Thinking...".dimmed());
             // Deliberately flush stdout to show thinking indicator immediately
             io::stdout().flush()?;
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
@@ -2683,7 +2683,7 @@ pub async fn handle_direct_prompt(
 
             match result {
                 Ok((response, input_tokens, output_tokens)) => {
-                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                     println!("{}", response);
 
                     // Save to database with token counts
@@ -2699,7 +2699,7 @@ pub async fn handle_direct_prompt(
                     }
                 }
                 Err(e) => {
-                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                     anyhow::bail!("Error: {}", e);
                 }
             }
@@ -2756,7 +2756,7 @@ pub async fn handle_direct_prompt(
         }
     } else {
         // Use regular non-streaming
-        print!("{} ", "Thinking...".dimmed());
+        print!("{}", "Thinking...".dimmed());
         // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
 
@@ -2839,7 +2839,7 @@ pub async fn handle_direct_prompt(
                 }
             }
             Err(e) => {
-                print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                 anyhow::bail!("Error: {}", e);
             }
         }
@@ -3035,7 +3035,7 @@ pub async fn handle_direct_prompt_with_piped_input(
         // Use streaming
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // For now, tools don't support streaming, fall back to regular
-            print!("{} ", "Thinking...".dimmed());
+            print!("{}", "Thinking...".dimmed());
             // Deliberately flush stdout to show thinking indicator immediately
             io::stdout().flush()?;
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
@@ -3054,7 +3054,7 @@ pub async fn handle_direct_prompt_with_piped_input(
             .await
             {
                 Ok((response, input_tokens, output_tokens)) => {
-                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                     println!("{}", response);
 
                     // Save to database with token counts (save a shortened version for cleaner logs)
@@ -3076,7 +3076,7 @@ pub async fn handle_direct_prompt_with_piped_input(
                     }
                 }
                 Err(e) => {
-                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                     anyhow::bail!("Error: {}", e);
                 }
             }
@@ -3139,7 +3139,7 @@ pub async fn handle_direct_prompt_with_piped_input(
         }
     } else {
         // Use regular non-streaming
-        print!("{} ", "Thinking...".dimmed());
+        print!("{}", "Thinking...".dimmed());
         // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
 
@@ -3213,7 +3213,7 @@ pub async fn handle_direct_prompt_with_piped_input(
                 }
             }
             Err(e) => {
-                print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                 anyhow::bail!("Error: {}", e);
             }
         }
@@ -3297,27 +3297,39 @@ pub async fn handle_chat_command(
             mcp_server_names.join(", ")
         );
     }
-    println!("{} Type /help for commands, /exit to quit\n", "💡".yellow());
+    println!("{} Type /help for commands, /exit to quit", "💡".yellow());
+    println!("{} Use Shift+Enter or Ctrl+J for multi-line input, Enter to send\n", "💡".yellow());
+
+    // Create multi-line input handler
+    let mut input_handler = MultiLineInput::new();
 
     loop {
-        print!("{} ", "You:".bold().green());
-        // Deliberately flush stdout to ensure prompt appears before user input
-        io::stdout().flush()?;
+        // Use multi-line input handler
+        let input_string = match input_handler.read_input(&format!("{}", "You:".bold().green())) {
+            Ok(input_text) => input_text.trim().to_string(),
+            Err(_) => {
+                // If there's an error with multi-line input, fall back to simple input
+                print!("{} ", "You:".bold().green());
+                io::stdout().flush()?;
+                
+                let mut fallback_input = String::new();
+                let bytes_read = io::stdin().read_line(&mut fallback_input)?;
+                
+                // If we read 0 bytes, it means EOF (e.g., when input is piped)
+                if bytes_read == 0 {
+                    println!("Goodbye! 👋");
+                    break;
+                }
+                
+                fallback_input.trim().to_string()
+            }
+        };
 
-        let mut input = String::new();
-        let bytes_read = io::stdin().read_line(&mut input)?;
-
-        // If we read 0 bytes, it means EOF (e.g., when input is piped)
-        if bytes_read == 0 {
-            println!("Goodbye! 👋");
-            break;
-        }
-
-        let input = input.trim();
-
-        if input.is_empty() {
+        if input_string.is_empty() {
             continue;
         }
+
+        let input = input_string.as_str();
 
         // Handle chat commands
         if input.starts_with('/') {
@@ -3336,7 +3348,12 @@ pub async fn handle_chat_command(
                     println!("  /exit          - Exit chat session");
                     println!("  /clear         - Clear current session");
                     println!("  /model <name>  - Change model");
-                    println!("  /help          - Show this help\n");
+                    println!("  /help          - Show this help");
+                    println!("\n{}", "Input Controls:".bold().blue());
+                    println!("  Enter          - Send message");
+                    println!("  Shift+Enter    - New line (multi-line input)");
+                    println!("  Ctrl+J         - New line (alternative)");
+                    println!("  Ctrl+C         - Cancel current input\n");
                     continue;
                 }
                 _ if input.starts_with("/model ") => {
@@ -3365,7 +3382,7 @@ pub async fn handle_chat_command(
         // RAG: Retrieve relevant context if database is specified
         let mut enhanced_input = input.to_string();
         if let Some(ref db_name) = database {
-            match retrieve_rag_context(db_name, input, &client, &current_model, &provider_name)
+            match retrieve_rag_context(db_name, &input, &client, &current_model, &provider_name)
                 .await
             {
                 Ok(context) => {
@@ -3430,7 +3447,9 @@ pub async fn handle_chat_command(
             Vec::new()
         };
 
-        print!("{} ", "Thinking...".dimmed());
+        // Add newline before "Thinking..." to ensure proper positioning after multi-line input
+        println!();
+        print!("{}", "Thinking...".dimmed());
         // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
 
@@ -3478,14 +3497,14 @@ pub async fn handle_chat_command(
 
             match result {
                 Ok((response, input_tokens, output_tokens)) => {
-                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                     println!("{} {}", "Assistant:".bold().blue(), response);
 
                     // Save to database with token counts
                     if let Err(e) = db.save_chat_entry_with_tokens(
                         &session_id,
                         &current_model,
-                        input,
+                        &input,
                         &response,
                         input_tokens,
                         output_tokens,
@@ -3499,13 +3518,13 @@ pub async fn handle_chat_command(
                     }
                 }
                 Err(e) => {
-                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                     println!("{} Error: {}", "✗".red(), e);
                 }
             }
         } else if use_streaming {
             // Use streaming chat when no tools and streaming is enabled - content is streamed directly to stdout
-            print!("{} ", "Assistant:".bold().blue());
+            print!("\r{}\r{} ", " ".repeat(12), "Assistant:".bold().blue()); // Clear "Thinking..." and show Assistant
             // Deliberately flush stdout to show assistant label before streaming
             io::stdout().flush()?;
             let result = if !messages.is_empty() {
@@ -3544,7 +3563,7 @@ pub async fn handle_chat_command(
                     if let Err(e) = db.save_chat_entry_with_tokens(
                         &session_id,
                         &current_model,
-                        input,
+                        &input,
                         "[Streamed Response]",
                         None,
                         None,
@@ -3592,14 +3611,14 @@ pub async fn handle_chat_command(
 
             match result {
                 Ok((response, input_tokens, output_tokens)) => {
-                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                     println!("{} {}", "Assistant:".bold().blue(), response);
 
                     // Save to database with token counts
                     if let Err(e) = db.save_chat_entry_with_tokens(
                         &session_id,
                         &current_model,
-                        input,
+                        &input,
                         &response,
                         input_tokens,
                         output_tokens,
@@ -3613,7 +3632,7 @@ pub async fn handle_chat_command(
                     }
                 }
                 Err(e) => {
-                    print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
+                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..." (12 chars)
                     println!("{} Error: {}", "✗".red(), e);
                 }
             }

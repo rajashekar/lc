@@ -11,6 +11,7 @@ pub mod dump_metadata;
 pub mod error;
 pub mod http_client;
 pub mod image_utils;
+pub mod input;
 pub mod mcp;
 pub mod mcp_daemon;
 pub mod model_metadata;

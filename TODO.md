@@ -1,9 +1,9 @@
 - Make sure documentation works
-- Support lc serve
+- Add support to multi line chat
 - Check images
 - Check audio
-- Support other vector dbs like milvus, pinecone, qdrant
 - Support other web proxy chats
+- Support lc serve
+- Support other vector dbs like milvus, pinecone, qdrant
 - make sure package works with brew, linux, windows
 - clean up code
-- Add support to multi line chat
