@@ -1,0 +1,13 @@
+# Sample configuration file for webchatproxy.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+
+[providers]
+# Configuration for kagi AI provider
+
+[providers.kagi]
+# Authentication token - replace with your actual token
+auth_token = "<your-api-key>"
+

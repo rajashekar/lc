@@ -6,11 +6,17 @@ sidebar_position: 15
 
 # Sync Command
 
-Sync configuration files to/from cloud providers. This command enables backup and synchronization of your LLM Client configuration across multiple environments.
+Sync configuration files and chat logs database to/from cloud providers. This command enables backup and synchronization of your LLM Client configuration and chat history across multiple environments.
 
 ## Overview
 
-The sync command provides seamless configuration management by allowing you to upload your local configuration to cloud storage and download configurations from cloud providers. This ensures consistent setups across different machines and enables easy backup/restore operations.
+The sync command provides seamless configuration and data management by allowing you to upload your local configuration files and chat logs database to cloud storage and download them from cloud providers. This ensures consistent setups and preserves chat history across different machines while enabling easy backup/restore operations.
+
+### What Gets Synced
+
+- **Configuration Files (.toml)**: All TOML configuration files in your lc config directory
+- **Chat Logs Database (logs.db)**: Complete chat history and session data
+- **Encryption Support**: Optional AES256-GCM encryption for secure storage
 
 ## Usage
 
@@ -43,9 +49,10 @@ lc sy from aws
 
 ## Options
 
-| Short | Long     | Description | Default |
-|-------|----------|-------------|---------|
-| `-h`  | `--help` | Print help  | False   |
+| Short | Long          | Description                    | Default |
+|-------|---------------|--------------------------------|---------|
+| `-e`  | `--encrypted` | Enable encryption/decryption   | False   |
+| `-h`  | `--help`      | Print help                     | False   |
 
 ## Examples
 
@@ -54,37 +61,61 @@ lc sy from aws
 ```bash
 # List supported providers
 lc sync providers
-# Output: aws, azure, gcp, dropbox
+# Output: s3 (Amazon S3 and S3-compatible services)
 
-# Configure AWS
-lc sync configure aws
-# Will prompt for AWS credentials and settings
+# Configure S3
+lc sync configure s3 setup
+# Will prompt for S3 credentials and settings
+
+# View current configuration
+lc sync configure s3 show
+
+# Remove configuration
+lc sync configure s3 remove
 ```
 
-### Sync Configuration
+### Sync Configuration and Database
 
 ```bash
-# Upload to AWS
-lc sync to aws
+# Upload to S3 (includes config files and logs.db)
+lc sync to s3
 
-# Download from AWS
-lc sync from aws
+# Download from S3
+lc sync from s3
+
+# With encryption (recommended for sensitive data)
+lc sync to s3 --encrypted
+lc sync from s3 --encrypted
 
 # Using aliases
-lc sy to aws
-lc sy from aws
+lc sy to s3
+lc sy from s3 -e
 ```
 
 ### Multi-environment Workflow
 
 ```bash
-# On machine A: upload config
-lc sync to aws
+# On machine A: clean up logs and upload
+lc logs purge --older-than-days 30 --keep-recent 1000
+lc sync to s3 --encrypted
 
-# On machine B: download config
-lc sync from aws
+# On machine B: download config and logs
+lc sync from s3 --encrypted
 
-# Now both machines have identical configurations
+# Now both machines have identical configurations and chat history
+```
+
+### Database Management Before Sync
+
+```bash
+# Check database size before syncing
+lc logs stats
+
+# Optimize database size for faster sync
+lc logs purge --older-than-days 30 --keep-recent 1000 --max-size-mb 50
+
+# Then sync with optimized database
+lc sync to s3 --encrypted
 ```
 
 ## Troubleshooting
@@ -93,30 +124,47 @@ lc sync from aws
 
 #### "Provider not configured"
 
-- **Error**: Cloud provider settings missing
-- **Solution**: Run `lc sync configure <provider>` first
+- **Error**: S3 provider settings missing
+- **Solution**: Run `lc sync configure s3 setup` first
 
 #### "Authentication failed"
 
-- **Error**: Invalid cloud provider credentials
-- **Solution**: Check and update your cloud credentials
-- **AWS**: Verify `~/.aws/credentials` or environment variables
-- **Azure**: Run `az login` to authenticate
-- **GCP**: Check service account key or run `gcloud auth login`
+- **Error**: Invalid S3 credentials
+- **Solution**: Check and update your S3 credentials
+- **Environment Variables**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- **Bucket Variables**: `LC_S3_BUCKET`, `LC_S3_REGION`
+- **Custom Endpoint**: `LC_S3_ENDPOINT` (for S3-compatible services)
 
 #### "Network error"
 
-- **Error**: Unable to connect to cloud provider
+- **Error**: Unable to connect to S3 endpoint
 - **Solution**: Check internet connection and firewall settings
+- **Custom Endpoints**: Verify endpoint URL for S3-compatible services
 
 #### "Permission denied"
 
-- **Error**: Insufficient permissions for cloud storage
+- **Error**: Insufficient permissions for S3 bucket
 - **Solution**: Verify IAM roles and bucket permissions
+- **Required Permissions**: `s3:GetObject`, `s3:PutObject`, `s3:ListBucket`
+
+#### "Decryption failed"
+
+- **Error**: Cannot decrypt downloaded files
+- **Solution**: Ensure you're using the same password used for encryption
+- **Check**: Verify files have `.enc` extension in S3
 
 ### Security Considerations
 
-- Configuration files may contain sensitive information
-- Use encrypted cloud storage when possible
-- Consider using environment-specific configurations
-- Regularly rotate cloud access keys
+- Configuration files and chat logs may contain sensitive information
+- **Always use encryption** for sensitive data: `lc sync to s3 --encrypted`
+- Use strong, unique passwords for encryption
+- Configure proper S3 bucket policies and IAM permissions
+- Regularly rotate S3 access keys
+- Consider purging old chat logs before syncing to reduce exposure
+
+### Performance Tips
+
+- **Purge logs before sync** to reduce upload/download time
+- Use `lc logs purge --older-than-days 30 --keep-recent 1000 --max-size-mb 50`
+- Monitor database size with `lc logs stats`
+- Consider regional S3 buckets for faster sync

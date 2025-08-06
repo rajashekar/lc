@@ -215,6 +215,19 @@ impl S3Provider {
             metadata.insert("sync-tool".to_string(), "lc".to_string());
             metadata.insert("sync-version".to_string(), "1.0".to_string());
             
+            // Add file type metadata for better handling
+            let file_type = if file.name.ends_with(".toml") {
+                "config"
+            } else if file.name == "logs.db" {
+                "database"
+            } else {
+                "unknown"
+            };
+            metadata.insert("file-type".to_string(), file_type.to_string());
+            
+            // Add file size for monitoring
+            metadata.insert("file-size".to_string(), file.content.len().to_string());
+            
             match self.client
                 .put_object()
                 .bucket(&self.bucket_name)

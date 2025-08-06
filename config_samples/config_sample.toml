@@ -1,0 +1,1160 @@
+# Sample configuration file for config.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+# Default AI provider to use when none is specified
+default_provider = "wmt"
+
+# Default model to use with the default provider
+default_model = "gpt-4o-mini"
+
+# Maximum number of tokens to generate in responses
+max_tokens = 5000
+
+# Controls randomness in responses (0.0 = deterministic, 1.0 = very random)
+temperature = 0.699999988079071
+
+
+[providers]
+# Configuration for grok AI provider
+
+[providers.grok]
+# API endpoint URL for this provider
+endpoint = "https://api.x.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-xai-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[grok.headers]
+
+[grok.vars]
+# Configuration for deepinfra AI provider
+
+[providers.deepinfra]
+# API endpoint URL for this provider
+endpoint = "https://api.deepinfra.com/v1/openai"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[deepinfra.headers]
+
+[deepinfra.vars]
+# Configuration for cloudflare AI provider
+
+[providers.cloudflare]
+# API endpoint URL for this provider
+endpoint = "https://api.cloudflare.com/client/v4"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/accounts/{account_id}/ai/run/@cf/{model}"
+
+
+[cloudflare.headers]
+
+[cloudflare.vars]
+account_id = "<your-account-id>"
+# Configuration for openrouter AI provider
+
+[providers.openrouter]
+# API endpoint URL for this provider
+endpoint = "https://openrouter.ai/api/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[openrouter.headers]
+
+[openrouter.vars]
+# Configuration for gemini AI provider
+
+[providers.gemini]
+# API endpoint URL for this provider
+endpoint = "https://generativelanguage.googleapis.com"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/v1beta/models/"
+
+# API path for chat completions
+chat_path = "/v1beta/models/{model}:generateContent"
+
+
+[gemini.headers]
+# API key header - replace with your actual key
+x-goog-api-key = "<your-api-key>"
+
+
+[gemini.vars]
+# Configuration for openai AI provider
+
+[providers.openai]
+# API endpoint URL for this provider
+endpoint = "https://api.openai.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+# API path for image generation
+images_path = "/v1/images/generations"
+
+# API path for text embeddings
+embeddings_path = "/v1/embeddings"
+
+
+[openai.headers]
+
+[openai.vars]
+# Configuration for github AI provider
+
+[providers.github]
+# API endpoint URL for this provider
+endpoint = "https://models.github.ai"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/catalog/models"
+
+# API path for chat completions
+chat_path = "/inference/chat/completions"
+
+
+[github.headers]
+
+[github.vars]
+# Configuration for meta AI provider
+
+[providers.meta]
+# API endpoint URL for this provider
+endpoint = "https://api.llama.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-meta-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[meta.headers]
+
+[meta.vars]
+# Configuration for cerebras AI provider
+
+[providers.cerebras]
+# API endpoint URL for this provider
+endpoint = "https://api.cerebras.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-cerebras-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[cerebras.headers]
+
+[cerebras.vars]
+# Configuration for digitalocean AI provider
+
+[providers.digitalocean]
+# API endpoint URL for this provider
+endpoint = "https://inference.do-ai.run/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[digitalocean.headers]
+
+[digitalocean.vars]
+# Configuration for vertex_google AI provider
+
+[providers.vertex_google]
+# API endpoint URL for this provider
+endpoint = "https://aiplatform.googleapis.com"
+
+# API key for authentication - replace with your actual key
+api_key = """
+{
+  "type": "service_account",
+  "project_id": "<your-project-id>",
+  "private_key_id": "<your-private-key-id>",
+  "private_key": "<your-private-key>",
+  "client_email": "<your-service-account-email>",
+  "client_id": "<your-client-id>",
+  "auth_uri": "<your-auth-uri>",
+  "token_uri": "<your-token-uri>",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "<your-client-x509-cert-url>",
+  "universe_domain": "googleapis.com"
+}
+"""
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent"
+
+# URL to refresh authentication tokens
+token_url = "<your-jwt-token>"
+
+# Authentication method used by this provider
+auth_type = "<your-api-key>"
+
+
+[vertex_google.headers]
+
+[vertex_google.cached_token]
+# Cached authentication token (auto-refreshed)
+token = "<your-jwt-token>"
+
+# Token expiration timestamp
+expires_at = "2025-08-06T11:50:21Z"
+
+
+[vertex_google.vars]
+location = "global"
+project = "gen-lang-client-0931965430"
+# Configuration for perplexity AI provider
+
+[providers.perplexity]
+# API endpoint URL for this provider
+endpoint = "https://api.perplexity.ai"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-perplexity-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[perplexity.headers]
+
+[perplexity.vars]
+# Configuration for ollama AI provider
+
+[providers.ollama]
+# API endpoint URL for this provider
+endpoint = "http://localhost:11434/v1"
+
+# API key for authentication - replace with your actual key
+api_key = ""
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[ollama.headers]
+
+[ollama.vars]
+# Configuration for kilo AI provider
+
+[providers.kilo]
+# API endpoint URL for this provider
+endpoint = "https://kilocode.ai/api/openrouter"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-jwt-token>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[kilo.headers]
+
+[kilo.vars]
+# Configuration for chutes AI provider
+
+[providers.chutes]
+# API endpoint URL for this provider
+endpoint = "https://llm.chutes.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-jwt-token>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[chutes.headers]
+
+[chutes.vars]
+# Configuration for bedrock AI provider
+
+[providers.bedrock]
+# API endpoint URL for this provider
+endpoint = "https://bedrock.us-east-1.amazonaws.com"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/foundation-models"
+
+# API path for chat completions
+chat_path = "https://bedrock-runtime.us-east-1.amazonaws.com/model/{model}/converse"
+
+
+[bedrock.headers]
+
+[bedrock.vars]
+# Configuration for nscale AI provider
+
+[providers.nscale]
+# API endpoint URL for this provider
+endpoint = "https://inference.api.nscale.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-nscale-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[nscale.headers]
+
+[nscale.vars]
+# Configuration for moonshot AI provider
+
+[providers.moonshot]
+# API endpoint URL for this provider
+endpoint = "https://api.moonshot.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[moonshot.headers]
+
+[moonshot.vars]
+# Configuration for together AI provider
+
+[providers.together]
+# API endpoint URL for this provider
+endpoint = "https://api.together.xyz/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[together.headers]
+
+[together.vars]
+# Configuration for wmt AI provider
+
+[providers.wmt]
+# API endpoint URL for this provider
+endpoint = "https://api.business.githubcopilot.com"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-github-token>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[wmt.headers]
+
+[wmt.vars]
+# Configuration for ai21 AI provider
+
+[providers.ai21]
+# API endpoint URL for this provider
+endpoint = "https://api.ai21.com/studio/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[ai21.headers]
+
+[ai21.vars]
+# Configuration for lambda AI provider
+
+[providers.lambda]
+# API endpoint URL for this provider
+endpoint = "https://api.lambda.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[lambda.headers]
+
+[lambda.vars]
+# Configuration for poe AI provider
+
+[providers.poe]
+# API endpoint URL for this provider
+endpoint = "https://api.poe.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[poe.headers]
+
+[poe.vars]
+# Configuration for venice AI provider
+
+[providers.venice]
+# API endpoint URL for this provider
+endpoint = "https://api.venice.ai/api/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[venice.headers]
+
+[venice.vars]
+# Configuration for wmtghco AI provider
+
+[providers.wmtghco]
+# API endpoint URL for this provider
+endpoint = "https://api.business.githubcopilot.com"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-github-token>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+# URL to refresh authentication tokens
+token_url = "<your-jwt-token>"
+
+
+[wmtghco.headers]
+# HTTP header: editor-version
+editor-version = "vscode/1.101.1"
+
+# HTTP header: user-agent
+user-agent = "GitHubCopilotChat/0.28.2"
+
+
+[wmtghco.cached_token]
+# Cached authentication token (auto-refreshed)
+token = "<your-jwt-token>"
+
+# Token expiration timestamp
+expires_at = "2025-08-05T06:25:28Z"
+
+
+[wmtghco.vars]
+# Configuration for chub AI provider
+
+[providers.chub]
+# API endpoint URL for this provider
+endpoint = "https://inference.chub.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-chub-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[chub.headers]
+
+[chub.vars]
+# Configuration for novita AI provider
+
+[providers.novita]
+# API endpoint URL for this provider
+endpoint = "https://api.novita.ai/v3/openai"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[novita.headers]
+
+[novita.vars]
+# Configuration for sambanova AI provider
+
+[providers.sambanova]
+# API endpoint URL for this provider
+endpoint = "https://api.sambanova.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[sambanova.headers]
+
+[sambanova.vars]
+# Configuration for litellm AI provider
+
+[providers.litellm]
+# API endpoint URL for this provider
+endpoint = "https://lite.rajashekar.org"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[litellm.headers]
+
+[litellm.vars]
+# Configuration for kagi AI provider
+
+[providers.kagi]
+# API endpoint URL for this provider
+endpoint = "http://127.0.0.1:8084/v1"
+
+# API key for authentication - replace with your actual key
+api_key = ""
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[kagi.headers]
+
+[kagi.vars]
+# Configuration for groq AI provider
+
+[providers.groq]
+# API endpoint URL for this provider
+endpoint = "https://api.groq.com/openai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-groq-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[groq.headers]
+
+[groq.vars]
+# Configuration for z AI provider
+
+[providers.z]
+# API endpoint URL for this provider
+endpoint = "https://api.z.ai/api/paas/v4"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[z.headers]
+
+[z.vars]
+# Configuration for vertex_llama AI provider
+
+[providers.vertex_llama]
+# API endpoint URL for this provider
+endpoint = "https://us-east5-aiplatform.googleapis.com"
+
+# API key for authentication - replace with your actual key
+api_key = """
+{
+  "type": "service_account",
+  "project_id": "<your-project-id>",
+  "private_key_id": "<your-private-key-id>",
+  "private_key": "<your-private-key>",
+  "client_email": "<your-service-account-email>",
+  "client_id": "<your-client-id>",
+  "auth_uri": "<your-auth-uri>",
+  "token_uri": "<your-token-uri>",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "<your-client-x509-cert-url>",
+  "universe_domain": "googleapis.com"
+}
+"""
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/v1/projects/{project}/locations/{location}/endpoints/openapi/chat/completions"
+
+# URL to refresh authentication tokens
+token_url = "<your-jwt-token>"
+
+# Authentication method used by this provider
+auth_type = "<your-api-key>"
+
+
+[vertex_llama.headers]
+
+[vertex_llama.cached_token]
+# Cached authentication token (auto-refreshed)
+token = "<your-jwt-token>"
+
+# Token expiration timestamp
+expires_at = "2025-08-06T11:53:02Z"
+
+
+[vertex_llama.vars]
+location = "us-east5"
+project = "gen-lang-client-0931965430"
+# Configuration for fireworks AI provider
+
+[providers.fireworks]
+# API endpoint URL for this provider
+endpoint = "https://api.fireworks.ai/inference/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-fireworks-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[fireworks.headers]
+
+[fireworks.vars]
+# Configuration for hyperbolic AI provider
+
+[providers.hyperbolic]
+# API endpoint URL for this provider
+endpoint = "https://api.hyperbolic.xyz/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-jwt-token>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[hyperbolic.headers]
+
+[hyperbolic.vars]
+# Configuration for github-copilot AI provider
+
+[providers.github-copilot]
+# API endpoint URL for this provider
+endpoint = "https://api.individual.githubcopilot.com"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-github-token>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+# URL to refresh authentication tokens
+token_url = "<your-jwt-token>"
+
+
+[github-copilot.headers]
+# HTTP header: editor-version
+editor-version = "vscode/1.101.1"
+
+# HTTP header: user-agent
+user-agent = "GitHubCopilotChat/0.28.2"
+
+
+[github-copilot.cached_token]
+# Cached authentication token (auto-refreshed)
+token = "<your-jwt-token>"
+
+# Token expiration timestamp
+expires_at = "2025-08-05T06:25:26Z"
+
+
+[github-copilot.vars]
+# Configuration for claude AI provider
+
+[providers.claude]
+# API endpoint URL for this provider
+endpoint = "https://api.anthropic.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[claude.headers]
+# HTTP header: anthropic-version
+anthropic-version = "2023-06-01"
+
+# API key header - replace with your actual key
+x-api-key = "<your-api-key>"
+
+
+[claude.vars]
+# Configuration for deepseek AI provider
+
+[providers.deepseek]
+# API endpoint URL for this provider
+endpoint = "https://api.deepseek.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[deepseek.headers]
+
+[deepseek.vars]
+# Configuration for alibaba AI provider
+
+[providers.alibaba]
+# API endpoint URL for this provider
+endpoint = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[alibaba.headers]
+
+[alibaba.vars]
+# Configuration for mistral AI provider
+
+[providers.mistral]
+# API endpoint URL for this provider
+endpoint = "https://api.mistral.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[mistral.headers]
+
+[mistral.vars]
+# Configuration for vercel AI provider
+
+[providers.vercel]
+# API endpoint URL for this provider
+endpoint = "https://ai-gateway.vercel.sh/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[vercel.headers]
+
+[vercel.vars]
+# Configuration for cohere AI provider
+
+[providers.cohere]
+# API endpoint URL for this provider
+endpoint = "https://api.cohere.com/v2"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat"
+
+
+[cohere.headers]
+
+[cohere.vars]
+# Configuration for hf AI provider
+
+[providers.hf]
+# API endpoint URL for this provider
+endpoint = "https://router.huggingface.co/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-huggingface-token>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[hf.headers]
+
+[hf.vars]
+# Configuration for nebius AI provider
+
+[providers.nebius]
+# API endpoint URL for this provider
+endpoint = "https://api.studio.nebius.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-jwt-token>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[nebius.headers]
+
+[nebius.vars]
+# Configuration for nvidia AI provider
+
+[providers.nvidia]
+# API endpoint URL for this provider
+endpoint = "https://integrate.api.nvidia.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-nvidia-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[nvidia.headers]
+
+[nvidia.vars]
+# Configuration for requesty AI provider
+
+[providers.requesty]
+# API endpoint URL for this provider
+endpoint = "https://router.requesty.ai/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[requesty.headers]
+
+[requesty.vars]
+
+[aliases]
+# Shortcut alias: use 'w' instead of 'wmt:gpt-4o-mini'
+w = "wmt:gpt-4o-mini"
+
+# Shortcut alias: use 'sonar-pro' instead of 'perplexity:sonar-pro'
+sonar-pro = "perplexity:sonar-pro"
+
+# Shortcut alias: use '4o-mini' instead of 'openai:gpt-4o-mini'
+4o-mini = "openai:gpt-4o-mini"
+
+# Shortcut alias: use 'sonar' instead of 'perplexity:sonar'
+sonar = "perplexity:sonar"
+
+
+[templates]
+# Prompt template for coding tasks
+coding = "You are an expert software engineer who writes clean, efficient code with detailed explanations."
+

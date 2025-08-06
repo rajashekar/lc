@@ -197,24 +197,30 @@ lc sync from s3 --encrypted
 
 ### What Gets Synced
 
-The sync feature automatically discovers and syncs all `.toml` configuration files in your lc configuration directory:
+The sync feature automatically discovers and syncs all configuration files and databases in your lc configuration directory:
 
-- `config.toml` - Main lc configuration
-- `mcp.toml` - MCP server configurations
-- `sync.toml` - Sync provider configurations
-- Any other `.toml` files in the config directory
+- **Configuration Files (.toml)**:
+  - `config.toml` - Main lc configuration
+  - `mcp.toml` - MCP server configurations
+  - `sync.toml` - Sync provider configurations
+  - Any other `.toml` files in the config directory
+
+- **Database Files**:
+  - `logs.db` - Chat logs and session history database
 
 ### File Processing
 
 1. **Upload Process**:
-   - Reads all `.toml` files from config directory
+   - Reads all `.toml` configuration files and `logs.db` from config directory
+   - Displays file types and sizes for transparency
    - Optionally encrypts content with AES256-GCM
    - Encodes as Base64 for safe S3 storage
-   - Uploads with metadata (original name, encryption status, etc.)
+   - Uploads with metadata (original name, file type, encryption status, file size, etc.)
 
 2. **Download Process**:
    - Lists objects in S3 bucket under `llm_client_config/` prefix
    - Downloads and decodes from Base64
+   - Displays file types and sizes during download
    - Optionally decrypts content
    - Restores files to local config directory
 
@@ -226,8 +232,49 @@ your-bucket/
 └── llm_client_config/
     ├── config.toml (or config.toml.enc if encrypted)
     ├── mcp.toml (or mcp.toml.enc if encrypted)
-    └── sync.toml (or sync.toml.enc if encrypted)
+    ├── sync.toml (or sync.toml.enc if encrypted)
+    └── logs.db (or logs.db.enc if encrypted)
 ```
+
+### Database Management
+
+Since `logs.db` can grow large over time, the sync feature includes database management tools:
+
+#### Purging Strategies
+
+1. **Age-based Purging**: Remove entries older than N days
+   ```bash
+   lc logs purge --older-than-days 30
+   ```
+
+2. **Count-based Purging**: Keep only the most recent N entries
+   ```bash
+   lc logs purge --keep-recent 1000
+   ```
+
+3. **Size-based Purging**: Purge when database exceeds N MB
+   ```bash
+   lc logs purge --max-size-mb 50
+   ```
+
+4. **Combined Purging**: Use multiple strategies together
+   ```bash
+   lc logs purge --older-than-days 30 --keep-recent 1000 --max-size-mb 50
+   ```
+
+#### Recommended Purging Strategy
+
+For optimal performance and reasonable sync times:
+```bash
+# Purge logs older than 30 days, keep max 1000 entries, limit to 50MB
+lc logs purge --older-than-days 30 --keep-recent 1000 --max-size-mb 50
+```
+
+This strategy:
+- Maintains recent context for chat continuity
+- Prevents unlimited database growth
+- Keeps sync operations fast
+- Preserves important conversation history
 
 ## Examples
 

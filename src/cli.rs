@@ -646,6 +646,15 @@ pub enum LogCommands {
         /// Confirm purge without prompt
         #[arg(long)]
         yes: bool,
+        /// Purge logs older than N days
+        #[arg(long)]
+        older_than_days: Option<u32>,
+        /// Keep only the most recent N entries
+        #[arg(long)]
+        keep_recent: Option<usize>,
+        /// Purge when database exceeds N MB
+        #[arg(long)]
+        max_size_mb: Option<u64>,
     },
 }
 
@@ -1699,23 +1708,48 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                 }
             }
         }
-        LogCommands::Purge { yes } => {
-            if !yes {
-                print!("Are you sure you want to purge all logs? This cannot be undone. (y/N): ");
-                // Deliberately flush stdout to ensure prompt appears before user input
-                io::stdout().flush()?;
-                
-                let mut input = String::new();
-                io::stdin().read_line(&mut input)?;
-                
-                if !input.trim().to_lowercase().starts_with('y') {
-                    println!("Purge cancelled.");
-                    return Ok(());
-                }
-            }
+        LogCommands::Purge { yes, older_than_days, keep_recent, max_size_mb } => {
+            // Check if any specific purge options are provided
+            let has_specific_options = older_than_days.is_some() || keep_recent.is_some() || max_size_mb.is_some();
             
-            db.purge_all_logs()?;
-            println!("{} All logs purged successfully", "✓".green());
+            if has_specific_options {
+                // Smart purge with specific options
+                let deleted_count = db.smart_purge(older_than_days, keep_recent, max_size_mb)?;
+                
+                if deleted_count > 0 {
+                    println!("{} Purged {} log entries", "✓".green(), deleted_count);
+                    
+                    if let Some(days) = older_than_days {
+                        println!("  - Removed entries older than {} days", days);
+                    }
+                    if let Some(count) = keep_recent {
+                        println!("  - Kept only the {} most recent entries", count);
+                    }
+                    if let Some(size) = max_size_mb {
+                        println!("  - Enforced maximum database size of {} MB", size);
+                    }
+                } else {
+                    println!("{} No logs needed to be purged", "ℹ️".blue());
+                }
+            } else {
+                // Full purge (existing behavior)
+                if !yes {
+                    print!("Are you sure you want to purge all logs? This cannot be undone. (y/N): ");
+                    // Deliberately flush stdout to ensure prompt appears before user input
+                    io::stdout().flush()?;
+                    
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input)?;
+                    
+                    if !input.trim().to_lowercase().starts_with('y') {
+                        println!("Purge cancelled.");
+                        return Ok(());
+                    }
+                }
+                
+                db.purge_all_logs()?;
+                println!("{} All logs purged successfully", "✓".green());
+            }
         }
     }
     Ok(())
@@ -1919,7 +1953,11 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
             println!("{}", config_dir.display());
             println!("\n{}", "Files:".bold().blue());
             println!("  {} config.toml", "•".blue());
-            println!("  {} logs.db", "•".blue());
+            println!("  {} logs.db (synced to cloud)", "•".blue());
+            println!("\n{}", "Database Management:".bold().blue());
+            println!("  {} Purge old logs: {}", "•".blue(), "lc logs purge --older-than-days 30".dimmed());
+            println!("  {} Keep recent logs: {}", "•".blue(), "lc logs purge --keep-recent 1000".dimmed());
+            println!("  {} Size-based purge: {}", "•".blue(), "lc logs purge --max-size-mb 50".dimmed());
         }
         None => {
             // Show current configuration with enhanced model metadata

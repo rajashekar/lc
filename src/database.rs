@@ -339,6 +339,113 @@ impl Database {
         }
     }
     
+    /// Purge logs based on age (older than specified days)
+    pub fn purge_logs_by_age(&self, days: u32) -> Result<usize> {
+        let conn = self.pool.get_connection()?;
+        
+        let cutoff_date = chrono::Utc::now() - chrono::Duration::days(days as i64);
+        
+        let deleted_count = conn.execute(
+            "DELETE FROM chat_logs WHERE timestamp < ?1",
+            [cutoff_date]
+        )?;
+        
+        Ok(deleted_count)
+    }
+    
+    /// Purge logs to keep only the most recent N entries
+    pub fn purge_logs_keep_recent(&self, keep_count: usize) -> Result<usize> {
+        let conn = self.pool.get_connection()?;
+        
+        // First, get the total count
+        let total_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM chat_logs",
+            [],
+            |row| row.get(0)
+        )?;
+        
+        if total_count <= keep_count as i64 {
+            return Ok(0); // Nothing to purge
+        }
+        
+        let to_delete = total_count - keep_count as i64;
+        
+        let deleted_count = conn.execute(
+            "DELETE FROM chat_logs WHERE id IN (
+                SELECT id FROM chat_logs
+                ORDER BY timestamp ASC
+                LIMIT ?1
+            )",
+            [to_delete]
+        )?;
+        
+        Ok(deleted_count)
+    }
+    
+    /// Purge logs when database size exceeds threshold (in MB)
+    pub fn purge_logs_by_size(&self, max_size_mb: u64) -> Result<usize> {
+        let db_path = Self::database_path()?;
+        let current_size = std::fs::metadata(&db_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+        
+        let max_size_bytes = max_size_mb * 1024 * 1024;
+        
+        if current_size <= max_size_bytes {
+            return Ok(0); // No purging needed
+        }
+        
+        // Purge oldest 25% of entries to get under the size limit
+        let conn = self.pool.get_connection()?;
+        let total_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM chat_logs",
+            [],
+            |row| row.get(0)
+        )?;
+        
+        let to_delete = (total_count as f64 * 0.25) as i64;
+        
+        if to_delete > 0 {
+            let deleted_count = conn.execute(
+                "DELETE FROM chat_logs WHERE id IN (
+                    SELECT id FROM chat_logs
+                    ORDER BY timestamp ASC
+                    LIMIT ?1
+                )",
+                [to_delete]
+            )?;
+            
+            // Run VACUUM to reclaim space
+            conn.execute("VACUUM", [])?;
+            
+            Ok(deleted_count)
+        } else {
+            Ok(0)
+        }
+    }
+    
+    /// Smart purge with configurable thresholds
+    pub fn smart_purge(&self, max_age_days: Option<u32>, max_entries: Option<usize>, max_size_mb: Option<u64>) -> Result<usize> {
+        let mut total_deleted = 0;
+        
+        // Purge by age first
+        if let Some(days) = max_age_days {
+            total_deleted += self.purge_logs_by_age(days)?;
+        }
+        
+        // Then purge by count
+        if let Some(max_count) = max_entries {
+            total_deleted += self.purge_logs_keep_recent(max_count)?;
+        }
+        
+        // Finally check size
+        if let Some(max_mb) = max_size_mb {
+            total_deleted += self.purge_logs_by_size(max_mb)?;
+        }
+        
+        Ok(total_deleted)
+    }
+    
     pub fn clear_session(&self, session_id: &str) -> Result<()> {
         let conn = self.pool.get_connection()?;
         

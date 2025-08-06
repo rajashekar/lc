@@ -501,6 +501,19 @@ pub struct OpenAIClient {
 impl OpenAIClient {
     
     pub fn new_with_headers(base_url: String, api_key: String, models_path: String, chat_path: String, custom_headers: std::collections::HashMap<String, String>) -> Self {
+        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+        
+        // Create default headers including the required tracking headers
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert(
+            HeaderName::from_static("http-referer"),
+            HeaderValue::from_static("https://lc.viwq.dev/")
+        );
+        default_headers.insert(
+            HeaderName::from_static("x-title"),
+            HeaderValue::from_static("lc")
+        );
+        
         // Create optimized HTTP client with connection pooling and keep-alive settings
         // This client keeps compression enabled for regular requests
         let client = Client::builder()
@@ -510,12 +523,14 @@ impl OpenAIClient {
             .timeout(Duration::from_secs(60)) // Total request timeout
             .connect_timeout(Duration::from_secs(10)) // Connection establishment timeout
             .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .default_headers(default_headers.clone())
             .build()
             .expect("Failed to create optimized HTTP client");
 
         // Create a separate streaming-optimized client
         let streaming_client = Client::builder()
             .timeout(Duration::from_secs(300))  // Longer timeout for streaming
+            .default_headers(default_headers)
             .build()
             .expect("Failed to create streaming-optimized HTTP client");
 
@@ -532,6 +547,19 @@ impl OpenAIClient {
     }
     
     pub fn new_with_provider_config(base_url: String, api_key: String, models_path: String, chat_path: String, custom_headers: std::collections::HashMap<String, String>, provider_config: crate::config::ProviderConfig) -> Self {
+        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+        
+        // Create default headers including the required tracking headers
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert(
+            HeaderName::from_static("http-referer"),
+            HeaderValue::from_static("https://lc.viwq.dev/")
+        );
+        default_headers.insert(
+            HeaderName::from_static("x-title"),
+            HeaderValue::from_static("lc")
+        );
+        
         // Create optimized HTTP client with connection pooling and keep-alive settings
         // This client keeps compression enabled for regular requests
         let client = Client::builder()
@@ -541,12 +569,14 @@ impl OpenAIClient {
             .timeout(Duration::from_secs(60)) // Total request timeout
             .connect_timeout(Duration::from_secs(10)) // Connection establishment timeout
             .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .default_headers(default_headers.clone())
             .build()
             .expect("Failed to create optimized HTTP client");
 
         // Create a separate streaming-optimized client
         let streaming_client = Client::builder()
             .timeout(Duration::from_secs(300))  // Longer timeout for streaming
+            .default_headers(default_headers)
             .build()
             .expect("Failed to create streaming-optimized HTTP client");
 
@@ -1274,6 +1304,19 @@ pub struct GeminiClient {
 impl GeminiClient {
     #[allow(dead_code)]
     pub fn new(base_url: String, api_key: String, models_path: String, chat_path_template: String) -> Self {
+        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+        
+        // Create default headers including the required tracking headers
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert(
+            HeaderName::from_static("http-referer"),
+            HeaderValue::from_static("https://lc.viwq.dev/")
+        );
+        default_headers.insert(
+            HeaderName::from_static("x-title"),
+            HeaderValue::from_static("lc")
+        );
+        
         let client = Client::builder()
             .pool_max_idle_per_host(10)
             .pool_idle_timeout(Duration::from_secs(90))
@@ -1281,6 +1324,7 @@ impl GeminiClient {
             .timeout(Duration::from_secs(60))
             .connect_timeout(Duration::from_secs(10))
             .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .default_headers(default_headers)
             .build()
             .expect("Failed to create optimized HTTP client");
         
@@ -1297,6 +1341,19 @@ impl GeminiClient {
     
     #[allow(dead_code)]
     pub fn new_with_headers(base_url: String, api_key: String, models_path: String, chat_path_template: String, custom_headers: std::collections::HashMap<String, String>) -> Self {
+        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+        
+        // Create default headers including the required tracking headers
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert(
+            HeaderName::from_static("http-referer"),
+            HeaderValue::from_static("https://lc.viwq.dev/")
+        );
+        default_headers.insert(
+            HeaderName::from_static("x-title"),
+            HeaderValue::from_static("lc")
+        );
+        
         let client = Client::builder()
             .pool_max_idle_per_host(10)
             .pool_idle_timeout(Duration::from_secs(90))
@@ -1304,6 +1361,7 @@ impl GeminiClient {
             .timeout(Duration::from_secs(60))
             .connect_timeout(Duration::from_secs(10))
             .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .default_headers(default_headers)
             .build()
             .expect("Failed to create optimized HTTP client");
         
@@ -1319,6 +1377,19 @@ impl GeminiClient {
     }
     
     pub fn new_with_provider_config(base_url: String, api_key: String, models_path: String, chat_path_template: String, custom_headers: std::collections::HashMap<String, String>, provider_config: crate::config::ProviderConfig) -> Self {
+        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+        
+        // Create default headers including the required tracking headers
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert(
+            HeaderName::from_static("http-referer"),
+            HeaderValue::from_static("https://lc.viwq.dev/")
+        );
+        default_headers.insert(
+            HeaderName::from_static("x-title"),
+            HeaderValue::from_static("lc")
+        );
+        
         let client = Client::builder()
             .pool_max_idle_per_host(10)
             .pool_idle_timeout(Duration::from_secs(90))
@@ -1326,6 +1397,7 @@ impl GeminiClient {
             .timeout(Duration::from_secs(60))
             .connect_timeout(Duration::from_secs(10))
             .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .default_headers(default_headers)
             .build()
             .expect("Failed to create optimized HTTP client");
         

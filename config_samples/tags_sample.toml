@@ -1,0 +1,49 @@
+# Sample configuration file for tags.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+
+[tags]
+
+[tags.context_length]
+paths = [".context_length", ".context_window", ".context_size", ".max_context_length", ".input_token_limit", ".inputTokenLimit", ".limits.max_input_tokens", ".top_provider.context_length"]
+value_type = "u32"
+
+[tags.output]
+paths = [".max_completion_tokens", ".outputTokenLimit", ".max_output_tokens", ".limits.max_output_tokens", ".top_provider.max_completion_tokens", ".max_tokens"]
+value_type = "u32"
+
+[tags.input_price_per_m]
+paths = [".pricing.prompt", ".pricing.input.usd", ".input_price"]
+value_type = "f64"
+transform = "multiply_million"
+
+[tags.input_price_per_m_direct]
+paths = [".input_token_price_per_m"]
+value_type = "f64"
+
+[tags.output_price_per_m]
+paths = [".pricing.completion", ".pricing.output.usd", ".output_price"]
+value_type = "f64"
+transform = "multiply_million"
+
+[tags.output_price_per_m_direct]
+paths = [".output_token_price_per_m"]
+value_type = "f64"
+
+[tags.supports_vision]
+paths = [".supports_vision", ".supports_image_input", ".capabilities.vision", ".architecture.input_modalities[] | select(. == "image")", ".architecture.output_modalities[] | select(. == "image")", "@name_contains("image")", "@name_contains("flux")", "@name_contains("dall-e")", "@name_contains("midjourney")", "@name_contains("stable")", "@name_contains("diffusion")", "@name_contains("vision")", "@name_contains("visual")", "@name_contains("photo")", "@name_contains("picture")", "@name_contains("draw")", "@name_contains("paint")", "@name_contains("art")", "@name_contains("generate")"]
+value_type = "bool"
+
+[tags.supports_tools]
+paths = [".supports_tools", ".capabilities.function_calling", ".features[] | select(. == "tools")", ".features[] | select(. == "function-calling")", ".capabilities[] | select(. == "tool-calling")", ".supported_parameters[] | select(. == "tools")"]
+value_type = "bool"
+
+[tags.supports_audio]
+paths = [".supports_audio", "@name_contains("audio")", ".features[] | select(. == "audio")", ".capabilities[] | select(. == "audio")", ".supported_input_modalities[] | select(. == "audio")", ".supported_output_modalities[] | select(. == "audio")", ".architecture.input_modalities[] | select(. == "audio")", ".architecture.output_modalities[] | select(. == "audio")"]
+value_type = "bool"
+
+[tags.supports_reasoning]
+paths = [".supports_reasoning", ".features[] | select(. == "think")", ".features[] | select(. == "reasoning")", ".capabilities[] | select(. == "reasoning")", ".supported_input_modalities[] | select(. == "reasoning")", ".supported_output_modalities[] | select(. == "reasoning")", ".architecture.input_modalities[] | select(. == "reasoning")", ".architecture.output_modalities[] | select(. == "reasoning")"]
+value_type = "bool"

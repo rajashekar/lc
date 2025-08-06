@@ -63,7 +63,7 @@ impl ConfigResolver {
         crate::config::Config::config_dir()
     }
 
-    /// Get all .toml configuration files in the lc config directory
+    /// Get all .toml configuration files and logs.db in the lc config directory
     pub fn get_config_files() -> Result<Vec<ConfigFile>> {
         let config_dir = Self::get_config_dir()?;
         let mut config_files = Vec::new();
@@ -72,26 +72,34 @@ impl ConfigResolver {
             return Ok(config_files);
         }
 
-        // Read all .toml files in the config directory
+        // Read all .toml files and logs.db in the config directory
         for entry in fs::read_dir(&config_dir)? {
             let entry = entry?;
             let path = entry.path();
             
             if path.is_file() {
-                if let Some(extension) = path.extension() {
-                    if extension == "toml" {
-                        let content = fs::read(&path)?;
-                        let name = path.file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("unknown")
-                            .to_string();
-                        
-                        config_files.push(ConfigFile {
-                            name,
-                            path: path.clone(),
-                            content,
-                        });
-                    }
+                let should_include = if let Some(extension) = path.extension() {
+                    extension == "toml"
+                } else {
+                    // Include files without extension if they are logs.db
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|name| name == "logs.db")
+                        .unwrap_or(false)
+                };
+
+                if should_include {
+                    let content = fs::read(&path)?;
+                    let name = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    
+                    config_files.push(ConfigFile {
+                        name,
+                        path: path.clone(),
+                        content,
+                    });
                 }
             }
         }
@@ -124,6 +132,10 @@ pub async fn handle_sync_providers() -> Result<()> {
     println!("  {} Sync from cloud: {}", "•".blue(), "lc sync from s3".dimmed());
     println!("  {} With encryption: {}", "•".blue(), "lc sync to s3 --encrypted".dimmed());
     
+    println!("\n{}", "What gets synced:".bold().blue());
+    println!("  {} Configuration files (*.toml)", "•".blue());
+    println!("  {} Chat logs database (logs.db)", "•".blue());
+    
     println!("\n{}", "Configuration:".bold().blue());
     println!("  {} S3 credentials can be provided via:", "•".blue());
     println!("    - Environment variables (recommended):");
@@ -139,6 +151,11 @@ pub async fn handle_sync_providers() -> Result<()> {
     println!("  {} Set LC_S3_ENDPOINT for non-AWS services:", "•".blue());
     println!("    - Backblaze B2: {}", "https://s3.us-west-004.backblazeb2.com".dimmed());
     println!("    - Cloudflare R2: {}", "https://your-account-id.r2.cloudflarestorage.com".dimmed());
+    
+    println!("\n{}", "Database Management:".bold().blue());
+    println!("  {} Purge old logs: {}", "•".blue(), "lc logs purge --older-than-days 30".dimmed());
+    println!("  {} Keep recent logs: {}", "•".blue(), "lc logs purge --keep-recent 1000".dimmed());
+    println!("  {} Size-based purge: {}", "•".blue(), "lc logs purge --max-size-mb 50".dimmed());
     
     Ok(())
 }
@@ -157,9 +174,17 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool) -> Result<()> 
         return Ok(());
     }
     
-    println!("{} Found {} configuration files:", "📁".blue(), config_files.len());
+    println!("{} Found {} files to sync:", "📁".blue(), config_files.len());
     for file in &config_files {
-        println!("  {} {}", "•".blue(), file.name);
+        let file_type = if file.name.ends_with(".toml") {
+            "config"
+        } else if file.name == "logs.db" {
+            "database"
+        } else {
+            "file"
+        };
+        let size_kb = (file.content.len() + 1023) / 1024; // Round up to KB
+        println!("  {} {} ({}, {} KB)", "•".blue(), file.name, file_type, size_kb);
     }
     
     // Handle encryption if requested
@@ -229,7 +254,15 @@ pub async fn handle_sync_from(provider_name: &str, encrypted: bool) -> Result<()
     
     println!("{} Downloaded {} files:", "📥".blue(), downloaded_files.len());
     for file in &downloaded_files {
-        println!("  {} {}", "•".blue(), file.name);
+        let file_type = if file.name.ends_with(".toml") {
+            "config"
+        } else if file.name == "logs.db" {
+            "database"
+        } else {
+            "file"
+        };
+        let size_kb = (file.content.len() + 1023) / 1024; // Round up to KB
+        println!("  {} {} ({}, {} KB)", "•".blue(), file.name, file_type, size_kb);
     }
     
     // Handle decryption if needed

@@ -36,18 +36,21 @@ lc l s
 |---------|-------|----------------------------------------|
 | `show`  | `sh`  | Display all logs (with --minimal flag)|
 | `stats` | `s`   | Show database statistics               |
-| `purge` | `p`   | Delete all logs (with --yes flag)     |
+| `purge` | `p`   | Delete logs with configurable options |
 | `recent`| `r`   | Show recent logs and details           |
 | `current`| `c`  | Show current session logs              |
 
 ## Options
 
-| Short | Long       | Description                 | Default |
-|-------|------------|-----------------------------|---------|
-| `-c`  | `--count`  | Number of recent entries    | 10      |
-|       | `--minimal`| Minimal output for show     | False   |
-|       | `--yes`    | Confirm purge operation     | False   |
-| `-h`  | `--help`   | Print help                  | False   |
+| Short | Long                    | Description                      | Default |
+|-------|-------------------------|----------------------------------|---------|
+| `-c`  | `--count`               | Number of recent entries         | 10      |
+|       | `--minimal`             | Minimal output for show          | False   |
+|       | `--yes`                 | Confirm full purge operation     | False   |
+|       | `--older-than-days`     | Purge logs older than N days     | None    |
+|       | `--keep-recent`         | Keep only N most recent entries  | None    |
+|       | `--max-size-mb`         | Purge when database exceeds N MB| None    |
+| `-h`  | `--help`                | Print help                       | False   |
 
 ## Examples
 
@@ -105,7 +108,15 @@ lc l c
 ### Log Management
 
 ```bash
-# Purge all logs (requires confirmation)
+# Smart purging with configurable options
+lc logs purge --older-than-days 30        # Remove logs older than 30 days
+lc logs purge --keep-recent 1000           # Keep only 1000 most recent entries
+lc logs purge --max-size-mb 50             # Purge when database exceeds 50MB
+
+# Combined purging strategies
+lc logs purge --older-than-days 30 --keep-recent 1000 --max-size-mb 50
+
+# Full purge (requires confirmation)
 lc logs purge --yes
 lc l p --yes
 
@@ -115,7 +126,27 @@ lc logs stats
 # Database size: 2.3 MB
 # Oldest entry: 2023-12-01
 # Latest entry: 2024-01-15
+
+# Using aliases for smart purging
+lc l p --older-than-days 7    # Remove logs older than 1 week
+lc l p --keep-recent 500       # Keep only 500 recent entries
 ```
+
+### Database Sync Integration
+
+The logs database is automatically included in sync operations:
+
+```bash
+# Sync logs database along with configuration files
+lc sync to s3
+lc sync from s3
+
+# With encryption (recommended for sensitive chat logs)
+lc sync to s3 --encrypted
+lc sync from s3 --encrypted
+```
+
+**Note**: Large log databases will increase sync time and storage usage. Use purging strategies to maintain optimal sync performance.
 
 ## Troubleshooting
 
@@ -141,10 +172,11 @@ lc logs stats
 
 ### Performance Considerations
 
-- Large log databases may slow down queries
+- Large log databases may slow down queries and sync operations
 - Use `--minimal` flag for faster display
-- Regular purging helps maintain performance
+- Regular purging helps maintain performance and reduces sync time
 - Consider archiving important logs before purging
+- Recommended purging strategy: `lc logs purge --older-than-days 30 --keep-recent 1000 --max-size-mb 50`
 
 ### Log Analysis Workflow
 
@@ -155,8 +187,14 @@ lc logs stats              # Check database size
 lc logs current            # Review current session
 
 # Weekly maintenance
-lc logs show --minimal | grep "error"  # Find errors
-lc logs purge --yes        # Clean old logs (if needed)
+lc logs show --minimal | grep "error"     # Find errors
+lc logs purge --older-than-days 7         # Remove logs older than 1 week
+lc logs purge --max-size-mb 25             # Keep database under 25MB
+
+# Monthly cleanup (before sync)
+lc logs stats                              # Check current size
+lc logs purge --older-than-days 30 --keep-recent 1000 --max-size-mb 50
+lc sync to s3 --encrypted                  # Sync cleaned database
 ```
 
 ### Security and Privacy

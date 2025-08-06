@@ -1,0 +1,23 @@
+# Sample configuration file for sync.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+
+[providers]
+# Configuration for s3 AI provider
+
+[providers.s3]
+type = "s3"
+# S3 bucket name for sync storage
+bucket_name = "rcawss3"
+
+# AWS region for S3 bucket
+region = "us-west-2"
+
+# AWS access key ID - replace with your actual key
+access_key_id = "<your-aws-access-key-id>"
+
+# AWS secret access key - replace with your actual key
+secret_access_key = "<your-api-key>"
+

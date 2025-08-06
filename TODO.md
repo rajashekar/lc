@@ -1,13 +1,10 @@
 - Make sure documentation works
-- give option to list paths for each provider and also set different paths for each provider
-- Support Amazon, alibaba, azure, vertex ai models
 - Support lc serve
 - Check images
 - Check audio
 - Support other vector dbs like milvus, pinecone, qdrant
 - Support other web proxy chats
 - Add support to sync db to cloud
-- provide sample config.toml
 - make sure package works with brew, linux, windows
 - clean up code
-- headers={"HTTP-Referer": "https://lc.viwq.dev/", "X-Title": "lc"}
+- Add support to multi line chat

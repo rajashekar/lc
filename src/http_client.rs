@@ -5,6 +5,19 @@ use std::time::Duration;
 /// Create an optimized HTTP client with connection pooling, keep-alive settings,
 /// and appropriate timeouts for better performance and connection reuse.
 pub fn create_optimized_client() -> Result<Client> {
+    use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+    
+    // Create default headers including the required tracking headers
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        HeaderName::from_static("http-referer"),
+        HeaderValue::from_static("https://lc.viwq.dev/")
+    );
+    headers.insert(
+        HeaderName::from_static("x-title"),
+        HeaderValue::from_static("lc")
+    );
+    
     Ok(Client::builder()
         // Connection pooling and keep-alive settings
         .pool_max_idle_per_host(10) // Keep up to 10 idle connections per host
@@ -21,6 +34,9 @@ pub fn create_optimized_client() -> Result<Client> {
             "/",
             env!("CARGO_PKG_VERSION")
         ))
+        
+        // Add default headers including tracking headers
+        .default_headers(headers)
         
         .build()?)
 }
