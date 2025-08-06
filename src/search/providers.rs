@@ -35,7 +35,7 @@ impl SearchProviderType {
     /// Auto-detect provider type from URL
     pub fn detect_from_url(url: &str) -> anyhow::Result<Self> {
         let url_lower = url.to_lowercase();
-        
+
         if url_lower.contains("api.search.brave.com") {
             Ok(SearchProviderType::Brave)
         } else if url_lower.contains("api.exa.ai") || url_lower.contains("exa.ai") {
@@ -62,7 +62,7 @@ impl SearchProviderType {
             )
         }
     }
-    
+
     /// Get the correct API key header name for this provider type
     pub fn api_key_header(&self) -> &'static str {
         match self {
@@ -79,5 +79,9 @@ impl SearchProviderType {
 #[allow(dead_code)]
 pub trait SearchProvider {
     fn name(&self) -> &str;
-    fn search(&self, query: &str, count: Option<usize>) -> impl std::future::Future<Output = anyhow::Result<super::SearchResults>> + Send;
+    fn search(
+        &self,
+        query: &str,
+        count: Option<usize>,
+    ) -> impl std::future::Future<Output = anyhow::Result<super::SearchResults>> + Send;
 }

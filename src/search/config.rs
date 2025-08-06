@@ -22,7 +22,7 @@ impl SearchConfig {
 
     pub fn load() -> Result<Self> {
         let config_path = Self::config_file_path()?;
-        
+
         if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
             let config: SearchConfig = toml::from_str(&content)?;
@@ -36,31 +36,36 @@ impl SearchConfig {
 
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_file_path()?;
-        
+
         // Ensure parent directory exists
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         let content = toml::to_string_pretty(self)?;
         fs::write(&config_path, content)?;
         Ok(())
     }
 
-    pub fn add_provider(&mut self, name: String, url: String, provider_type: SearchProviderType) -> Result<()> {
+    pub fn add_provider(
+        &mut self,
+        name: String,
+        url: String,
+        provider_type: SearchProviderType,
+    ) -> Result<()> {
         let provider_config = SearchProviderConfig {
             url,
             provider_type,
             headers: HashMap::new(),
         };
-        
+
         self.providers.insert(name.clone(), provider_config);
-        
+
         // Set as default if it's the first provider
         if self.default_provider.is_none() {
             self.default_provider = Some(name);
         }
-        
+
         Ok(())
     }
 
@@ -74,16 +79,21 @@ impl SearchConfig {
         if self.providers.remove(name).is_none() {
             anyhow::bail!("Search provider '{}' not found", name);
         }
-        
+
         // Clear default if it was the deleted provider
         if self.default_provider.as_ref() == Some(&name.to_string()) {
             self.default_provider = None;
         }
-        
+
         Ok(())
     }
 
-    pub fn set_header(&mut self, provider: &str, header_name: String, header_value: String) -> Result<()> {
+    pub fn set_header(
+        &mut self,
+        provider: &str,
+        header_name: String,
+        header_value: String,
+    ) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(provider) {
             provider_config.headers.insert(header_name, header_value);
             Ok(())
@@ -93,7 +103,8 @@ impl SearchConfig {
     }
 
     pub fn get_provider(&self, name: &str) -> Result<&SearchProviderConfig> {
-        self.providers.get(name)
+        self.providers
+            .get(name)
             .ok_or_else(|| anyhow::anyhow!("Search provider '{}' not found", name))
     }
 

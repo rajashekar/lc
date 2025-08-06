@@ -1,11 +1,11 @@
 //! Integration tests for configuration commands
-//! 
+//!
 //! This module contains integration tests for configuration management
 //! commands (lc config set, get, delete).
 
 mod common;
 
-use common::{create_config_with_providers};
+use common::create_config_with_providers;
 use lc::config::Config;
 use std::collections::HashMap;
 
@@ -19,7 +19,7 @@ mod config_set_tests {
 
         // Set default provider
         config.default_provider = Some("anthropic".to_string());
-        
+
         assert_eq!(config.default_provider, Some("anthropic".to_string()));
     }
 
@@ -29,7 +29,7 @@ mod config_set_tests {
 
         // Set default model
         config.default_model = Some("gpt-4".to_string());
-        
+
         assert_eq!(config.default_model, Some("gpt-4".to_string()));
     }
 
@@ -39,8 +39,11 @@ mod config_set_tests {
 
         // Set system prompt
         config.system_prompt = Some("You are a helpful assistant.".to_string());
-        
-        assert_eq!(config.system_prompt, Some("You are a helpful assistant.".to_string()));
+
+        assert_eq!(
+            config.system_prompt,
+            Some("You are a helpful assistant.".to_string())
+        );
     }
 
     #[test]
@@ -75,7 +78,7 @@ mod config_get_tests {
     #[test]
     fn test_config_get_existing_values() {
         let mut config = create_config_with_providers();
-        
+
         // Set some values
         config.default_provider = Some("openai".to_string());
         config.default_model = Some("gpt-4".to_string());
@@ -121,7 +124,7 @@ mod config_delete_tests {
     #[test]
     fn test_config_delete_values() {
         let mut config = create_config_with_providers();
-        
+
         // Set values first
         config.default_provider = Some("openai".to_string());
         config.default_model = Some("gpt-4".to_string());
@@ -177,9 +180,12 @@ mod config_validation_tests {
     #[test]
     fn test_template_resolution() {
         let mut config = create_config_with_providers();
-        
+
         // Add a template
-        config.templates.insert("helpful".to_string(), "You are a helpful assistant.".to_string());
+        config.templates.insert(
+            "helpful".to_string(),
+            "You are a helpful assistant.".to_string(),
+        );
 
         // Test template resolution
         let resolved = config.resolve_template_or_prompt("t:helpful");

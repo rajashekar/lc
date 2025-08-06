@@ -1,13 +1,13 @@
 //! Integration tests for vector database commands
-//! 
+//!
 //! This module contains comprehensive integration tests for all vector database-related
 //! CLI commands, testing the underlying functionality as the CLI would use it.
 
 mod common;
 
+use chrono::Utc;
 use lc::vector_db::VectorDatabase;
 use tempfile::TempDir;
-use chrono::Utc;
 
 #[cfg(test)]
 mod vector_database_creation_tests {
@@ -17,11 +17,11 @@ mod vector_database_creation_tests {
     fn test_vector_database_creation() {
         let _temp_dir = TempDir::new().unwrap();
         let db_name = "test_db";
-        
+
         // Test database creation with temporary directory
         let result = VectorDatabase::new(db_name);
         assert!(result.is_ok());
-        
+
         let db = result.unwrap();
         // Database should be empty initially
         let count = db.count().unwrap();
@@ -34,7 +34,7 @@ mod vector_database_creation_tests {
         let db_name = "test_database";
         let result = VectorDatabase::new(db_name);
         assert!(result.is_ok());
-        
+
         // Database should be created in the correct location
         let db = result.unwrap();
         let count = db.count().unwrap();
@@ -45,7 +45,7 @@ mod vector_database_creation_tests {
     fn test_vector_database_with_special_characters() {
         let temp_dir = TempDir::new().unwrap();
         let embeddings_dir = temp_dir.path().join("embeddings");
-        
+
         let db_names = vec![
             "test-db",
             "test_db",
@@ -57,15 +57,19 @@ mod vector_database_creation_tests {
         for db_name in &db_names {
             // Clean up any existing database first
             let _ = VectorDatabase::delete_database_in_dir(db_name, &embeddings_dir);
-            
+
             let result = VectorDatabase::new(db_name);
-            assert!(result.is_ok(), "Failed to create database with name: {}", db_name);
-            
+            assert!(
+                result.is_ok(),
+                "Failed to create database with name: {}",
+                db_name
+            );
+
             let db = result.unwrap();
             let count = db.count().unwrap();
             assert_eq!(count, 0);
         }
-        
+
         // Cleanup all test databases
         for db_name in &db_names {
             let _ = VectorDatabase::delete_database_in_dir(db_name, &embeddings_dir);
@@ -75,8 +79,8 @@ mod vector_database_creation_tests {
     #[test]
     fn test_vector_database_invalid_names() {
         let invalid_names = vec![
-            "", // Empty name
-            " ", // Whitespace only
+            "",               // Empty name
+            " ",              // Whitespace only
             "db with spaces", // Spaces in name
         ];
 
@@ -103,7 +107,7 @@ mod vector_storage_tests {
     fn test_vector_addition() {
         let db_name = "test_add";
         let _ = VectorDatabase::delete_database(db_name);
-        
+
         let db = VectorDatabase::new(db_name).unwrap();
         let text = "Test text for embedding";
         let vector = create_test_vector(1536);
@@ -119,7 +123,7 @@ mod vector_storage_tests {
         // Check that count increased
         let count = db.count().unwrap();
         assert_eq!(count, 1);
-        
+
         // Cleanup
         VectorDatabase::delete_database(db_name).unwrap();
     }
@@ -128,13 +132,9 @@ mod vector_storage_tests {
     fn test_multiple_vector_addition() {
         let db_name = "test_multiple";
         let _ = VectorDatabase::delete_database(db_name);
-        
+
         let db = VectorDatabase::new(db_name).unwrap();
-        let texts = vec![
-            "First text",
-            "Second text",
-            "Third text",
-        ];
+        let texts = vec!["First text", "Second text", "Third text"];
         let model = "text-embedding-3-small";
         let provider = "openai";
 
@@ -146,7 +146,7 @@ mod vector_storage_tests {
 
         let count = db.count().unwrap();
         assert_eq!(count, 3);
-        
+
         // Cleanup
         VectorDatabase::delete_database(db_name).unwrap();
     }
@@ -155,7 +155,7 @@ mod vector_storage_tests {
     fn test_vector_with_different_dimensions() {
         let db_name = "test_dimensions";
         let _ = VectorDatabase::delete_database(db_name);
-        
+
         let db = VectorDatabase::new(db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
@@ -172,7 +172,7 @@ mod vector_storage_tests {
 
         let count = db.count().unwrap();
         assert_eq!(count, 2);
-        
+
         // Cleanup
         VectorDatabase::delete_database(db_name).unwrap();
     }
@@ -210,17 +210,26 @@ mod vector_retrieval_tests {
     fn setup_test_database(db_name: &str) -> VectorDatabase {
         // Delete any existing database first
         let _ = VectorDatabase::delete_database(db_name);
-        
+
         let db = VectorDatabase::new(db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
 
         // Add test vectors
         let test_data = vec![
-            ("Machine learning is a subset of AI", vec![0.1, 0.2, 0.3, 0.4, 0.5]),
-            ("Deep learning uses neural networks", vec![0.2, 0.3, 0.4, 0.5, 0.6]),
+            (
+                "Machine learning is a subset of AI",
+                vec![0.1, 0.2, 0.3, 0.4, 0.5],
+            ),
+            (
+                "Deep learning uses neural networks",
+                vec![0.2, 0.3, 0.4, 0.5, 0.6],
+            ),
             ("Natural language processing", vec![0.3, 0.4, 0.5, 0.6, 0.7]),
-            ("Computer vision applications", vec![0.4, 0.5, 0.6, 0.7, 0.8]),
+            (
+                "Computer vision applications",
+                vec![0.4, 0.5, 0.6, 0.7, 0.8],
+            ),
         ];
 
         for (text, vector) in test_data {
@@ -233,13 +242,13 @@ mod vector_retrieval_tests {
     #[test]
     fn test_get_all_vectors() {
         let db = setup_test_database("test_get_all_vectors");
-        
+
         let result = db.get_all_vectors();
         assert!(result.is_ok());
-        
+
         let vectors = result.unwrap();
         assert_eq!(vectors.len(), 4);
-        
+
         // Check that all vectors have the expected structure
         for vector in &vectors {
             assert!(!vector.text.is_empty());
@@ -248,7 +257,7 @@ mod vector_retrieval_tests {
             assert_eq!(vector.provider, "openai");
             assert!(vector.id > 0);
         }
-        
+
         // Cleanup
         VectorDatabase::delete_database("test_get_all_vectors").unwrap();
     }
@@ -267,7 +276,7 @@ mod vector_retrieval_tests {
         assert_eq!(first_vector.provider, "openai");
         // created_at should be a valid timestamp
         assert!(first_vector.created_at <= Utc::now());
-        
+
         // Cleanup
         VectorDatabase::delete_database("test_vector_entry_structure").unwrap();
     }
@@ -281,12 +290,17 @@ mod vector_retrieval_tests {
         // Since we clean the database in setup_test_database, IDs should be sequential
         let mut ids: Vec<i64> = vectors.iter().map(|v| v.id).collect();
         ids.sort();
-        
+
         // Check that IDs are in ascending order
         for i in 1..ids.len() {
-            assert!(ids[i] > ids[i-1], "IDs should be in ascending order: {} should be > {}", ids[i], ids[i-1]);
+            assert!(
+                ids[i] > ids[i - 1],
+                "IDs should be in ascending order: {} should be > {}",
+                ids[i],
+                ids[i - 1]
+            );
         }
-        
+
         // Cleanup
         VectorDatabase::delete_database("test_vector_ordering").unwrap();
     }
@@ -295,10 +309,10 @@ mod vector_retrieval_tests {
     fn test_empty_database_retrieval() {
         let _temp_dir = TempDir::new().unwrap();
         let db = VectorDatabase::new("test_empty_retrieval").unwrap();
-        
+
         let result = db.get_all_vectors();
         assert!(result.is_ok());
-        
+
         let vectors = result.unwrap();
         assert!(vectors.is_empty());
     }
@@ -322,7 +336,7 @@ mod vector_similarity_tests {
     fn test_cosine_similarity_calculation() {
         let db_name = "test_similarity";
         let _ = VectorDatabase::delete_database(db_name);
-        
+
         let db = VectorDatabase::new(db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
@@ -347,7 +361,7 @@ mod vector_similarity_tests {
         // First result should be most similar (vector1)
         assert!(similar[0].1 > similar[1].1); // Higher similarity score
         assert!(similar[1].1 >= similar[2].1);
-        
+
         // Cleanup
         VectorDatabase::delete_database(db_name).unwrap();
     }
@@ -359,7 +373,8 @@ mod vector_similarity_tests {
         let provider = "openai";
 
         let vector = vec![0.5, 0.5, 0.5, 0.5];
-        db.add_vector("Identical text", &vector, model, provider).unwrap();
+        db.add_vector("Identical text", &vector, model, provider)
+            .unwrap();
 
         // Query with identical vector
         let result = db.find_similar(&vector, 1);
@@ -367,7 +382,7 @@ mod vector_similarity_tests {
 
         let similar = result.unwrap();
         assert_eq!(similar.len(), 1);
-        
+
         // Similarity should be very close to 1.0 (allowing for floating point precision)
         assert!(similar[0].1 > 0.99);
     }
@@ -376,7 +391,7 @@ mod vector_similarity_tests {
     fn test_similarity_with_orthogonal_vectors() {
         let db_name = "test_orthogonal";
         let _ = VectorDatabase::delete_database(db_name);
-        
+
         let db = VectorDatabase::new(db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
@@ -384,8 +399,10 @@ mod vector_similarity_tests {
         let vector1 = vec![1.0, 0.0];
         let vector2 = vec![0.0, 1.0];
 
-        db.add_vector("Vector 1", &vector1, model, provider).unwrap();
-        db.add_vector("Vector 2", &vector2, model, provider).unwrap();
+        db.add_vector("Vector 1", &vector1, model, provider)
+            .unwrap();
+        db.add_vector("Vector 2", &vector2, model, provider)
+            .unwrap();
 
         // Query with vector1
         let result = db.find_similar(&vector1, 2);
@@ -398,7 +415,7 @@ mod vector_similarity_tests {
         // Second should be orthogonal (similarity ~0.0)
         assert!(similar[0].1 > 0.99);
         assert!(similar[1].1.abs() < 0.1); // Close to 0 (relaxed tolerance)
-        
+
         // Cleanup
         VectorDatabase::delete_database(db_name).unwrap();
     }
@@ -412,7 +429,8 @@ mod vector_similarity_tests {
         // Add 5 vectors
         for i in 0..5 {
             let vector = vec![i as f64, 0.0, 0.0];
-            db.add_vector(&format!("Text {}", i), &vector, model, provider).unwrap();
+            db.add_vector(&format!("Text {}", i), &vector, model, provider)
+                .unwrap();
         }
 
         // Request only 3 results
@@ -428,7 +446,7 @@ mod vector_similarity_tests {
     fn test_similarity_with_empty_database() {
         let _temp_dir = TempDir::new().unwrap();
         let db = VectorDatabase::new("test_empty_similarity").unwrap();
-        
+
         let query_vector = vec![1.0, 0.0, 0.0];
         let result = db.find_similar(&query_vector, 5);
         assert!(result.is_ok());
@@ -445,12 +463,13 @@ mod vector_similarity_tests {
 
         // Add vector with 3 dimensions
         let stored_vector = vec![1.0, 0.0, 0.0];
-        db.add_vector("Stored text", &stored_vector, model, provider).unwrap();
+        db.add_vector("Stored text", &stored_vector, model, provider)
+            .unwrap();
 
         // Query with different dimensions
         let query_vector = vec![1.0, 0.0]; // Only 2 dimensions
         let result = db.find_similar(&query_vector, 1);
-        
+
         // This should handle dimension mismatch gracefully
         // Implementation might return error or handle it somehow
         let _ = result;
@@ -465,7 +484,7 @@ mod vector_metadata_tests {
     fn test_model_info_storage_and_retrieval() {
         let db_name = "test_model_info";
         let _ = VectorDatabase::delete_database(db_name);
-        
+
         let db = VectorDatabase::new(db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
@@ -478,7 +497,8 @@ mod vector_metadata_tests {
 
         // Add a vector
         let vector = vec![0.1, 0.2, 0.3];
-        db.add_vector("Test text", &vector, model, provider).unwrap();
+        db.add_vector("Test text", &vector, model, provider)
+            .unwrap();
 
         // Now should have model info
         let result = db.get_model_info();
@@ -489,7 +509,7 @@ mod vector_metadata_tests {
         let (stored_model, stored_provider) = model_info.unwrap();
         assert_eq!(stored_model, model);
         assert_eq!(stored_provider, provider);
-        
+
         // Cleanup
         VectorDatabase::delete_database(db_name).unwrap();
     }
@@ -503,7 +523,8 @@ mod vector_metadata_tests {
         // Add multiple vectors with same model/provider
         for i in 0..3 {
             let vector = vec![i as f64, 0.0, 0.0];
-            db.add_vector(&format!("Text {}", i), &vector, model, provider).unwrap();
+            db.add_vector(&format!("Text {}", i), &vector, model, provider)
+                .unwrap();
         }
 
         let model_info = db.get_model_info().unwrap().unwrap();
@@ -517,11 +538,13 @@ mod vector_metadata_tests {
 
         // Add vector with first model
         let vector1 = vec![0.1, 0.2, 0.3];
-        db.add_vector("Text 1", &vector1, "model1", "provider1").unwrap();
+        db.add_vector("Text 1", &vector1, "model1", "provider1")
+            .unwrap();
 
         // Add vector with different model
         let vector2 = vec![0.4, 0.5, 0.6];
-        db.add_vector("Text 2", &vector2, "model2", "provider2").unwrap();
+        db.add_vector("Text 2", &vector2, "model2", "provider2")
+            .unwrap();
 
         // Should return the first model info (or handle mixed models somehow)
         let model_info = db.get_model_info().unwrap();
@@ -533,7 +556,7 @@ mod vector_metadata_tests {
     fn test_database_count() {
         let db_name = "test_count";
         let _ = VectorDatabase::delete_database(db_name);
-        
+
         let db = VectorDatabase::new(db_name).unwrap();
 
         // Initially empty
@@ -545,10 +568,11 @@ mod vector_metadata_tests {
 
         for i in 0..5 {
             let vector = vec![i as f64];
-            db.add_vector(&format!("Text {}", i), &vector, model, provider).unwrap();
+            db.add_vector(&format!("Text {}", i), &vector, model, provider)
+                .unwrap();
             assert_eq!(db.count().unwrap(), i + 1);
         }
-        
+
         // Cleanup
         VectorDatabase::delete_database(db_name).unwrap();
     }
@@ -573,7 +597,7 @@ mod vector_database_management_tests {
         assert!(databases.contains(&"list_test_1".to_string()));
         assert!(databases.contains(&"list_test_2".to_string()));
         assert!(databases.contains(&"list_test_3".to_string()));
-        
+
         // Cleanup
         VectorDatabase::delete_database("list_test_1").ok();
         VectorDatabase::delete_database("list_test_2").ok();
@@ -616,7 +640,8 @@ mod vector_database_management_tests {
         {
             let db = VectorDatabase::new(db_name).unwrap();
             let vector = vec![0.1, 0.2, 0.3];
-            db.add_vector("Persistent text", &vector, model, provider).unwrap();
+            db.add_vector("Persistent text", &vector, model, provider)
+                .unwrap();
         }
 
         // Reopen database and check data persists
@@ -644,7 +669,7 @@ mod vector_error_handling_tests {
         // Test various edge cases for database creation
         let edge_cases = vec![
             "normal_db",
-            "db-with-hyphens", 
+            "db-with-hyphens",
             "db_with_underscores",
             "db123",
         ];
@@ -669,7 +694,7 @@ mod vector_error_handling_tests {
         // This test depends on implementation details
         // Some databases might not have an explicit "closed" state
         let db = VectorDatabase::new("test_closed").unwrap();
-        
+
         // Try operations (should work normally)
         let vector = vec![0.1, 0.2, 0.3];
         let result = db.add_vector("Test", &vector, "model", "provider");
@@ -759,7 +784,7 @@ mod vector_integration_tests {
 
         // Test with large vectors (typical embedding sizes)
         let large_vector: Vec<f64> = (0..1536).map(|i| (i as f64) * 0.001).collect();
-        
+
         let result = db.add_vector("Large vector test", &large_vector, model, provider);
         assert!(result.is_ok());
 
@@ -783,8 +808,10 @@ mod vector_integration_tests {
         let provider = "openai";
 
         // Add different data to each database
-        db1.add_vector("Database 1 text", &vec![1.0, 0.0, 0.0], model, provider).unwrap();
-        db2.add_vector("Database 2 text", &vec![0.0, 1.0, 0.0], model, provider).unwrap();
+        db1.add_vector("Database 1 text", &vec![1.0, 0.0, 0.0], model, provider)
+            .unwrap();
+        db2.add_vector("Database 2 text", &vec![0.0, 1.0, 0.0], model, provider)
+            .unwrap();
 
         // Verify isolation
         assert_eq!(db1.count().unwrap(), 1);

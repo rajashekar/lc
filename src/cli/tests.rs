@@ -1,18 +1,18 @@
 //! Test module for CLI functionality
-//! 
+//!
 //! This module contains comprehensive tests for all CLI commands,
 //! with a focus on the providers command and its various options.
 
 use crate::config::{Config, ProviderConfig};
+use chrono::Utc;
 use std::collections::HashMap;
 use tempfile::TempDir;
-use chrono::Utc;
 
 /// Helper function to create a temporary config for testing
 fn create_test_config() -> (Config, TempDir) {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let _config_path = temp_dir.path().join("config.toml");
-    
+
     let config = Config {
         providers: HashMap::new(),
         default_provider: None,
@@ -24,7 +24,7 @@ fn create_test_config() -> (Config, TempDir) {
         temperature: None,
         stream: None,
     };
-    
+
     (config, temp_dir)
 }
 
@@ -59,20 +59,20 @@ fn create_config_with_providers() -> Config {
         temperature: None,
         stream: None,
     };
-    
+
     // Add test providers
     config.providers.insert(
         "openai".to_string(),
-        create_test_provider_config("https://api.openai.com")
+        create_test_provider_config("https://api.openai.com"),
     );
-    
+
     config.providers.insert(
         "anthropic".to_string(),
-        create_test_provider_config("https://api.anthropic.com")
+        create_test_provider_config("https://api.anthropic.com"),
     );
-    
+
     config.default_provider = Some("openai".to_string());
-    
+
     config
 }
 
@@ -97,19 +97,19 @@ mod provider_tests {
         // Test adding a basic provider
         let result = config.add_provider(
             "test-provider".to_string(),
-            "https://api.test.com".to_string()
+            "https://api.test.com".to_string(),
         );
 
         assert!(result.is_ok());
         assert!(config.has_provider("test-provider"));
-        
+
         let provider = config.get_provider("test-provider").unwrap();
         assert_eq!(provider.endpoint, "https://api.test.com");
         assert_eq!(provider.models_path, "/models");
         assert_eq!(provider.chat_path, "/chat/completions");
         assert!(provider.api_key.is_none());
         assert!(provider.headers.is_empty());
-        
+
         // Should be set as default since it's the first provider
         assert_eq!(config.default_provider, Some("test-provider".to_string()));
     }
@@ -133,12 +133,12 @@ mod provider_tests {
             "custom-provider".to_string(),
             "https://api.custom.com".to_string(),
             Some("/v1/models".to_string()),
-            Some("/v1/completions".to_string())
+            Some("/v1/completions".to_string()),
         );
 
         assert!(result.is_ok());
         assert!(config.has_provider("custom-provider"));
-        
+
         let provider = config.get_provider("custom-provider").unwrap();
         assert_eq!(provider.endpoint, "https://api.custom.com");
         assert_eq!(provider.models_path, "/v1/models");
@@ -153,7 +153,7 @@ mod provider_tests {
         // Add another provider
         let result = config.add_provider(
             "new-provider".to_string(),
-            "https://api.new.com".to_string()
+            "https://api.new.com".to_string(),
         );
 
         assert!(result.is_ok());
@@ -169,7 +169,7 @@ mod provider_tests {
         // Update existing provider
         let result = config.add_provider(
             "openai".to_string(),
-            "https://api.openai.com/v2".to_string()
+            "https://api.openai.com/v2".to_string(),
         );
 
         assert!(result.is_ok());
@@ -228,20 +228,14 @@ mod provider_tests {
         let mut config = create_config_with_providers();
 
         // Test setting API key
-        let result = config.set_api_key(
-            "openai".to_string(),
-            "new-api-key".to_string()
-        );
+        let result = config.set_api_key("openai".to_string(), "new-api-key".to_string());
         assert!(result.is_ok());
 
         let provider = config.get_provider("openai").unwrap();
         assert_eq!(provider.api_key, Some("new-api-key".to_string()));
 
         // Test setting API key for non-existent provider
-        let result = config.set_api_key(
-            "nonexistent".to_string(),
-            "key".to_string()
-        );
+        let result = config.set_api_key("nonexistent".to_string(), "key".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -254,28 +248,25 @@ mod provider_tests {
         let result = config.add_header(
             "openai".to_string(),
             "X-Custom-Header".to_string(),
-            "custom-value".to_string()
+            "custom-value".to_string(),
         );
         assert!(result.is_ok());
 
         let headers = config.list_headers("openai").unwrap();
-        assert_eq!(headers.get("X-Custom-Header"), Some(&"custom-value".to_string()));
+        assert_eq!(
+            headers.get("X-Custom-Header"),
+            Some(&"custom-value".to_string())
+        );
 
         // Test removing header
-        let result = config.remove_header(
-            "openai".to_string(),
-            "X-Custom-Header".to_string()
-        );
+        let result = config.remove_header("openai".to_string(), "X-Custom-Header".to_string());
         assert!(result.is_ok());
 
         let headers = config.list_headers("openai").unwrap();
         assert!(!headers.contains_key("X-Custom-Header"));
 
         // Test removing non-existent header
-        let result = config.remove_header(
-            "openai".to_string(),
-            "Non-Existent".to_string()
-        );
+        let result = config.remove_header("openai".to_string(), "Non-Existent".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
@@ -283,7 +274,7 @@ mod provider_tests {
         let result = config.add_header(
             "nonexistent".to_string(),
             "header".to_string(),
-            "value".to_string()
+            "value".to_string(),
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
@@ -296,18 +287,19 @@ mod provider_tests {
         // Test setting token URL
         let result = config.set_token_url(
             "openai".to_string(),
-            "https://auth.openai.com/token".to_string()
+            "https://auth.openai.com/token".to_string(),
         );
         assert!(result.is_ok());
 
         let token_url = config.get_token_url("openai");
-        assert_eq!(token_url, Some(&"https://auth.openai.com/token".to_string()));
+        assert_eq!(
+            token_url,
+            Some(&"https://auth.openai.com/token".to_string())
+        );
 
         // Test setting token URL for non-existent provider
-        let result = config.set_token_url(
-            "nonexistent".to_string(),
-            "https://example.com".to_string()
-        );
+        let result =
+            config.set_token_url("nonexistent".to_string(), "https://example.com".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -321,7 +313,7 @@ mod provider_tests {
         let result = config.set_cached_token(
             "openai".to_string(),
             "cached-token-123".to_string(),
-            expires_at
+            expires_at,
         );
         assert!(result.is_ok());
 
@@ -331,11 +323,8 @@ mod provider_tests {
         assert_eq!(cached_token.unwrap().expires_at, expires_at);
 
         // Test setting cached token for non-existent provider
-        let result = config.set_cached_token(
-            "nonexistent".to_string(),
-            "token".to_string(),
-            expires_at
-        );
+        let result =
+            config.set_cached_token("nonexistent".to_string(), "token".to_string(), expires_at);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -346,19 +335,19 @@ mod provider_tests {
         let expires_at = Utc::now() + chrono::Duration::hours(1);
 
         // Set a cached token first
-        config.set_cached_token(
-            "openai".to_string(),
-            "cached-token".to_string(),
-            expires_at
-        ).unwrap();
+        config
+            .set_cached_token("openai".to_string(), "cached-token".to_string(), expires_at)
+            .unwrap();
 
         assert!(config.get_cached_token("openai").is_some());
 
         // Setting token URL should clear cached token
-        config.set_token_url(
-            "openai".to_string(),
-            "https://auth.openai.com/token".to_string()
-        ).unwrap();
+        config
+            .set_token_url(
+                "openai".to_string(),
+                "https://auth.openai.com/token".to_string(),
+            )
+            .unwrap();
 
         assert!(config.get_cached_token("openai").is_none());
     }
@@ -366,7 +355,7 @@ mod provider_tests {
 
 #[cfg(test)]
 mod provider_command_tests {
-    use crate::cli::{ProviderCommands, HeaderCommands};
+    use crate::cli::{HeaderCommands, ProviderCommands};
 
     /// Mock test for provider add command
     /// Note: This would require refactoring the actual command handlers to accept
@@ -382,7 +371,12 @@ mod provider_command_tests {
         };
 
         match command {
-            ProviderCommands::Add { name, url, models_path, chat_path } => {
+            ProviderCommands::Add {
+                name,
+                url,
+                models_path,
+                chat_path,
+            } => {
                 assert_eq!(name, "test-provider");
                 assert_eq!(url, "https://api.test.com");
                 assert_eq!(models_path, Some("/v1/models".to_string()));
@@ -553,11 +547,17 @@ mod provider_edge_cases {
         assert!(result.is_ok()); // Config doesn't validate empty names, but CLI should
 
         // Test provider name with special characters
-        let result = config.add_provider("test-provider_123".to_string(), "https://api.test.com".to_string());
+        let result = config.add_provider(
+            "test-provider_123".to_string(),
+            "https://api.test.com".to_string(),
+        );
         assert!(result.is_ok());
 
         // Test provider name with spaces
-        let result = config.add_provider("test provider".to_string(), "https://api.test.com".to_string());
+        let result = config.add_provider(
+            "test provider".to_string(),
+            "https://api.test.com".to_string(),
+        );
         assert!(result.is_ok());
     }
 
@@ -607,11 +607,17 @@ mod provider_edge_cases {
 
         // Test various path formats
         let test_cases = vec![
-            (Some("/models".to_string()), Some("/chat/completions".to_string())),
-            (Some("/v1/models".to_string()), Some("/v1/chat/completions".to_string())),
+            (
+                Some("/models".to_string()),
+                Some("/chat/completions".to_string()),
+            ),
+            (
+                Some("/v1/models".to_string()),
+                Some("/v1/chat/completions".to_string()),
+            ),
             (Some("models".to_string()), Some("chat".to_string())), // Without leading slash
-            (Some("".to_string()), Some("".to_string())), // Empty paths
-            (None, None), // Default paths
+            (Some("".to_string()), Some("".to_string())),           // Empty paths
+            (None, None),                                           // Default paths
         ];
 
         for (i, (models_path, chat_path)) in test_cases.into_iter().enumerate() {
@@ -624,8 +630,14 @@ mod provider_edge_cases {
             assert!(result.is_ok());
 
             let provider = config.get_provider(&format!("provider-{}", i)).unwrap();
-            assert_eq!(provider.models_path, models_path.unwrap_or_else(|| "/models".to_string()));
-            assert_eq!(provider.chat_path, chat_path.unwrap_or_else(|| "/chat/completions".to_string()));
+            assert_eq!(
+                provider.models_path,
+                models_path.unwrap_or_else(|| "/models".to_string())
+            );
+            assert_eq!(
+                provider.chat_path,
+                chat_path.unwrap_or_else(|| "/chat/completions".to_string())
+            );
         }
     }
 
@@ -644,14 +656,16 @@ mod provider_edge_cases {
         };
 
         // Add provider
-        let result = config.add_provider("duplicate".to_string(), "https://api1.test.com".to_string());
+        let result =
+            config.add_provider("duplicate".to_string(), "https://api1.test.com".to_string());
         assert!(result.is_ok());
 
         let provider1 = config.get_provider("duplicate").unwrap();
         assert_eq!(provider1.endpoint, "https://api1.test.com");
 
         // Add provider with same name (should overwrite)
-        let result = config.add_provider("duplicate".to_string(), "https://api2.test.com".to_string());
+        let result =
+            config.add_provider("duplicate".to_string(), "https://api2.test.com".to_string());
         assert!(result.is_ok());
 
         let provider2 = config.get_provider("duplicate").unwrap();
@@ -673,9 +687,21 @@ mod provider_edge_cases {
         };
 
         // Add providers with different cases
-        config.add_provider("OpenAI".to_string(), "https://api.openai.com".to_string()).unwrap();
-        config.add_provider("openai".to_string(), "https://api.openai.com/v2".to_string()).unwrap();
-        config.add_provider("OPENAI".to_string(), "https://api.openai.com/v3".to_string()).unwrap();
+        config
+            .add_provider("OpenAI".to_string(), "https://api.openai.com".to_string())
+            .unwrap();
+        config
+            .add_provider(
+                "openai".to_string(),
+                "https://api.openai.com/v2".to_string(),
+            )
+            .unwrap();
+        config
+            .add_provider(
+                "OPENAI".to_string(),
+                "https://api.openai.com/v3".to_string(),
+            )
+            .unwrap();
 
         // All should be treated as different providers
         assert!(config.has_provider("OpenAI"));
@@ -697,13 +723,29 @@ mod provider_edge_cases {
         assert!(result.is_ok());
 
         // Test header with special characters
-        let result = config.add_header("openai".to_string(), "X-Special-Chars!@#".to_string(), "value!@#$%".to_string());
+        let result = config.add_header(
+            "openai".to_string(),
+            "X-Special-Chars!@#".to_string(),
+            "value!@#$%".to_string(),
+        );
         assert!(result.is_ok());
 
         // Test overwriting existing header
-        config.add_header("openai".to_string(), "X-Test".to_string(), "original".to_string()).unwrap();
-        config.add_header("openai".to_string(), "X-Test".to_string(), "updated".to_string()).unwrap();
-        
+        config
+            .add_header(
+                "openai".to_string(),
+                "X-Test".to_string(),
+                "original".to_string(),
+            )
+            .unwrap();
+        config
+            .add_header(
+                "openai".to_string(),
+                "X-Test".to_string(),
+                "updated".to_string(),
+            )
+            .unwrap();
+
         let headers = config.list_headers("openai").unwrap();
         assert_eq!(headers.get("X-Test"), Some(&"updated".to_string()));
     }
@@ -728,59 +770,116 @@ mod provider_integration_tests {
         };
 
         // 1. Add provider
-        config.add_provider_with_paths(
-            "test-provider".to_string(),
-            "https://api.test.com".to_string(),
-            Some("/v1/models".to_string()),
-            Some("/v1/chat".to_string()),
-        ).unwrap();
+        config
+            .add_provider_with_paths(
+                "test-provider".to_string(),
+                "https://api.test.com".to_string(),
+                Some("/v1/models".to_string()),
+                Some("/v1/chat".to_string()),
+            )
+            .unwrap();
 
         assert!(config.has_provider("test-provider"));
         assert_eq!(config.default_provider, Some("test-provider".to_string()));
 
         // 2. Set API key
-        config.set_api_key("test-provider".to_string(), "secret-key".to_string()).unwrap();
+        config
+            .set_api_key("test-provider".to_string(), "secret-key".to_string())
+            .unwrap();
         let provider = config.get_provider("test-provider").unwrap();
         assert_eq!(provider.api_key, Some("secret-key".to_string()));
 
         // 3. Add headers
-        config.add_header("test-provider".to_string(), "X-API-Version".to_string(), "v1".to_string()).unwrap();
-        config.add_header("test-provider".to_string(), "X-Client".to_string(), "lc-cli".to_string()).unwrap();
-        
+        config
+            .add_header(
+                "test-provider".to_string(),
+                "X-API-Version".to_string(),
+                "v1".to_string(),
+            )
+            .unwrap();
+        config
+            .add_header(
+                "test-provider".to_string(),
+                "X-Client".to_string(),
+                "lc-cli".to_string(),
+            )
+            .unwrap();
+
         let headers = config.list_headers("test-provider").unwrap();
         assert_eq!(headers.len(), 2);
         assert_eq!(headers.get("X-API-Version"), Some(&"v1".to_string()));
         assert_eq!(headers.get("X-Client"), Some(&"lc-cli".to_string()));
 
         // 4. Set token URL
-        config.set_token_url("test-provider".to_string(), "https://auth.test.com/token".to_string()).unwrap();
-        assert_eq!(config.get_token_url("test-provider"), Some(&"https://auth.test.com/token".to_string()));
+        config
+            .set_token_url(
+                "test-provider".to_string(),
+                "https://auth.test.com/token".to_string(),
+            )
+            .unwrap();
+        assert_eq!(
+            config.get_token_url("test-provider"),
+            Some(&"https://auth.test.com/token".to_string())
+        );
 
         // 5. Set cached token
         let expires_at = Utc::now() + chrono::Duration::hours(1);
-        config.set_cached_token("test-provider".to_string(), "cached-token".to_string(), expires_at).unwrap();
-        
+        config
+            .set_cached_token(
+                "test-provider".to_string(),
+                "cached-token".to_string(),
+                expires_at,
+            )
+            .unwrap();
+
         let cached_token = config.get_cached_token("test-provider").unwrap();
         assert_eq!(cached_token.token, "cached-token");
 
         // 6. Update provider URL (note: add_provider creates a new config, so API key is lost)
-        config.add_provider("test-provider".to_string(), "https://api.test.com/v2".to_string()).unwrap();
+        config
+            .add_provider(
+                "test-provider".to_string(),
+                "https://api.test.com/v2".to_string(),
+            )
+            .unwrap();
         let updated_provider = config.get_provider("test-provider").unwrap();
         assert_eq!(updated_provider.endpoint, "https://api.test.com/v2");
         // API key is lost when updating via add_provider (this is expected behavior)
         assert_eq!(updated_provider.api_key, None);
-        
+
         // Re-set the API key after update
-        config.set_api_key("test-provider".to_string(), "secret-key-updated".to_string()).unwrap();
+        config
+            .set_api_key(
+                "test-provider".to_string(),
+                "secret-key-updated".to_string(),
+            )
+            .unwrap();
         let provider_with_key = config.get_provider("test-provider").unwrap();
-        assert_eq!(provider_with_key.api_key, Some("secret-key-updated".to_string()));
+        assert_eq!(
+            provider_with_key.api_key,
+            Some("secret-key-updated".to_string())
+        );
 
         // 7. Re-add headers after provider update (since they were lost)
-        config.add_header("test-provider".to_string(), "X-API-Version".to_string(), "v1".to_string()).unwrap();
-        config.add_header("test-provider".to_string(), "X-Client".to_string(), "lc-cli".to_string()).unwrap();
-        
+        config
+            .add_header(
+                "test-provider".to_string(),
+                "X-API-Version".to_string(),
+                "v1".to_string(),
+            )
+            .unwrap();
+        config
+            .add_header(
+                "test-provider".to_string(),
+                "X-Client".to_string(),
+                "lc-cli".to_string(),
+            )
+            .unwrap();
+
         // Now remove one header
-        config.remove_header("test-provider".to_string(), "X-API-Version".to_string()).unwrap();
+        config
+            .remove_header("test-provider".to_string(), "X-API-Version".to_string())
+            .unwrap();
         let headers = config.list_headers("test-provider").unwrap();
         assert_eq!(headers.len(), 1);
         assert!(!headers.contains_key("X-API-Version"));
@@ -813,8 +912,12 @@ mod provider_integration_tests {
         ];
 
         for (name, url) in providers {
-            config.add_provider(name.to_string(), url.to_string()).unwrap();
-            config.set_api_key(name.to_string(), format!("{}-api-key", name)).unwrap();
+            config
+                .add_provider(name.to_string(), url.to_string())
+                .unwrap();
+            config
+                .set_api_key(name.to_string(), format!("{}-api-key", name))
+                .unwrap();
         }
 
         // Verify all providers exist
@@ -833,9 +936,27 @@ mod provider_integration_tests {
         }
 
         // Add different headers to each provider
-        config.add_header("openai".to_string(), "X-OpenAI-Version".to_string(), "2023-12-01".to_string()).unwrap();
-        config.add_header("anthropic".to_string(), "X-Anthropic-Version".to_string(), "2023-06-01".to_string()).unwrap();
-        config.add_header("cohere".to_string(), "X-Cohere-Version".to_string(), "2023-08-01".to_string()).unwrap();
+        config
+            .add_header(
+                "openai".to_string(),
+                "X-OpenAI-Version".to_string(),
+                "2023-12-01".to_string(),
+            )
+            .unwrap();
+        config
+            .add_header(
+                "anthropic".to_string(),
+                "X-Anthropic-Version".to_string(),
+                "2023-06-01".to_string(),
+            )
+            .unwrap();
+        config
+            .add_header(
+                "cohere".to_string(),
+                "X-Cohere-Version".to_string(),
+                "2023-08-01".to_string(),
+            )
+            .unwrap();
 
         // Verify headers are isolated per provider
         let openai_headers = config.list_headers("openai").unwrap();
@@ -861,14 +982,18 @@ mod provider_integration_tests {
 
         // Test operations on non-existent provider
         let nonexistent_provider = "nonexistent".to_string();
-        
+
         // Test setting API key for non-existent provider
         let result = config.set_api_key(nonexistent_provider.clone(), "key".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
         // Test adding header for non-existent provider
-        let result = config.add_header(nonexistent_provider.clone(), "header".to_string(), "value".to_string());
+        let result = config.add_header(
+            nonexistent_provider.clone(),
+            "header".to_string(),
+            "value".to_string(),
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
@@ -883,13 +1008,20 @@ mod provider_integration_tests {
         assert!(result.unwrap_err().to_string().contains("not found"));
 
         // Test setting token URL for non-existent provider
-        let result = config.set_token_url(nonexistent_provider.clone(), "https://example.com".to_string());
+        let result = config.set_token_url(
+            nonexistent_provider.clone(),
+            "https://example.com".to_string(),
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
         // Test setting cached token for non-existent provider
         let expires_at = Utc::now() + chrono::Duration::hours(1);
-        let result = config.set_cached_token(nonexistent_provider.clone(), "token".to_string(), expires_at);
+        let result = config.set_cached_token(
+            nonexistent_provider.clone(),
+            "token".to_string(),
+            expires_at,
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -902,20 +1034,48 @@ mod provider_integration_tests {
         let provider_name = "openai".to_string();
 
         // Set API key
-        config.set_api_key(provider_name.clone(), "api-key-1".to_string()).unwrap();
-        
+        config
+            .set_api_key(provider_name.clone(), "api-key-1".to_string())
+            .unwrap();
+
         // Add multiple headers
-        config.add_header(provider_name.clone(), "X-Header-1".to_string(), "value-1".to_string()).unwrap();
-        config.add_header(provider_name.clone(), "X-Header-2".to_string(), "value-2".to_string()).unwrap();
-        config.add_header(provider_name.clone(), "X-Header-3".to_string(), "value-3".to_string()).unwrap();
+        config
+            .add_header(
+                provider_name.clone(),
+                "X-Header-1".to_string(),
+                "value-1".to_string(),
+            )
+            .unwrap();
+        config
+            .add_header(
+                provider_name.clone(),
+                "X-Header-2".to_string(),
+                "value-2".to_string(),
+            )
+            .unwrap();
+        config
+            .add_header(
+                provider_name.clone(),
+                "X-Header-3".to_string(),
+                "value-3".to_string(),
+            )
+            .unwrap();
 
         // Set token URL
-        config.set_token_url(provider_name.clone(), "https://auth.openai.com/token".to_string()).unwrap();
+        config
+            .set_token_url(
+                provider_name.clone(),
+                "https://auth.openai.com/token".to_string(),
+            )
+            .unwrap();
 
         // Verify all operations succeeded
         let provider = config.get_provider(&provider_name).unwrap();
         assert_eq!(provider.api_key, Some("api-key-1".to_string()));
-        assert_eq!(provider.token_url, Some("https://auth.openai.com/token".to_string()));
+        assert_eq!(
+            provider.token_url,
+            Some("https://auth.openai.com/token".to_string())
+        );
 
         let headers = config.list_headers(&provider_name).unwrap();
         assert_eq!(headers.len(), 3);
@@ -924,12 +1084,16 @@ mod provider_integration_tests {
         assert!(headers.contains_key("X-Header-3"));
 
         // Update API key
-        config.set_api_key(provider_name.clone(), "api-key-2".to_string()).unwrap();
+        config
+            .set_api_key(provider_name.clone(), "api-key-2".to_string())
+            .unwrap();
         let provider = config.get_provider(&provider_name).unwrap();
         assert_eq!(provider.api_key, Some("api-key-2".to_string()));
 
         // Remove some headers
-        config.remove_header(provider_name.clone(), "X-Header-2".to_string()).unwrap();
+        config
+            .remove_header(provider_name.clone(), "X-Header-2".to_string())
+            .unwrap();
         let headers = config.list_headers(&provider_name).unwrap();
         assert_eq!(headers.len(), 2);
         assert!(!headers.contains_key("X-Header-2"));
@@ -984,16 +1148,26 @@ mod provider_config_persistence_tests {
         let config_path = temp_dir.path().join("config.toml");
 
         // Add a provider
-        config.add_provider_with_paths(
-            "test-provider".to_string(),
-            "https://api.test.com".to_string(),
-            Some("/v1/models".to_string()),
-            Some("/v1/chat".to_string()),
-        ).unwrap();
+        config
+            .add_provider_with_paths(
+                "test-provider".to_string(),
+                "https://api.test.com".to_string(),
+                Some("/v1/models".to_string()),
+                Some("/v1/chat".to_string()),
+            )
+            .unwrap();
 
         // Set API key and headers
-        config.set_api_key("test-provider".to_string(), "secret-key".to_string()).unwrap();
-        config.add_header("test-provider".to_string(), "X-Custom".to_string(), "value".to_string()).unwrap();
+        config
+            .set_api_key("test-provider".to_string(), "secret-key".to_string())
+            .unwrap();
+        config
+            .add_header(
+                "test-provider".to_string(),
+                "X-Custom".to_string(),
+                "value".to_string(),
+            )
+            .unwrap();
 
         // Save config to file
         let toml_content = toml::to_string_pretty(&config).unwrap();
@@ -1019,10 +1193,21 @@ mod provider_config_persistence_tests {
         let config_path = temp_dir.path().join("config.toml");
 
         // Add provider with cached token
-        config.add_provider("test-provider".to_string(), "https://api.test.com".to_string()).unwrap();
-        
+        config
+            .add_provider(
+                "test-provider".to_string(),
+                "https://api.test.com".to_string(),
+            )
+            .unwrap();
+
         let expires_at = Utc::now() + chrono::Duration::hours(1);
-        config.set_cached_token("test-provider".to_string(), "cached-token-123".to_string(), expires_at).unwrap();
+        config
+            .set_cached_token(
+                "test-provider".to_string(),
+                "cached-token-123".to_string(),
+                expires_at,
+            )
+            .unwrap();
 
         // Save and reload
         let toml_content = toml::to_string_pretty(&config).unwrap();

@@ -1,11 +1,11 @@
-use clap::{Parser, Subcommand};
+use crate::{chat, config, database, readers};
 use anyhow::Result;
-use crate::{config, chat, database, readers};
+use clap::{Parser, Subcommand};
 use colored::Colorize;
 use rpassword::read_password;
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::collections::HashMap;
 
 // Global debug flag
 pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
@@ -26,72 +26,73 @@ pub fn set_debug_mode(enabled: bool) {
     DEBUG_MODE.store(enabled, Ordering::Relaxed);
 }
 
-
 #[derive(Parser)]
 #[command(name = "lc")]
-#[command(about = "LLM Client - A fast Rust-based LLM CLI tool with PDF support and RAG capabilities")]
+#[command(
+    about = "LLM Client - A fast Rust-based LLM CLI tool with PDF support and RAG capabilities"
+)]
 #[command(version = "0.1.0")]
 pub struct Cli {
     /// Direct prompt to send to the default model
     #[arg(value_name = "PROMPT")]
     pub prompt: Vec<String>,
-    
+
     /// Provider to use for the prompt
     #[arg(short = 'p', long = "provider")]
     pub provider: Option<String>,
-    
+
     /// Model to use for the prompt
     #[arg(short = 'm', long = "model")]
     pub model: Option<String>,
-    
+
     /// System prompt to use (when used with direct prompt)
     #[arg(short = 's', long = "system")]
     pub system_prompt: Option<String>,
-    
+
     /// Max tokens override (supports 'k' suffix, e.g., '2k' for 2000)
     #[arg(long = "max-tokens")]
     pub max_tokens: Option<String>,
-    
+
     /// Temperature override (0.0 to 2.0)
     #[arg(long = "temperature")]
     pub temperature: Option<String>,
-    
+
     /// Attach file(s) to the prompt (supports text files, PDFs with 'pdf' feature)
     #[arg(short = 'a', long = "attach")]
     pub attachments: Vec<String>,
-    
+
     /// Attach image(s) to the prompt (supports jpg, png, gif, webp, or URLs)
     #[arg(short = 'i', long = "image")]
     pub images: Vec<String>,
-    
+
     /// Include tools from MCP server(s) (comma-separated server names)
     #[arg(short = 't', long = "tools")]
     pub tools: Option<String>,
-    
+
     /// Vector database name for RAG (Retrieval-Augmented Generation)
     #[arg(short = 'v', long = "vectordb")]
     pub vectordb: Option<String>,
-    
+
     /// Enable debug/verbose logging
     #[arg(short = 'd', long = "debug")]
     pub debug: bool,
-    
+
     /// Continue the current session (use existing session ID)
     #[arg(short = 'c', long = "continue")]
     pub continue_session: bool,
-    
+
     /// Chat ID to use or continue (alternative to --continue)
     #[arg(long = "cid")]
     pub chat_id: Option<String>,
-    
+
     /// Use search results as context (format: provider or provider:query)
     #[arg(long = "use-search")]
     pub use_search: Option<String>,
-    
+
     /// Enable streaming output for prompt responses
     #[arg(long = "stream")]
     pub stream: bool,
-    
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -956,6 +957,12 @@ pub enum SyncCommands {
         /// Encrypt files before uploading
         #[arg(short = 'e', long = "encrypted")]
         encrypted: bool,
+        /// Enable debug/verbose logging
+        #[arg(short = 'd', long = "debug")]
+        debug: bool,
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long = "yes")]
+        yes: bool,
     },
     /// Sync configuration from cloud provider
     From {
@@ -964,6 +971,12 @@ pub enum SyncCommands {
         /// Decrypt files after downloading
         #[arg(short = 'e', long = "encrypted")]
         encrypted: bool,
+        /// Enable debug/verbose logging
+        #[arg(short = 'd', long = "debug")]
+        debug: bool,
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long = "yes")]
+        yes: bool,
     },
 }
 
@@ -1048,7 +1061,10 @@ pub enum McpServerType {
 fn parse_env_var(s: &str) -> Result<(String, String), String> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
     if parts.len() != 2 {
-        return Err(format!("Invalid environment variable format: '{}'. Expected 'KEY=VALUE'", s));
+        return Err(format!(
+            "Invalid environment variable format: '{}'. Expected 'KEY=VALUE'",
+            s
+        ));
     }
     Ok((parts[0].to_string(), parts[1].to_string()))
 }
@@ -1058,7 +1074,7 @@ fn extract_code_blocks(text: &str) -> Vec<String> {
     let mut code_blocks = Vec::new();
     let mut in_code_block = false;
     let mut current_block = String::new();
-    
+
     for line in text.lines() {
         if line.starts_with("```") {
             if in_code_block {
@@ -1077,19 +1093,24 @@ fn extract_code_blocks(text: &str) -> Vec<String> {
             current_block.push('\n');
         }
     }
-    
+
     // Handle case where code block doesn't end properly
     if in_code_block && !current_block.trim().is_empty() {
         code_blocks.push(current_block.trim().to_string());
     }
-    
+
     code_blocks
 }
 
 // Provider command handlers
 pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
     match command {
-        ProviderCommands::Add { name, url, models_path, chat_path } => {
+        ProviderCommands::Add {
+            name,
+            url,
+            models_path,
+            chat_path,
+        } => {
             let mut config = config::Config::load()?;
             config.add_provider_with_paths(name.clone(), url, models_path, chat_path)?;
             config.save()?;
@@ -1119,17 +1140,18 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
                 println!("No providers configured.");
                 return Ok(());
             }
-            
+
             println!("\n{}", "Configured Providers:".bold().blue());
-            
+
             // Sort providers by name for easier lookup
             let mut sorted_providers: Vec<_> = config.providers.iter().collect();
             sorted_providers.sort_by(|a, b| a.0.cmp(b.0));
-            
+
             for (name, provider_config) in sorted_providers {
                 let has_key = provider_config.api_key.is_some();
                 let key_status = if has_key { "✓".green() } else { "✗".red() };
-                println!("  {} {} - {} (API Key: {})",
+                println!(
+                    "  {} {} - {} (API Key: {})",
                     "•".blue(),
                     name.bold(),
                     provider_config.endpoint,
@@ -1138,52 +1160,83 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
             }
         }
         ProviderCommands::Models { name, refresh } => {
-            debug_log!("Handling provider models command for '{}', refresh: {}", name, refresh);
-            
+            debug_log!(
+                "Handling provider models command for '{}', refresh: {}",
+                name,
+                refresh
+            );
+
             let config = config::Config::load()?;
             let _provider_config = config.get_provider(&name)?;
-            
+
             debug_log!("Provider '{}' found in config", name);
-            
+
             // Use unified cache system
-            match crate::unified_cache::UnifiedCache::fetch_and_cache_provider_models(&name, refresh).await {
+            match crate::unified_cache::UnifiedCache::fetch_and_cache_provider_models(
+                &name, refresh,
+            )
+            .await
+            {
                 Ok(models) => {
-                    debug_log!("Successfully fetched {} models for provider '{}'", models.len(), name);
+                    debug_log!(
+                        "Successfully fetched {} models for provider '{}'",
+                        models.len(),
+                        name
+                    );
                     println!("\n{} Available models:", "Models:".bold());
                     display_provider_models(&models)?;
                 }
                 Err(e) => {
                     debug_log!("Unified cache failed for provider '{}': {}", name, e);
                     eprintln!("Error fetching models from provider '{}': {}", name, e);
-                    
+
                     // Fallback to basic listing if unified cache fails
-                    debug_log!("Attempting fallback to basic client listing for provider '{}'", name);
+                    debug_log!(
+                        "Attempting fallback to basic client listing for provider '{}'",
+                        name
+                    );
                     let mut config_mut = config.clone();
                     match chat::create_authenticated_client(&mut config_mut, &name).await {
                         Ok(client) => {
                             debug_log!("Created fallback client for provider '{}'", name);
                             // Save config if tokens were updated
-                            if config_mut.get_cached_token(&name) != config.get_cached_token(&name) {
+                            if config_mut.get_cached_token(&name) != config.get_cached_token(&name)
+                            {
                                 debug_log!("Tokens updated for provider '{}', saving config", name);
                                 config_mut.save()?;
                             }
-                            
+
                             match client.list_models().await {
                                 Ok(models) => {
-                                    debug_log!("Fallback client returned {} models for provider '{}'", models.len(), name);
-                                    println!("\n{} Available models (basic listing):", "Models:".bold());
+                                    debug_log!(
+                                        "Fallback client returned {} models for provider '{}'",
+                                        models.len(),
+                                        name
+                                    );
+                                    println!(
+                                        "\n{} Available models (basic listing):",
+                                        "Models:".bold()
+                                    );
                                     for model in models {
                                         println!("  • {}", model.id);
                                     }
                                 }
                                 Err(e2) => {
-                                    debug_log!("Fallback client failed for provider '{}': {}", name, e2);
+                                    debug_log!(
+                                        "Fallback client failed for provider '{}': {}",
+                                        name,
+                                        e2
+                                    );
                                     anyhow::bail!("Failed to fetch models: {}", e2);
                                 }
                             }
                         }
                         Err(e2) => {
-                            debug_log!("Failed to create fallback client for provider '{}': {}", name, e2);
+                            debug_log!(
+                                "Failed to create fallback client for provider '{}': {}",
+                                name,
+                                e2
+                            );
                             anyhow::bail!("Failed to create client: {}", e2);
                         }
                     }
@@ -1192,28 +1245,42 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
         }
         ProviderCommands::Headers { provider, command } => {
             let mut config = config::Config::load()?;
-            
+
             if !config.has_provider(&provider) {
                 anyhow::bail!("Provider '{}' not found", provider);
             }
-            
+
             match command {
                 HeaderCommands::Add { name, value } => {
                     config.add_header(provider.clone(), name.clone(), value.clone())?;
                     config.save()?;
-                    println!("{} Header '{}' added to provider '{}'", "✓".green(), name, provider);
+                    println!(
+                        "{} Header '{}' added to provider '{}'",
+                        "✓".green(),
+                        name,
+                        provider
+                    );
                 }
                 HeaderCommands::Delete { name } => {
                     config.remove_header(provider.clone(), name.clone())?;
                     config.save()?;
-                    println!("{} Header '{}' removed from provider '{}'", "✓".green(), name, provider);
+                    println!(
+                        "{} Header '{}' removed from provider '{}'",
+                        "✓".green(),
+                        name,
+                        provider
+                    );
                 }
                 HeaderCommands::List => {
                     let headers = config.list_headers(&provider)?;
                     if headers.is_empty() {
                         println!("No custom headers configured for provider '{}'", provider);
                     } else {
-                        println!("\n{} Custom headers for provider '{}':", "Headers:".bold().blue(), provider);
+                        println!(
+                            "\n{} Custom headers for provider '{}':",
+                            "Headers:".bold().blue(),
+                            provider
+                        );
                         for (name, value) in headers {
                             println!("  {} {}: {}", "•".blue(), name.bold(), value);
                         }
@@ -1223,11 +1290,11 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
         }
         ProviderCommands::TokenUrl { provider, url } => {
             let mut config = config::Config::load()?;
-            
+
             if !config.has_provider(&provider) {
                 anyhow::bail!("Provider '{}' not found", provider);
             }
-            
+
             config.set_token_url(provider.clone(), url.clone())?;
             config.save()?;
             println!("{} Token URL set for provider '{}'", "✓".green(), provider);
@@ -1241,7 +1308,13 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
                 ProviderVarsCommands::Set { key, value } => {
                     config.set_provider_var(&provider, &key, &value)?;
                     config.save()?;
-                    println!("{} Set var '{}'='{}' for provider '{}'", "✓".green(), key, value, provider);
+                    println!(
+                        "{} Set var '{}'='{}' for provider '{}'",
+                        "✓".green(),
+                        key,
+                        value,
+                        provider
+                    );
                 }
                 ProviderVarsCommands::Get { key } => {
                     match config.get_provider_var(&provider, &key) {
@@ -1254,7 +1327,11 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
                     if vars.is_empty() {
                         println!("No vars set for provider '{}'", provider);
                     } else {
-                        println!("\n{} Vars for provider '{}':", "Vars:".bold().blue(), provider);
+                        println!(
+                            "\n{} Vars for provider '{}':",
+                            "Vars:".bold().blue(),
+                            provider
+                        );
                         for (k, v) in vars {
                             println!("  {} {} = {}", "•".blue(), k.bold(), v);
                         }
@@ -1268,26 +1345,51 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
                 anyhow::bail!("Provider '{}' not found", provider);
             }
             match command {
-                ProviderPathCommands::Add { models_path, chat_path, images_path, embeddings_path } => {
+                ProviderPathCommands::Add {
+                    models_path,
+                    chat_path,
+                    images_path,
+                    embeddings_path,
+                } => {
                     let mut updated = false;
                     if let Some(path) = models_path {
                         config.set_provider_models_path(&provider, &path)?;
-                        println!("{} Models path set to '{}' for provider '{}'", "✓".green(), path, provider);
+                        println!(
+                            "{} Models path set to '{}' for provider '{}'",
+                            "✓".green(),
+                            path,
+                            provider
+                        );
                         updated = true;
                     }
                     if let Some(path) = chat_path {
                         config.set_provider_chat_path(&provider, &path)?;
-                        println!("{} Chat path set to '{}' for provider '{}'", "✓".green(), path, provider);
+                        println!(
+                            "{} Chat path set to '{}' for provider '{}'",
+                            "✓".green(),
+                            path,
+                            provider
+                        );
                         updated = true;
                     }
                     if let Some(path) = images_path {
                         config.set_provider_images_path(&provider, &path)?;
-                        println!("{} Images path set to '{}' for provider '{}'", "✓".green(), path, provider);
+                        println!(
+                            "{} Images path set to '{}' for provider '{}'",
+                            "✓".green(),
+                            path,
+                            provider
+                        );
                         updated = true;
                     }
                     if let Some(path) = embeddings_path {
                         config.set_provider_embeddings_path(&provider, &path)?;
-                        println!("{} Embeddings path set to '{}' for provider '{}'", "✓".green(), path, provider);
+                        println!(
+                            "{} Embeddings path set to '{}' for provider '{}'",
+                            "✓".green(),
+                            path,
+                            provider
+                        );
                         updated = true;
                     }
                     if !updated {
@@ -1295,26 +1397,47 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
                     }
                     config.save()?;
                 }
-                ProviderPathCommands::Delete { models, chat, images, embeddings } => {
+                ProviderPathCommands::Delete {
+                    models,
+                    chat,
+                    images,
+                    embeddings,
+                } => {
                     let mut updated = false;
                     if models {
                         config.reset_provider_models_path(&provider)?;
-                        println!("{} Models path reset to default for provider '{}'", "✓".green(), provider);
+                        println!(
+                            "{} Models path reset to default for provider '{}'",
+                            "✓".green(),
+                            provider
+                        );
                         updated = true;
                     }
                     if chat {
                         config.reset_provider_chat_path(&provider)?;
-                        println!("{} Chat path reset to default for provider '{}'", "✓".green(), provider);
+                        println!(
+                            "{} Chat path reset to default for provider '{}'",
+                            "✓".green(),
+                            provider
+                        );
                         updated = true;
                     }
                     if images {
                         config.reset_provider_images_path(&provider)?;
-                        println!("{} Images path reset to default for provider '{}'", "✓".green(), provider);
+                        println!(
+                            "{} Images path reset to default for provider '{}'",
+                            "✓".green(),
+                            provider
+                        );
                         updated = true;
                     }
                     if embeddings {
                         config.reset_provider_embeddings_path(&provider)?;
-                        println!("{} Embeddings path reset to default for provider '{}'", "✓".green(), provider);
+                        println!(
+                            "{} Embeddings path reset to default for provider '{}'",
+                            "✓".green(),
+                            provider
+                        );
                         updated = true;
                     }
                     if !updated {
@@ -1324,7 +1447,11 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
                 }
                 ProviderPathCommands::List => {
                     let paths = config.list_provider_paths(&provider)?;
-                    println!("\n{} API paths for provider '{}':", "Paths:".bold().blue(), provider);
+                    println!(
+                        "\n{} API paths for provider '{}':",
+                        "Paths:".bold().blue(),
+                        provider
+                    );
                     println!("  {} Models: {}", "•".blue(), paths.models_path.bold());
                     println!("  {} Chat: {}", "•".blue(), paths.chat_path.bold());
                     if let Some(ref images_path) = paths.images_path {
@@ -1349,9 +1476,12 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
     match command {
         KeyCommands::Add { name } => {
             let mut config = config::Config::load()?;
-            
+
             if !config.has_provider(&name) {
-                anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", name);
+                anyhow::bail!(
+                    "Provider '{}' not found. Add it first with 'lc providers add'",
+                    name
+                );
             }
 
             // Detect Google SA JWT providers and prompt for Service Account JSON
@@ -1360,37 +1490,43 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
                 || provider_cfg.endpoint.contains("aiplatform.googleapis.com");
 
             if is_google_sa {
-                println!("Detected Google Vertex AI provider. Please provide the Service Account JSON.");
+                println!(
+                    "Detected Google Vertex AI provider. Please provide the Service Account JSON."
+                );
                 println!("Options:");
                 println!("  1. Paste the base64 version directly (ex: cat sa.json | base64)");
                 println!("  2. Provide the path to the JSON file (ex: /path/to/sa.json)");
                 print!("Base64 Service Account JSON or file path for {}: ", name);
                 io::stdout().flush()?;
-                
+
                 // Use regular stdin reading instead of rpassword for large inputs
                 let mut input = String::new();
                 io::stdin().read_line(&mut input)?;
                 let input = input.trim();
-                
+
                 let sa_json = if input.starts_with('/') || input.ends_with(".json") {
                     // Treat as file path
                     match std::fs::read_to_string(input) {
                         Ok(file_content) => file_content,
-                        Err(e) => anyhow::bail!("Failed to read service account file '{}': {}", input, e),
+                        Err(e) => {
+                            anyhow::bail!("Failed to read service account file '{}': {}", input, e)
+                        }
                     }
                 } else {
                     // Treat as base64 input - clean whitespace and newlines
-                    let sa_json_b64 = input.trim().replace("\n", "").replace("\r", "").replace(" ", "");
-                    
+                    let sa_json_b64 = input
+                        .trim()
+                        .replace("\n", "")
+                        .replace("\r", "")
+                        .replace(" ", "");
+
                     // Decode base64
-                    use base64::{Engine as _, engine::general_purpose};
+                    use base64::{engine::general_purpose, Engine as _};
                     match general_purpose::STANDARD.decode(&sa_json_b64) {
-                        Ok(decoded_bytes) => {
-                            match String::from_utf8(decoded_bytes) {
-                                Ok(json_str) => json_str,
-                                Err(_) => anyhow::bail!("Invalid UTF-8 in decoded base64 data"),
-                            }
-                        }
+                        Ok(decoded_bytes) => match String::from_utf8(decoded_bytes) {
+                            Ok(json_str) => json_str,
+                            Err(_) => anyhow::bail!("Invalid UTF-8 in decoded base64 data"),
+                        },
                         Err(_) => anyhow::bail!("Invalid base64 format"),
                     }
                 };
@@ -1399,8 +1535,14 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
                 let parsed: serde_json::Value = serde_json::from_str(&sa_json)
                     .map_err(|e| anyhow::anyhow!("Invalid JSON: {}", e))?;
                 let sa_type = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                let client_email = parsed.get("client_email").and_then(|v| v.as_str()).unwrap_or("");
-                let private_key = parsed.get("private_key").and_then(|v| v.as_str()).unwrap_or("");
+                let client_email = parsed
+                    .get("client_email")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let private_key = parsed
+                    .get("private_key")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
 
                 if sa_type != "service_account" {
                     anyhow::bail!("Service Account JSON must have \"type\": \"service_account\"");
@@ -1415,12 +1557,16 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
                 // Store full JSON string in api_key field (used by JWT mint flow)
                 config.set_api_key(name.clone(), sa_json)?;
                 config.save()?;
-                println!("{} Service Account stored for provider '{}'", "✓".green(), name);
+                println!(
+                    "{} Service Account stored for provider '{}'",
+                    "✓".green(),
+                    name
+                );
             } else {
                 print!("Enter API key for {}: ", name);
                 io::stdout().flush()?;
                 let key = read_password()?;
-                
+
                 config.set_api_key(name.clone(), key)?;
                 config.save()?;
                 println!("{} API key set for provider '{}'", "✓".green(), name);
@@ -1428,11 +1574,11 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
         }
         KeyCommands::Get { name } => {
             let config = config::Config::load()?;
-            
+
             if !config.has_provider(&name) {
                 anyhow::bail!("Provider '{}' not found", name);
             }
-            
+
             let provider_config = config.get_provider(&name)?;
             if let Some(api_key) = &provider_config.api_key {
                 println!("{}", api_key);
@@ -1446,7 +1592,7 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
                 println!("No providers configured.");
                 return Ok(());
             }
-            
+
             println!("\n{}", "API Key Status:".bold().blue());
             for (name, provider_config) in &config.providers {
                 let status = if provider_config.api_key.is_some() {
@@ -1459,11 +1605,11 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
         }
         KeyCommands::Remove { name } => {
             let mut config = config::Config::load()?;
-            
+
             if !config.has_provider(&name) {
                 anyhow::bail!("Provider '{}' not found", name);
             }
-            
+
             if let Some(provider_config) = config.providers.get_mut(&name) {
                 provider_config.api_key = None;
             }
@@ -1477,19 +1623,19 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
 // Log command handlers
 pub async fn handle_log_command(command: LogCommands) -> Result<()> {
     let db = database::Database::new()?;
-    
+
     match command {
         LogCommands::Show { minimal } => {
             let entries = db.get_all_logs()?;
-            
+
             if entries.is_empty() {
                 println!("No chat logs found.");
                 return Ok(());
             }
-            
+
             if minimal {
                 use tabled::{Table, Tabled};
-                
+
                 #[derive(Tabled)]
                 struct LogEntry {
                     #[tabled(rename = "Chat ID")]
@@ -1501,9 +1647,10 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                     #[tabled(rename = "Time")]
                     time: String,
                 }
-                
-                let table_data: Vec<LogEntry> = entries.into_iter().map(|entry| {
-                    LogEntry {
+
+                let table_data: Vec<LogEntry> = entries
+                    .into_iter()
+                    .map(|entry| LogEntry {
                         chat_id: entry.chat_id[..8].to_string(),
                         model: entry.model,
                         question: if entry.question.len() > 50 {
@@ -1512,30 +1659,40 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                             entry.question
                         },
                         time: entry.timestamp.format("%m-%d %H:%M").to_string(),
-                    }
-                }).collect();
-                
+                    })
+                    .collect();
+
                 let table = Table::new(table_data);
                 println!("{}", table);
             } else {
                 println!("\n{}", "Chat Logs:".bold().blue());
-                
+
                 for entry in entries {
-                    println!("\n{} {} ({})",
+                    println!(
+                        "\n{} {} ({})",
                         "Session:".bold(),
                         &entry.chat_id[..8],
                         entry.timestamp.format("%Y-%m-%d %H:%M:%S")
                     );
                     println!("{} {}", "Model:".bold(), entry.model);
-                    
+
                     // Show token usage if available
-                    if let (Some(input_tokens), Some(output_tokens)) = (entry.input_tokens, entry.output_tokens) {
-                        println!("{} {} input + {} output = {} total tokens",
-                                 "Tokens:".bold(), input_tokens, output_tokens, input_tokens + output_tokens);
+                    if let (Some(input_tokens), Some(output_tokens)) =
+                        (entry.input_tokens, entry.output_tokens)
+                    {
+                        println!(
+                            "{} {} input + {} output = {} total tokens",
+                            "Tokens:".bold(),
+                            input_tokens,
+                            output_tokens,
+                            input_tokens + output_tokens
+                        );
                     }
-                    
+
                     println!("{} {}", "Q:".yellow(), entry.question);
-                    println!("{} {}", "A:".green(),
+                    println!(
+                        "{} {}",
+                        "A:".green(),
                         if entry.response.len() > 200 {
                             format!("{}...", &entry.response[..200])
                         } else {
@@ -1598,30 +1755,44 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                     // Default behavior - show recent logs
                     let mut entries = db.get_all_logs()?;
                     entries.truncate(count);
-                    
+
                     if entries.is_empty() {
                         println!("No recent logs found.");
                         return Ok(());
                     }
-                    
-                    println!("\n{} (showing {} entries)", "Recent Logs:".bold().blue(), entries.len());
-                    
+
+                    println!(
+                        "\n{} (showing {} entries)",
+                        "Recent Logs:".bold().blue(),
+                        entries.len()
+                    );
+
                     for entry in entries {
-                        println!("\n{} {} ({})",
+                        println!(
+                            "\n{} {} ({})",
                             "Session:".bold(),
                             &entry.chat_id[..8],
                             entry.timestamp.format("%Y-%m-%d %H:%M:%S")
                         );
                         println!("{} {}", "Model:".bold(), entry.model);
-                        
+
                         // Show token usage if available
-                        if let (Some(input_tokens), Some(output_tokens)) = (entry.input_tokens, entry.output_tokens) {
-                            println!("{} {} input + {} output = {} total tokens",
-                                     "Tokens:".bold(), input_tokens, output_tokens, input_tokens + output_tokens);
+                        if let (Some(input_tokens), Some(output_tokens)) =
+                            (entry.input_tokens, entry.output_tokens)
+                        {
+                            println!(
+                                "{} {} input + {} output = {} total tokens",
+                                "Tokens:".bold(),
+                                input_tokens,
+                                output_tokens,
+                                input_tokens + output_tokens
+                            );
                         }
-                        
+
                         println!("{} {}", "Q:".yellow(), entry.question);
-                        println!("{} {}", "A:".green(),
+                        println!(
+                            "{} {}",
+                            "A:".green(),
                             if entry.response.len() > 150 {
                                 format!("{}...", &entry.response[..150])
                             } else {
@@ -1636,18 +1807,21 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
         LogCommands::Current => {
             if let Some(session_id) = db.get_current_session_id()? {
                 let history = db.get_chat_history(&session_id)?;
-                
+
                 println!("\n{} {}", "Current Session:".bold().blue(), session_id);
                 println!("{} {} messages", "Messages:".bold(), history.len());
-                
+
                 for (i, entry) in history.iter().enumerate() {
-                    println!("\n{} {} ({})", 
+                    println!(
+                        "\n{} {} ({})",
                         format!("Message {}:", i + 1).bold(),
                         entry.model,
                         entry.timestamp.format("%H:%M:%S")
                     );
                     println!("{} {}", "Q:".yellow(), entry.question);
-                    println!("{} {}", "A:".green(), 
+                    println!(
+                        "{} {}",
+                        "A:".green(),
                         if entry.response.len() > 100 {
                             format!("{}...", &entry.response[..100])
                         } else {
@@ -1661,14 +1835,14 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
         }
         LogCommands::Stats => {
             let stats = db.get_stats()?;
-            
+
             println!("\n{}", "Database Statistics:".bold().blue());
             println!();
-            
+
             // Basic stats
             println!("{} {}", "Total Entries:".bold(), stats.total_entries);
             println!("{} {}", "Unique Sessions:".bold(), stats.unique_sessions);
-            
+
             // File size formatting
             let file_size_str = if stats.file_size_bytes < 1024 {
                 format!("{} bytes", stats.file_size_bytes)
@@ -1678,10 +1852,11 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                 format!("{:.1} MB", stats.file_size_bytes as f64 / (1024.0 * 1024.0))
             };
             println!("{} {}", "Database Size:".bold(), file_size_str);
-            
+
             // Date range
             if let Some((earliest, latest)) = stats.date_range {
-                println!("{} {} to {}",
+                println!(
+                    "{} {} to {}",
                     "Date Range:".bold(),
                     earliest.format("%Y-%m-%d %H:%M:%S"),
                     latest.format("%Y-%m-%d %H:%M:%S")
@@ -1689,7 +1864,7 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
             } else {
                 println!("{} {}", "Date Range:".bold(), "No entries".dimmed());
             }
-            
+
             // Model usage
             if !stats.model_usage.is_empty() {
                 println!("\n{}", "Model Usage:".bold().blue());
@@ -1699,7 +1874,8 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                     } else {
                         0.0
                     };
-                    println!("  {} {} ({} - {:.1}%)",
+                    println!(
+                        "  {} {} ({} - {:.1}%)",
                         "•".blue(),
                         model.bold(),
                         count,
@@ -1708,17 +1884,23 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
                 }
             }
         }
-        LogCommands::Purge { yes, older_than_days, keep_recent, max_size_mb } => {
+        LogCommands::Purge {
+            yes,
+            older_than_days,
+            keep_recent,
+            max_size_mb,
+        } => {
             // Check if any specific purge options are provided
-            let has_specific_options = older_than_days.is_some() || keep_recent.is_some() || max_size_mb.is_some();
-            
+            let has_specific_options =
+                older_than_days.is_some() || keep_recent.is_some() || max_size_mb.is_some();
+
             if has_specific_options {
                 // Smart purge with specific options
                 let deleted_count = db.smart_purge(older_than_days, keep_recent, max_size_mb)?;
-                
+
                 if deleted_count > 0 {
                     println!("{} Purged {} log entries", "✓".green(), deleted_count);
-                    
+
                     if let Some(days) = older_than_days {
                         println!("  - Removed entries older than {} days", days);
                     }
@@ -1734,19 +1916,21 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
             } else {
                 // Full purge (existing behavior)
                 if !yes {
-                    print!("Are you sure you want to purge all logs? This cannot be undone. (y/N): ");
+                    print!(
+                        "Are you sure you want to purge all logs? This cannot be undone. (y/N): "
+                    );
                     // Deliberately flush stdout to ensure prompt appears before user input
                     io::stdout().flush()?;
-                    
+
                     let mut input = String::new();
                     io::stdin().read_line(&mut input)?;
-                    
+
                     if !input.trim().to_lowercase().starts_with('y') {
                         println!("Purge cancelled.");
                         return Ok(());
                     }
                 }
-                
+
                 db.purge_all_logs()?;
                 println!("{} All logs purged successfully", "✓".green());
             }
@@ -1758,70 +1942,71 @@ pub async fn handle_log_command(command: LogCommands) -> Result<()> {
 // Config command handlers
 pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()> {
     match command {
-        Some(ConfigCommands::Set { command }) => {
-            match command {
-                SetCommands::Provider { name } => {
-                    let mut config = config::Config::load()?;
-                    
-                    if !config.has_provider(&name) {
-                        anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", name);
-                    }
-                    
-                    config.default_provider = Some(name.clone());
-                    config.save()?;
-                    println!("{} Default provider set to '{}'", "✓".green(), name);
+        Some(ConfigCommands::Set { command }) => match command {
+            SetCommands::Provider { name } => {
+                let mut config = config::Config::load()?;
+
+                if !config.has_provider(&name) {
+                    anyhow::bail!(
+                        "Provider '{}' not found. Add it first with 'lc providers add'",
+                        name
+                    );
                 }
-                SetCommands::Model { name } => {
-                    let mut config = config::Config::load()?;
-                    config.default_model = Some(name.clone());
-                    config.save()?;
-                    println!("{} Default model set to '{}'", "✓".green(), name);
-                }
-                SetCommands::SystemPrompt { prompt } => {
-                    let mut config = config::Config::load()?;
-                    let resolved_prompt = config.resolve_template_or_prompt(&prompt);
-                    config.system_prompt = Some(resolved_prompt);
-                    config.save()?;
-                    println!("{} System prompt set", "✓".green());
-                }
-                SetCommands::MaxTokens { value } => {
-                    let mut config = config::Config::load()?;
-                    let parsed_value = config::Config::parse_max_tokens(&value)?;
-                    config.max_tokens = Some(parsed_value);
-                    config.save()?;
-                    println!("{} Max tokens set to {}", "✓".green(), parsed_value);
-                }
-                SetCommands::Temperature { value } => {
-                    let mut config = config::Config::load()?;
-                    let parsed_value = config::Config::parse_temperature(&value)?;
-                    config.temperature = Some(parsed_value);
-                    config.save()?;
-                    println!("{} Temperature set to {}", "✓".green(), parsed_value);
-                }
-                SetCommands::Search { name } => {
-                    let mut search_config = crate::search::SearchConfig::load()?;
-                    
-                    if !search_config.has_provider(&name) {
-                        anyhow::bail!("Search provider '{}' not found. Add it first with 'lc search provider add'", name);
-                    }
-                    
-                    search_config.set_default_provider(name.clone())?;
-                    search_config.save()?;
-                    println!("{} Default search provider set to '{}'", "✓".green(), name);
-                }
-                SetCommands::Stream { value } => {
-                    let mut config = config::Config::load()?;
-                    let stream_value = match value.to_lowercase().as_str() {
-                        "true" | "1" | "yes" | "on" => true,
-                        "false" | "0" | "no" | "off" => false,
-                        _ => anyhow::bail!("Invalid stream value '{}'. Use 'true' or 'false'", value),
-                    };
-                    config.stream = Some(stream_value);
-                    config.save()?;
-                    println!("{} Streaming mode set to {}", "✓".green(), stream_value);
-                }
+
+                config.default_provider = Some(name.clone());
+                config.save()?;
+                println!("{} Default provider set to '{}'", "✓".green(), name);
             }
-        }
+            SetCommands::Model { name } => {
+                let mut config = config::Config::load()?;
+                config.default_model = Some(name.clone());
+                config.save()?;
+                println!("{} Default model set to '{}'", "✓".green(), name);
+            }
+            SetCommands::SystemPrompt { prompt } => {
+                let mut config = config::Config::load()?;
+                let resolved_prompt = config.resolve_template_or_prompt(&prompt);
+                config.system_prompt = Some(resolved_prompt);
+                config.save()?;
+                println!("{} System prompt set", "✓".green());
+            }
+            SetCommands::MaxTokens { value } => {
+                let mut config = config::Config::load()?;
+                let parsed_value = config::Config::parse_max_tokens(&value)?;
+                config.max_tokens = Some(parsed_value);
+                config.save()?;
+                println!("{} Max tokens set to {}", "✓".green(), parsed_value);
+            }
+            SetCommands::Temperature { value } => {
+                let mut config = config::Config::load()?;
+                let parsed_value = config::Config::parse_temperature(&value)?;
+                config.temperature = Some(parsed_value);
+                config.save()?;
+                println!("{} Temperature set to {}", "✓".green(), parsed_value);
+            }
+            SetCommands::Search { name } => {
+                let mut search_config = crate::search::SearchConfig::load()?;
+
+                if !search_config.has_provider(&name) {
+                    anyhow::bail!("Search provider '{}' not found. Add it first with 'lc search provider add'", name);
+                }
+
+                search_config.set_default_provider(name.clone())?;
+                search_config.save()?;
+                println!("{} Default search provider set to '{}'", "✓".green(), name);
+            }
+            SetCommands::Stream { value } => {
+                let mut config = config::Config::load()?;
+                let stream_value = match value.to_lowercase().as_str() {
+                    "true" | "1" | "yes" | "on" => true,
+                    "false" | "0" | "no" | "off" => false,
+                    _ => anyhow::bail!("Invalid stream value '{}'. Use 'true' or 'false'", value),
+                };
+                config.stream = Some(stream_value);
+                config.save()?;
+                println!("{} Streaming mode set to {}", "✓".green(), stream_value);
+            }
+        },
         Some(ConfigCommands::Get { command }) => {
             let config = config::Config::load()?;
             match command {
@@ -1955,21 +2140,33 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
             println!("  {} config.toml", "•".blue());
             println!("  {} logs.db (synced to cloud)", "•".blue());
             println!("\n{}", "Database Management:".bold().blue());
-            println!("  {} Purge old logs: {}", "•".blue(), "lc logs purge --older-than-days 30".dimmed());
-            println!("  {} Keep recent logs: {}", "•".blue(), "lc logs purge --keep-recent 1000".dimmed());
-            println!("  {} Size-based purge: {}", "•".blue(), "lc logs purge --max-size-mb 50".dimmed());
+            println!(
+                "  {} Purge old logs: {}",
+                "•".blue(),
+                "lc logs purge --older-than-days 30".dimmed()
+            );
+            println!(
+                "  {} Keep recent logs: {}",
+                "•".blue(),
+                "lc logs purge --keep-recent 1000".dimmed()
+            );
+            println!(
+                "  {} Size-based purge: {}",
+                "•".blue(),
+                "lc logs purge --max-size-mb 50".dimmed()
+            );
         }
         None => {
             // Show current configuration with enhanced model metadata
             let config = config::Config::load()?;
             println!("\n{}", "Current Configuration:".bold().blue());
-            
+
             if let Some(provider) = &config.default_provider {
                 println!("provider {}", provider);
             } else {
                 println!("provider {}", "not set".dimmed());
             }
-            
+
             if let Some(model) = &config.default_model {
                 // Try to find model metadata to display rich information
                 if let Some(provider) = &config.default_provider {
@@ -1979,10 +2176,12 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                             if let Some(model_metadata) = models.iter().find(|m| m.id == *model) {
                                 // Display model with metadata
                                 let _model_info = vec![model.clone()];
-                                
+
                                 // Build capability indicators
                                 let mut capabilities = Vec::new();
-                                if model_metadata.supports_tools || model_metadata.supports_function_calling {
+                                if model_metadata.supports_tools
+                                    || model_metadata.supports_function_calling
+                                {
                                     capabilities.push("🔧 tools".blue());
                                 }
                                 if model_metadata.supports_vision {
@@ -1997,7 +2196,7 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                                 if model_metadata.supports_code {
                                     capabilities.push("💻 code".green());
                                 }
-                                
+
                                 // Build context and pricing info
                                 let mut info_parts = Vec::new();
                                 if let Some(ctx) = model_metadata.context_length {
@@ -2015,29 +2214,31 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
                                 if let Some(output_price) = model_metadata.output_price_per_m {
                                     info_parts.push(format!("${:.2}/M out", output_price));
                                 }
-                                
+
                                 // Display model name with metadata
-                                let model_display = if let Some(ref display_name) = model_metadata.display_name {
-                                    if display_name != &model_metadata.id {
-                                        format!("{} ({})", model, display_name)
+                                let model_display =
+                                    if let Some(ref display_name) = model_metadata.display_name {
+                                        if display_name != &model_metadata.id {
+                                            format!("{} ({})", model, display_name)
+                                        } else {
+                                            model.clone()
+                                        }
                                     } else {
                                         model.clone()
-                                    }
-                                } else {
-                                    model.clone()
-                                };
-                                
+                                    };
+
                                 print!("model {}", model_display);
-                                
+
                                 if !capabilities.is_empty() {
-                                    let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+                                    let capability_strings: Vec<String> =
+                                        capabilities.iter().map(|c| c.to_string()).collect();
                                     print!(" [{}]", capability_strings.join(" "));
                                 }
-                                
+
                                 if !info_parts.is_empty() {
                                     print!(" ({})", info_parts.join(", ").dimmed());
                                 }
-                                
+
                                 println!();
                             } else {
                                 // Model not found in metadata, show basic info
@@ -2056,25 +2257,25 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
             } else {
                 println!("model {}", "not set".dimmed());
             }
-            
+
             if let Some(system_prompt) = &config.system_prompt {
                 println!("system_prompt {}", system_prompt);
             } else {
                 println!("system_prompt {}", "not set".dimmed());
             }
-            
+
             if let Some(max_tokens) = &config.max_tokens {
                 println!("max_tokens {}", max_tokens);
             } else {
                 println!("max_tokens {}", "not set".dimmed());
             }
-            
+
             if let Some(temperature) = &config.temperature {
                 println!("temperature {}", temperature);
             } else {
                 println!("temperature {}", "not set".dimmed());
             }
-            
+
             if let Some(stream) = &config.stream {
                 println!("stream {}", stream);
             } else {
@@ -2089,7 +2290,7 @@ pub async fn handle_config_command(command: Option<ConfigCommands>) -> Result<()
 pub fn resolve_model_and_provider(
     config: &config::Config,
     provider_override: Option<String>,
-    model_override: Option<String>
+    model_override: Option<String>,
 ) -> Result<(String, String)> {
     // Parse provider and model from model_override if it contains ":" or resolve alias
     // BUT if provider_override is already provided, treat model_override as literal
@@ -2114,10 +2315,16 @@ pub fn resolve_model_and_provider(
                     if parts.len() == 2 {
                         (Some(parts[0].to_string()), Some(parts[1].to_string()))
                     } else {
-                        anyhow::bail!("Invalid alias target format: '{}'. Expected 'provider:model'", alias_target);
+                        anyhow::bail!(
+                            "Invalid alias target format: '{}'. Expected 'provider:model'",
+                            alias_target
+                        );
                     }
                 } else {
-                    anyhow::bail!("Invalid alias target format: '{}'. Expected 'provider:model'", alias_target);
+                    anyhow::bail!(
+                        "Invalid alias target format: '{}'. Expected 'provider:model'",
+                        alias_target
+                    );
                 }
             } else {
                 // Not an alias, treat as regular model name
@@ -2127,12 +2334,15 @@ pub fn resolve_model_and_provider(
     } else {
         (provider_override, model_override)
     };
-    
+
     // Determine provider and model to use
     let provider_name = if let Some(provider) = final_provider_override {
         // Validate that the provider exists
         if !config.has_provider(&provider) {
-            anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", provider);
+            anyhow::bail!(
+                "Provider '{}' not found. Add it first with 'lc providers add'",
+                provider
+            );
         }
         provider
     } else {
@@ -2140,7 +2350,7 @@ pub fn resolve_model_and_provider(
             .ok_or_else(|| anyhow::anyhow!("No default provider configured. Set one with 'lc config set provider <name>' or use -p flag"))?
             .clone()
     };
-    
+
     let model_name = if let Some(model) = final_model_override {
         model
     } else {
@@ -2148,7 +2358,7 @@ pub fn resolve_model_and_provider(
             .ok_or_else(|| anyhow::anyhow!("No default model configured. Set one with 'lc config set model <name>' or use -m flag"))?
             .clone()
     };
-    
+
     Ok((provider_name, model_name))
 }
 
@@ -2157,22 +2367,22 @@ pub fn read_and_format_attachments(attachments: &[String]) -> Result<String> {
     if attachments.is_empty() {
         return Ok(String::new());
     }
-    
+
     let mut formatted_content = String::new();
-    
+
     for (i, file_path) in attachments.iter().enumerate() {
         if i > 0 {
             formatted_content.push_str("\n\n");
         }
-        
+
         // Determine file extension for better formatting
         let extension = std::path::Path::new(file_path)
             .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("");
-        
+
         formatted_content.push_str(&format!("=== File: {} ===\n", file_path));
-        
+
         // Check if we have a specialized reader for this file type
         if let Some(reader) = readers::get_reader_for_extension(extension) {
             match reader.read_as_text(file_path) {
@@ -2180,7 +2390,11 @@ pub fn read_and_format_attachments(attachments: &[String]) -> Result<String> {
                     formatted_content.push_str(&content);
                 }
                 Err(e) => {
-                    anyhow::bail!("Failed to read file '{}' with specialized reader: {}", file_path, e);
+                    anyhow::bail!(
+                        "Failed to read file '{}' with specialized reader: {}",
+                        file_path,
+                        e
+                    );
                 }
             }
         } else {
@@ -2200,47 +2414,102 @@ pub fn read_and_format_attachments(attachments: &[String]) -> Result<String> {
             }
         }
     }
-    
+
     Ok(formatted_content)
 }
 
 // Helper function to determine if a file extension represents code
 pub fn is_code_file(extension: &str) -> bool {
-    matches!(extension.to_lowercase().as_str(),
-        "rs" | "py" | "js" | "ts" | "java" | "cpp" | "c" | "h" | "hpp" |
-        "go" | "rb" | "php" | "swift" | "kt" | "scala" | "sh" | "bash" |
-        "zsh" | "fish" | "ps1" | "bat" | "cmd" | "html" | "css" | "scss" |
-        "sass" | "less" | "xml" | "json" | "yaml" | "yml" | "toml" | "ini" |
-        "cfg" | "conf" | "sql" | "r" | "m" | "mm" | "pl" | "pm" | "lua" |
-        "vim" | "dockerfile" | "makefile" | "cmake" | "gradle" | "maven"
+    matches!(
+        extension.to_lowercase().as_str(),
+        "rs" | "py"
+            | "js"
+            | "ts"
+            | "java"
+            | "cpp"
+            | "c"
+            | "h"
+            | "hpp"
+            | "go"
+            | "rb"
+            | "php"
+            | "swift"
+            | "kt"
+            | "scala"
+            | "sh"
+            | "bash"
+            | "zsh"
+            | "fish"
+            | "ps1"
+            | "bat"
+            | "cmd"
+            | "html"
+            | "css"
+            | "scss"
+            | "sass"
+            | "less"
+            | "xml"
+            | "json"
+            | "yaml"
+            | "yml"
+            | "toml"
+            | "ini"
+            | "cfg"
+            | "conf"
+            | "sql"
+            | "r"
+            | "m"
+            | "mm"
+            | "pl"
+            | "pm"
+            | "lua"
+            | "vim"
+            | "dockerfile"
+            | "makefile"
+            | "cmake"
+            | "gradle"
+            | "maven"
     )
 }
 
 // Direct prompt handler
-pub async fn handle_direct_prompt(prompt: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, images: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>, stream: bool) -> Result<()> {
+pub async fn handle_direct_prompt(
+    prompt: String,
+    provider_override: Option<String>,
+    model_override: Option<String>,
+    system_prompt_override: Option<String>,
+    max_tokens_override: Option<String>,
+    temperature_override: Option<String>,
+    attachments: Vec<String>,
+    images: Vec<String>,
+    tools: Option<String>,
+    vectordb: Option<String>,
+    use_search: Option<String>,
+    stream: bool,
+) -> Result<()> {
     let config = config::Config::load()?;
     let db = database::Database::new()?;
-    
+
     // Note: We don't enforce vision capability checks here as model metadata may be incomplete.
     // Let the API/model handle vision support validation and return appropriate errors if needed.
-    
+
     // Read and format attachments
     let attachment_content = read_and_format_attachments(&attachments)?;
-    
+
     // Process images if provided
     let processed_images = if !images.is_empty() {
         crate::image_utils::process_images(&images)?
     } else {
         Vec::new()
     };
-    
+
     // Combine prompt with attachments
     let final_prompt = if attachment_content.is_empty() {
         prompt.clone()
     } else {
         format!("{}\n\n{}", prompt, attachment_content)
     };
-    
+
     // Determine system prompt to use (CLI override takes precedence over config)
     let system_prompt = if let Some(override_prompt) = &system_prompt_override {
         Some(config.resolve_template_or_prompt(override_prompt))
@@ -2250,21 +2519,21 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         None
     };
     let system_prompt = system_prompt.as_deref();
-    
+
     // Determine max_tokens to use (CLI override takes precedence over config)
     let max_tokens = if let Some(override_tokens) = &max_tokens_override {
         Some(config::Config::parse_max_tokens(override_tokens)?)
     } else {
         config.max_tokens
     };
-    
+
     // Determine temperature to use (CLI override takes precedence over config)
     let temperature = if let Some(override_temp) = &temperature_override {
         Some(config::Config::parse_temperature(override_temp)?)
     } else {
         config.temperature
     };
-    
+
     // Fetch MCP tools if specified
     let (mcp_tools, mcp_server_names) = if let Some(tools_str) = &tools {
         fetch_mcp_tools(tools_str).await?
@@ -2273,35 +2542,50 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
     };
 
     // Resolve provider and model
-    let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
-    
+    let (provider_name, model_name) =
+        resolve_model_and_provider(&config, provider_override, model_override)?;
+
     // Get provider config
     let provider_config = config.get_provider(&provider_name)?;
-    
+
     if provider_config.api_key.is_none() {
-        anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
+        anyhow::bail!(
+            "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
+            provider_name,
+            provider_name
+        );
     }
-    
+
     let mut config_mut = config.clone();
     let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
-    
+
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
         config_mut.save()?;
     }
-    
+
     // Generate a session ID for this direct prompt
     let session_id = uuid::Uuid::new_v4().to_string();
     db.set_current_session_id(&session_id)?;
-    
+
     // RAG: Retrieve relevant context if database is specified
     let mut enhanced_prompt = final_prompt.clone();
     if let Some(ref db_name) = vectordb {
-        match retrieve_rag_context(db_name, &final_prompt, &client, &model_name, &provider_name).await {
+        match retrieve_rag_context(db_name, &final_prompt, &client, &model_name, &provider_name)
+            .await
+        {
             Ok(context) => {
                 if !context.is_empty() {
-                    enhanced_prompt = format!("Context from knowledge base:\n{}\n\nUser question: {}", context, final_prompt);
-                    println!("{} Retrieved {} relevant context entries from '{}'", "🧠".blue(), context.lines().filter(|l| l.starts_with("- ")).count(), db_name);
+                    enhanced_prompt = format!(
+                        "Context from knowledge base:\n{}\n\nUser question: {}",
+                        context, final_prompt
+                    );
+                    println!(
+                        "{} Retrieved {} relevant context entries from '{}'",
+                        "🧠".blue(),
+                        context.lines().filter(|l| l.starts_with("- ")).count(),
+                        db_name
+                    );
                 }
             }
             Err(e) => {
@@ -2309,7 +2593,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
             }
         }
     }
-    
+
     // Search integration: Add search results as context if --use-search is specified
     if let Some(search_spec) = use_search {
         match integrate_search_context(&search_spec, &prompt, &mut enhanced_prompt).await {
@@ -2323,17 +2607,17 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
             }
         }
     }
-    
+
     // Determine if streaming should be used (CLI flag takes precedence over config)
     let use_streaming = stream || config.stream.unwrap_or(false);
-    
+
     // Create the appropriate message based on whether images are included
     let messages = if !processed_images.is_empty() {
         // Create multimodal message with text and images
-        let mut content_parts = vec![
-            crate::provider::ContentPart::Text { text: enhanced_prompt.clone() }
-        ];
-        
+        let mut content_parts = vec![crate::provider::ContentPart::Text {
+            text: enhanced_prompt.clone(),
+        }];
+
         // Add each image as a content part
         for image_url in processed_images {
             content_parts.push(crate::provider::ContentPart::ImageUrl {
@@ -2343,10 +2627,12 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
                 },
             });
         }
-        
+
         vec![crate::provider::Message {
             role: "user".to_string(),
-            content_type: crate::provider::MessageContent::Multimodal { content: content_parts },
+            content_type: crate::provider::MessageContent::Multimodal {
+                content: content_parts,
+            },
             tool_calls: None,
             tool_call_id: None,
         }]
@@ -2354,7 +2640,7 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         // Regular text message
         vec![]
     };
-    
+
     // Send the prompt
     if use_streaming {
         // Use streaming
@@ -2364,21 +2650,51 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
             // Deliberately flush stdout to show thinking indicator immediately
             io::stdout().flush()?;
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            
+
             // Use messages if we have images, otherwise use the text prompt
             let result = if !messages.is_empty() {
-                chat::send_chat_request_with_tool_execution_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+                chat::send_chat_request_with_tool_execution_messages(
+                    &client,
+                    &model_name,
+                    &messages,
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    mcp_tools,
+                    &server_refs,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+                chat::send_chat_request_with_tool_execution(
+                    &client,
+                    &model_name,
+                    &enhanced_prompt,
+                    &[],
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    mcp_tools,
+                    &server_refs,
+                )
+                .await
             };
-            
+
             match result {
                 Ok((response, input_tokens, output_tokens)) => {
                     print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                     println!("{}", response);
-                    
+
                     // Save to database with token counts
-                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &prompt, &response, input_tokens, output_tokens) {
+                    if let Err(e) = db.save_chat_entry_with_tokens(
+                        &session_id,
+                        &model_name,
+                        &prompt,
+                        &response,
+                        input_tokens,
+                        output_tokens,
+                    ) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
                     }
                 }
@@ -2390,18 +2706,46 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         } else {
             // Use streaming chat - content is streamed directly to stdout
             let result = if !messages.is_empty() {
-                chat::send_chat_request_with_streaming_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, None).await
+                chat::send_chat_request_with_streaming_messages(
+                    &client,
+                    &model_name,
+                    &messages,
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_streaming(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+                chat::send_chat_request_with_streaming(
+                    &client,
+                    &model_name,
+                    &enhanced_prompt,
+                    &[],
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             };
-            
+
             match result {
                 Ok(_) => {
                     // Streaming completed successfully, add a newline
                     println!();
-                    
+
                     // For streaming, we save a placeholder since the actual response was streamed
-                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &prompt, "[Streamed Response]", None, None) {
+                    if let Err(e) = db.save_chat_entry_with_tokens(
+                        &session_id,
+                        &model_name,
+                        &prompt,
+                        "[Streamed Response]",
+                        None,
+                        None,
+                    ) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
                     }
                 }
@@ -2415,31 +2759,82 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
         print!("{} ", "Thinking...".dimmed());
         // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
-        
+
         let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Use tool execution loop when tools are available
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
             if !messages.is_empty() {
-                chat::send_chat_request_with_tool_execution_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+                chat::send_chat_request_with_tool_execution_messages(
+                    &client,
+                    &model_name,
+                    &messages,
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    mcp_tools,
+                    &server_refs,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+                chat::send_chat_request_with_tool_execution(
+                    &client,
+                    &model_name,
+                    &enhanced_prompt,
+                    &[],
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    mcp_tools,
+                    &server_refs,
+                )
+                .await
             }
         } else {
             // Use regular chat when no tools
             if !messages.is_empty() {
-                chat::send_chat_request_with_validation_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, None).await
+                chat::send_chat_request_with_validation_messages(
+                    &client,
+                    &model_name,
+                    &messages,
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+                chat::send_chat_request_with_validation(
+                    &client,
+                    &model_name,
+                    &enhanced_prompt,
+                    &[],
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             }
         };
-        
+
         match result {
             Ok((response, input_tokens, output_tokens)) => {
                 print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                 println!("{}", response);
-                
+
                 // Save to database with token counts (save original prompt for cleaner logs)
-                if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &prompt, &response, input_tokens, output_tokens) {
+                if let Err(e) = db.save_chat_entry_with_tokens(
+                    &session_id,
+                    &model_name,
+                    &prompt,
+                    &response,
+                    input_tokens,
+                    output_tokens,
+                ) {
                     eprintln!("Warning: Failed to save chat entry: {}", e);
                 }
             }
@@ -2449,38 +2844,54 @@ pub async fn handle_direct_prompt(prompt: String, provider_override: Option<Stri
             }
         }
     }
-    
+
     Ok(())
 }
 
 // Direct prompt handler for piped input (treats piped content as attachment)
-pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provider_override: Option<String>, model_override: Option<String>, system_prompt_override: Option<String>, max_tokens_override: Option<String>, temperature_override: Option<String>, attachments: Vec<String>, images: Vec<String>, tools: Option<String>, vectordb: Option<String>, use_search: Option<String>, stream: bool) -> Result<()> {
+pub async fn handle_direct_prompt_with_piped_input(
+    piped_content: String,
+    provider_override: Option<String>,
+    model_override: Option<String>,
+    system_prompt_override: Option<String>,
+    max_tokens_override: Option<String>,
+    temperature_override: Option<String>,
+    attachments: Vec<String>,
+    images: Vec<String>,
+    tools: Option<String>,
+    vectordb: Option<String>,
+    use_search: Option<String>,
+    stream: bool,
+) -> Result<()> {
     // For piped input, we need to determine if there's a prompt in the arguments
     // Since we're called from main.rs when there's no prompt argument, we'll treat the piped content as both prompt and attachment
     // But we should provide a way to specify a prompt when piping content
-    
+
     // For now, let's treat piped content as an attachment and ask for clarification
     let prompt = "Please analyze the following content:".to_string();
-    
+
     // Create a temporary "attachment" from piped content
     let all_attachments = attachments;
-    
+
     // Format piped content as an attachment
     let piped_attachment = format!("=== Piped Input ===\n{}", piped_content);
-    
+
     let config = config::Config::load()?;
     let db = database::Database::new()?;
-    
+
     // Read and format file attachments
     let file_attachment_content = read_and_format_attachments(&all_attachments)?;
-    
+
     // Combine prompt with piped content and file attachments
     let final_prompt = if file_attachment_content.is_empty() {
         format!("{}\n\n{}", prompt, piped_attachment)
     } else {
-        format!("{}\n\n{}\n\n{}", prompt, piped_attachment, file_attachment_content)
+        format!(
+            "{}\n\n{}\n\n{}",
+            prompt, piped_attachment, file_attachment_content
+        )
     };
-    
+
     // Determine system prompt to use (CLI override takes precedence over config)
     let system_prompt = if let Some(override_prompt) = &system_prompt_override {
         Some(config.resolve_template_or_prompt(override_prompt))
@@ -2490,21 +2901,21 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         None
     };
     let system_prompt = system_prompt.as_deref();
-    
+
     // Determine max_tokens to use (CLI override takes precedence over config)
     let max_tokens = if let Some(override_tokens) = &max_tokens_override {
         Some(config::Config::parse_max_tokens(override_tokens)?)
     } else {
         config.max_tokens
     };
-    
+
     // Determine temperature to use (CLI override takes precedence over config)
     let temperature = if let Some(override_temp) = &temperature_override {
         Some(config::Config::parse_temperature(override_temp)?)
     } else {
         config.temperature
     };
-    
+
     // Fetch MCP tools if specified
     let (mcp_tools, mcp_server_names) = if let Some(tools_str) = &tools {
         fetch_mcp_tools(tools_str).await?
@@ -2513,35 +2924,50 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
     };
 
     // Resolve provider and model
-    let (provider_name, model_name) = resolve_model_and_provider(&config, provider_override, model_override)?;
-    
+    let (provider_name, model_name) =
+        resolve_model_and_provider(&config, provider_override, model_override)?;
+
     // Get provider config
     let provider_config = config.get_provider(&provider_name)?;
-    
+
     if provider_config.api_key.is_none() {
-        anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
+        anyhow::bail!(
+            "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
+            provider_name,
+            provider_name
+        );
     }
-    
+
     let mut config_mut = config.clone();
     let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
-    
+
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
         config_mut.save()?;
     }
-    
+
     // Generate a session ID for this direct prompt
     let session_id = uuid::Uuid::new_v4().to_string();
     db.set_current_session_id(&session_id)?;
-    
+
     // RAG: Retrieve relevant context if database is specified
     let mut enhanced_prompt = final_prompt.clone();
     if let Some(ref db_name) = vectordb {
-        match retrieve_rag_context(db_name, &final_prompt, &client, &model_name, &provider_name).await {
+        match retrieve_rag_context(db_name, &final_prompt, &client, &model_name, &provider_name)
+            .await
+        {
             Ok(context) => {
                 if !context.is_empty() {
-                    enhanced_prompt = format!("Context from knowledge base:\n{}\n\nUser question: {}", context, final_prompt);
-                    println!("{} Retrieved {} relevant context entries from '{}'", "🧠".blue(), context.lines().filter(|l| l.starts_with("- ")).count(), db_name);
+                    enhanced_prompt = format!(
+                        "Context from knowledge base:\n{}\n\nUser question: {}",
+                        context, final_prompt
+                    );
+                    println!(
+                        "{} Retrieved {} relevant context entries from '{}'",
+                        "🧠".blue(),
+                        context.lines().filter(|l| l.starts_with("- ")).count(),
+                        db_name
+                    );
                 }
             }
             Err(e) => {
@@ -2549,7 +2975,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
             }
         }
     }
-    
+
     // Search integration: Add search results as context if --use-search is specified
     if let Some(search_spec) = use_search {
         match integrate_search_context(&search_spec, &prompt, &mut enhanced_prompt).await {
@@ -2563,24 +2989,24 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
             }
         }
     }
-    
+
     // Determine if streaming should be used (CLI flag takes precedence over config)
     let use_streaming = stream || config.stream.unwrap_or(false);
-    
+
     // Process images if provided
     let processed_images = if !images.is_empty() {
         crate::image_utils::process_images(&images)?
     } else {
         Vec::new()
     };
-    
+
     // Create the appropriate message based on whether images are included
     let messages = if !processed_images.is_empty() {
         // Create multimodal message with text and images
-        let mut content_parts = vec![
-            crate::provider::ContentPart::Text { text: enhanced_prompt.clone() }
-        ];
-        
+        let mut content_parts = vec![crate::provider::ContentPart::Text {
+            text: enhanced_prompt.clone(),
+        }];
+
         // Add each image as a content part
         for image_url in processed_images {
             content_parts.push(crate::provider::ContentPart::ImageUrl {
@@ -2590,10 +3016,12 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
                 },
             });
         }
-        
+
         vec![crate::provider::Message {
             role: "user".to_string(),
-            content_type: crate::provider::MessageContent::Multimodal { content: content_parts },
+            content_type: crate::provider::MessageContent::Multimodal {
+                content: content_parts,
+            },
             tool_calls: None,
             tool_call_id: None,
         }]
@@ -2601,7 +3029,7 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         // Regular text message
         vec![]
     };
-    
+
     // Send the prompt
     if use_streaming {
         // Use streaming
@@ -2611,19 +3039,39 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
             // Deliberately flush stdout to show thinking indicator immediately
             io::stdout().flush()?;
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            match chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await {
+            match chat::send_chat_request_with_tool_execution(
+                &client,
+                &model_name,
+                &enhanced_prompt,
+                &[],
+                system_prompt,
+                max_tokens,
+                temperature,
+                &provider_name,
+                mcp_tools,
+                &server_refs,
+            )
+            .await
+            {
                 Ok((response, input_tokens, output_tokens)) => {
                     print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                     println!("{}", response);
-                    
+
                     // Save to database with token counts (save a shortened version for cleaner logs)
                     let log_prompt = if piped_content.len() > 100 {
                         format!("{}... (piped content)", &piped_content[..100])
                     } else {
                         format!("{} (piped content)", piped_content)
                     };
-                    
-                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &log_prompt, &response, input_tokens, output_tokens) {
+
+                    if let Err(e) = db.save_chat_entry_with_tokens(
+                        &session_id,
+                        &model_name,
+                        &log_prompt,
+                        &response,
+                        input_tokens,
+                        output_tokens,
+                    ) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
                     }
                 }
@@ -2635,24 +3083,52 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         } else {
             // Use streaming chat - content is streamed directly to stdout
             let result = if !messages.is_empty() {
-                chat::send_chat_request_with_streaming_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, None).await
+                chat::send_chat_request_with_streaming_messages(
+                    &client,
+                    &model_name,
+                    &messages,
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_streaming(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+                chat::send_chat_request_with_streaming(
+                    &client,
+                    &model_name,
+                    &enhanced_prompt,
+                    &[],
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             };
-            
+
             match result {
                 Ok(_) => {
                     // Streaming completed successfully, add a newline
                     println!();
-                    
+
                     // Save to database with token counts (save a shortened version for cleaner logs)
                     let log_prompt = if piped_content.len() > 100 {
                         format!("{}... (piped content)", &piped_content[..100])
                     } else {
                         format!("{} (piped content)", piped_content)
                     };
-                    
-                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &log_prompt, "[Streamed Response]", None, None) {
+
+                    if let Err(e) = db.save_chat_entry_with_tokens(
+                        &session_id,
+                        &model_name,
+                        &log_prompt,
+                        "[Streamed Response]",
+                        None,
+                        None,
+                    ) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
                     }
                 }
@@ -2666,33 +3142,73 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
         print!("{} ", "Thinking...".dimmed());
         // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
-        
+
         let result = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Use tool execution loop when tools are available
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            chat::send_chat_request_with_tool_execution(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, mcp_tools, &server_refs).await
+            chat::send_chat_request_with_tool_execution(
+                &client,
+                &model_name,
+                &enhanced_prompt,
+                &[],
+                system_prompt,
+                max_tokens,
+                temperature,
+                &provider_name,
+                mcp_tools,
+                &server_refs,
+            )
+            .await
         } else {
             // Use regular chat when no tools
             if !messages.is_empty() {
-                chat::send_chat_request_with_validation_messages(&client, &model_name, &messages, system_prompt, max_tokens, temperature, &provider_name, None).await
+                chat::send_chat_request_with_validation_messages(
+                    &client,
+                    &model_name,
+                    &messages,
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_validation(&client, &model_name, &enhanced_prompt, &[], system_prompt, max_tokens, temperature, &provider_name, None).await
+                chat::send_chat_request_with_validation(
+                    &client,
+                    &model_name,
+                    &enhanced_prompt,
+                    &[],
+                    system_prompt,
+                    max_tokens,
+                    temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             }
         };
-        
+
         match result {
             Ok((response, input_tokens, output_tokens)) => {
                 print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                 println!("{}", response);
-                
+
                 // Save to database with token counts (save a shortened version for cleaner logs)
                 let log_prompt = if piped_content.len() > 100 {
                     format!("{}... (piped content)", &piped_content[..100])
                 } else {
                     format!("{} (piped content)", piped_content)
                 };
-                
-                if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &model_name, &log_prompt, &response, input_tokens, output_tokens) {
+
+                if let Err(e) = db.save_chat_entry_with_tokens(
+                    &session_id,
+                    &model_name,
+                    &log_prompt,
+                    &response,
+                    input_tokens,
+                    output_tokens,
+                ) {
                     eprintln!("Warning: Failed to save chat entry: {}", e);
                 }
             }
@@ -2702,58 +3218,71 @@ pub async fn handle_direct_prompt_with_piped_input(piped_content: String, provid
             }
         }
     }
-    
+
     Ok(())
 }
 
 // Interactive chat mode
-pub async fn handle_chat_command(model: Option<String>, provider: Option<String>, cid: Option<String>, tools: Option<String>, database: Option<String>, debug: bool, images: Vec<String>, stream: bool) -> Result<()> {
+pub async fn handle_chat_command(
+    model: Option<String>,
+    provider: Option<String>,
+    cid: Option<String>,
+    tools: Option<String>,
+    database: Option<String>,
+    debug: bool,
+    images: Vec<String>,
+    stream: bool,
+) -> Result<()> {
     // Set debug mode if requested
     if debug {
         set_debug_mode(true);
     }
     let config = config::Config::load()?;
     let db = database::Database::new()?;
-    
+
     // Note: We don't enforce vision capability checks here as model metadata may be incomplete.
     // Let the API/model handle vision support validation and return appropriate errors if needed.
-    
+
     // Determine session ID
     let session_id = cid.unwrap_or_else(|| {
         let new_id = uuid::Uuid::new_v4().to_string();
         db.set_current_session_id(&new_id).unwrap();
         new_id
     });
-    
+
     // Resolve provider and model using the same logic as direct prompts
     let (provider_name, resolved_model) = resolve_model_and_provider(&config, provider, model)?;
     let _provider_config = config.get_provider(&provider_name)?;
-    
+
     let mut config_mut = config.clone();
     let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
-    
+
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
         config_mut.save()?;
     }
-    
+
     // Fetch MCP tools if specified
     let (mcp_tools, mcp_server_names) = if let Some(tools_str) = &tools {
         fetch_mcp_tools(tools_str).await?
     } else {
         (None, Vec::new())
     };
-    
+
     let mut current_model = resolved_model.clone();
-    
+
     // Process initial images if provided
     let mut processed_images = if !images.is_empty() {
-        println!("{} Processing {} initial image(s)...", "🖼️".blue(), images.len());
+        println!(
+            "{} Processing {} initial image(s)...",
+            "🖼️".blue(),
+            images.len()
+        );
         crate::image_utils::process_images(&images)?
     } else {
         Vec::new()
     };
-    
+
     println!("\n{} Interactive Chat Mode", "🚀".blue());
     println!("{} Session ID: {}", "📝".blue(), session_id);
     println!("{} Model: {}", "🤖".blue(), current_model);
@@ -2761,32 +3290,35 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
         println!("{} Initial images: {}", "🖼️".blue(), images.len());
     }
     if mcp_tools.is_some() && !mcp_server_names.is_empty() {
-        println!("{} Tools: {} (from MCP servers: {})", "🔧".blue(),
-                 mcp_tools.as_ref().unwrap().len(),
-                 mcp_server_names.join(", "));
+        println!(
+            "{} Tools: {} (from MCP servers: {})",
+            "🔧".blue(),
+            mcp_tools.as_ref().unwrap().len(),
+            mcp_server_names.join(", ")
+        );
     }
     println!("{} Type /help for commands, /exit to quit\n", "💡".yellow());
-    
+
     loop {
         print!("{} ", "You:".bold().green());
         // Deliberately flush stdout to ensure prompt appears before user input
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         let bytes_read = io::stdin().read_line(&mut input)?;
-        
+
         // If we read 0 bytes, it means EOF (e.g., when input is piped)
         if bytes_read == 0 {
             println!("Goodbye! 👋");
             break;
         }
-        
+
         let input = input.trim();
-        
+
         if input.is_empty() {
             continue;
         }
-        
+
         // Handle chat commands
         if input.starts_with('/') {
             match input {
@@ -2818,23 +3350,36 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
                     continue;
                 }
                 _ => {
-                    println!("{} Unknown command. Type /help for available commands", "✗".red());
+                    println!(
+                        "{} Unknown command. Type /help for available commands",
+                        "✗".red()
+                    );
                     continue;
                 }
             }
         }
-        
+
         // Send chat message
         let history = db.get_chat_history(&session_id)?;
-        
+
         // RAG: Retrieve relevant context if database is specified
         let mut enhanced_input = input.to_string();
         if let Some(ref db_name) = database {
-            match retrieve_rag_context(db_name, input, &client, &current_model, &provider_name).await {
+            match retrieve_rag_context(db_name, input, &client, &current_model, &provider_name)
+                .await
+            {
                 Ok(context) => {
                     if !context.is_empty() {
-                        enhanced_input = format!("Context from knowledge base:\n{}\n\nUser question: {}", context, input);
-                        println!("{} Retrieved {} relevant context entries from '{}'", "🧠".blue(), context.lines().filter(|l| l.starts_with("- ")).count(), db_name);
+                        enhanced_input = format!(
+                            "Context from knowledge base:\n{}\n\nUser question: {}",
+                            context, input
+                        );
+                        println!(
+                            "{} Retrieved {} relevant context entries from '{}'",
+                            "🧠".blue(),
+                            context.lines().filter(|l| l.starts_with("- ")).count(),
+                            db_name
+                        );
                     }
                 }
                 Err(e) => {
@@ -2842,22 +3387,25 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
                 }
             }
         }
-        
+
         // Create messages with images if we have initial images
         let messages = if !processed_images.is_empty() {
             // Build history messages first
-            let mut msgs: Vec<crate::provider::Message> = history.iter().flat_map(|entry| {
-                vec![
-                    crate::provider::Message::user(entry.question.clone()),
-                    crate::provider::Message::assistant(entry.response.clone()),
-                ]
-            }).collect();
-            
+            let mut msgs: Vec<crate::provider::Message> = history
+                .iter()
+                .flat_map(|entry| {
+                    vec![
+                        crate::provider::Message::user(entry.question.clone()),
+                        crate::provider::Message::assistant(entry.response.clone()),
+                    ]
+                })
+                .collect();
+
             // Add current message with images
-            let mut content_parts = vec![
-                crate::provider::ContentPart::Text { text: enhanced_input.clone() }
-            ];
-            
+            let mut content_parts = vec![crate::provider::ContentPart::Text {
+                text: enhanced_input.clone(),
+            }];
+
             // Add each image as a content part
             for image_url in &processed_images {
                 content_parts.push(crate::provider::ContentPart::ImageUrl {
@@ -2867,52 +3415,84 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
                     },
                 });
             }
-            
+
             msgs.push(crate::provider::Message {
                 role: "user".to_string(),
-                content_type: crate::provider::MessageContent::Multimodal { content: content_parts },
+                content_type: crate::provider::MessageContent::Multimodal {
+                    content: content_parts,
+                },
                 tool_calls: None,
                 tool_call_id: None,
             });
-            
+
             msgs
         } else {
             Vec::new()
         };
-        
+
         print!("{} ", "Thinking...".dimmed());
         // Deliberately flush stdout to show thinking indicator immediately
         io::stdout().flush()?;
-        
+
         let resolved_system_prompt = if let Some(system_prompt) = &config.system_prompt {
             Some(config.resolve_template_or_prompt(system_prompt))
         } else {
             None
         };
-        
+
         // Determine if streaming should be used (default to true for interactive chat)
         // CLI flag takes precedence, then config, then default to true for chat mode
         let use_streaming = stream || config.stream.unwrap_or(true);
-        
+
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Use tool execution loop when tools are available (tools don't support streaming yet)
             let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
             let result = if !messages.is_empty() {
-                chat::send_chat_request_with_tool_execution_messages(&client, &current_model, &messages, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await
+                chat::send_chat_request_with_tool_execution_messages(
+                    &client,
+                    &current_model,
+                    &messages,
+                    resolved_system_prompt.as_deref(),
+                    config.max_tokens,
+                    config.temperature,
+                    &provider_name,
+                    mcp_tools.clone(),
+                    &server_refs,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_tool_execution(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, mcp_tools.clone(), &server_refs).await
+                chat::send_chat_request_with_tool_execution(
+                    &client,
+                    &current_model,
+                    &enhanced_input,
+                    &history,
+                    resolved_system_prompt.as_deref(),
+                    config.max_tokens,
+                    config.temperature,
+                    &provider_name,
+                    mcp_tools.clone(),
+                    &server_refs,
+                )
+                .await
             };
-            
+
             match result {
                 Ok((response, input_tokens, output_tokens)) => {
                     print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                     println!("{} {}", "Assistant:".bold().blue(), response);
-                    
+
                     // Save to database with token counts
-                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, &response, input_tokens, output_tokens) {
+                    if let Err(e) = db.save_chat_entry_with_tokens(
+                        &session_id,
+                        &current_model,
+                        input,
+                        &response,
+                        input_tokens,
+                        output_tokens,
+                    ) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
                     }
-                    
+
                     // Clear processed images after first use
                     if !processed_images.is_empty() {
                         processed_images.clear();
@@ -2929,21 +3509,49 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
             // Deliberately flush stdout to show assistant label before streaming
             io::stdout().flush()?;
             let result = if !messages.is_empty() {
-                chat::send_chat_request_with_streaming_messages(&client, &current_model, &messages, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+                chat::send_chat_request_with_streaming_messages(
+                    &client,
+                    &current_model,
+                    &messages,
+                    resolved_system_prompt.as_deref(),
+                    config.max_tokens,
+                    config.temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_streaming(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+                chat::send_chat_request_with_streaming(
+                    &client,
+                    &current_model,
+                    &enhanced_input,
+                    &history,
+                    resolved_system_prompt.as_deref(),
+                    config.max_tokens,
+                    config.temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             };
-            
+
             match result {
                 Ok(_) => {
                     // Streaming completed successfully, add a newline
                     println!();
-                    
+
                     // Save to database with placeholder since the actual response was streamed
-                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, "[Streamed Response]", None, None) {
+                    if let Err(e) = db.save_chat_entry_with_tokens(
+                        &session_id,
+                        &current_model,
+                        input,
+                        "[Streamed Response]",
+                        None,
+                        None,
+                    ) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
                     }
-                    
+
                     // Clear processed images after first use
                     if !processed_images.is_empty() {
                         processed_images.clear();
@@ -2956,21 +3564,49 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
         } else {
             // Use regular chat when no tools and streaming is disabled
             let result = if !messages.is_empty() {
-                chat::send_chat_request_with_validation_messages(&client, &current_model, &messages, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+                chat::send_chat_request_with_validation_messages(
+                    &client,
+                    &current_model,
+                    &messages,
+                    resolved_system_prompt.as_deref(),
+                    config.max_tokens,
+                    config.temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             } else {
-                chat::send_chat_request_with_validation(&client, &current_model, &enhanced_input, &history, resolved_system_prompt.as_deref(), config.max_tokens, config.temperature, &provider_name, None).await
+                chat::send_chat_request_with_validation(
+                    &client,
+                    &current_model,
+                    &enhanced_input,
+                    &history,
+                    resolved_system_prompt.as_deref(),
+                    config.max_tokens,
+                    config.temperature,
+                    &provider_name,
+                    None,
+                )
+                .await
             };
-            
+
             match result {
                 Ok((response, input_tokens, output_tokens)) => {
                     print!("\r{}\r", " ".repeat(20)); // Clear "Thinking..."
                     println!("{} {}", "Assistant:".bold().blue(), response);
-                    
+
                     // Save to database with token counts
-                    if let Err(e) = db.save_chat_entry_with_tokens(&session_id, &current_model, input, &response, input_tokens, output_tokens) {
+                    if let Err(e) = db.save_chat_entry_with_tokens(
+                        &session_id,
+                        &current_model,
+                        input,
+                        &response,
+                        input_tokens,
+                        output_tokens,
+                    ) {
                         eprintln!("Warning: Failed to save chat entry: {}", e);
                     }
-                    
+
                     // Clear processed images after first use
                     if !processed_images.is_empty() {
                         processed_images.clear();
@@ -2982,10 +3618,10 @@ pub async fn handle_chat_command(model: Option<String>, provider: Option<String>
                 }
             }
         }
-        
+
         println!(); // Add spacing
     }
-    
+
     Ok(())
 }
 
@@ -3001,54 +3637,76 @@ pub async fn handle_models_command(
     output_price: Option<f64>,
 ) -> Result<()> {
     use colored::Colorize;
-    
+
     match command {
         Some(ModelsCommands::Refresh) => {
             crate::unified_cache::UnifiedCache::refresh_all_providers().await?;
         }
         Some(ModelsCommands::Info) => {
             debug_log!("Handling models info command");
-            
+
             let models_dir = crate::unified_cache::UnifiedCache::models_dir()?;
             debug_log!("Models cache directory: {}", models_dir.display());
-            
+
             println!("\n{}", "Models Cache Information:".bold().blue());
             println!("Cache Directory: {}", models_dir.display());
-            
+
             if !models_dir.exists() {
                 debug_log!("Cache directory does not exist");
                 println!("Status: No cache directory found");
                 return Ok(());
             }
-            
+
             let entries = std::fs::read_dir(&models_dir)?;
             let mut provider_count = 0;
             let mut total_models = 0;
-            
+
             debug_log!("Reading cache directory entries");
-            
+
             // Collect provider information first
             let mut provider_info = Vec::new();
             for entry in entries {
                 let entry = entry?;
                 let path = entry.path();
-                
+
                 if let Some(extension) = path.extension() {
                     if extension == "json" {
                         if let Some(provider_name) = path.file_stem().and_then(|s| s.to_str()) {
                             debug_log!("Processing cache file for provider: {}", provider_name);
                             provider_count += 1;
-                            match crate::unified_cache::UnifiedCache::load_provider_models(provider_name).await {
+                            match crate::unified_cache::UnifiedCache::load_provider_models(
+                                provider_name,
+                            )
+                            .await
+                            {
                                 Ok(models) => {
                                     let count = models.len();
                                     total_models += count;
-                                    debug_log!("Provider '{}' has {} cached models", provider_name, count);
-                                    
-                                    let age_display = crate::unified_cache::UnifiedCache::get_cache_age_display(provider_name).await
+                                    debug_log!(
+                                        "Provider '{}' has {} cached models",
+                                        provider_name,
+                                        count
+                                    );
+
+                                    let age_display =
+                                        crate::unified_cache::UnifiedCache::get_cache_age_display(
+                                            provider_name,
+                                        )
+                                        .await
                                         .unwrap_or_else(|_| "Unknown".to_string());
-                                    let is_fresh = crate::unified_cache::UnifiedCache::is_cache_fresh(provider_name).await.unwrap_or(false);
-                                    debug_log!("Provider '{}' cache age: {}, fresh: {}", provider_name, age_display, is_fresh);
-                                    
+                                    let is_fresh =
+                                        crate::unified_cache::UnifiedCache::is_cache_fresh(
+                                            provider_name,
+                                        )
+                                        .await
+                                        .unwrap_or(false);
+                                    debug_log!(
+                                        "Provider '{}' cache age: {}, fresh: {}",
+                                        provider_name,
+                                        age_display,
+                                        is_fresh
+                                    );
+
                                     let status = if is_fresh {
                                         age_display.green()
                                     } else {
@@ -3057,31 +3715,49 @@ pub async fn handle_models_command(
                                     provider_info.push((provider_name.to_string(), count, status));
                                 }
                                 Err(e) => {
-                                    debug_log!("Error loading cache for provider '{}': {}", provider_name, e);
-                                    provider_info.push((provider_name.to_string(), 0, "Error loading cache".red()));
+                                    debug_log!(
+                                        "Error loading cache for provider '{}': {}",
+                                        provider_name,
+                                        e
+                                    );
+                                    provider_info.push((
+                                        provider_name.to_string(),
+                                        0,
+                                        "Error loading cache".red(),
+                                    ));
                                 }
                             }
                         }
                     }
                 }
             }
-            
+
             debug_log!("Sorting {} providers alphabetically", provider_info.len());
-            
+
             // Sort providers alphabetically by name
             provider_info.sort_by(|a, b| a.0.cmp(&b.0));
-            
+
             println!("\nCached Providers:");
             for (provider_name, count, status) in provider_info {
                 if count > 0 {
-                    println!("  {} {} - {} models ({})", "•".blue(), provider_name.bold(), count, status);
+                    println!(
+                        "  {} {} - {} models ({})",
+                        "•".blue(),
+                        provider_name.bold(),
+                        count,
+                        status
+                    );
                 } else {
                     println!("  {} {} - {}", "•".blue(), provider_name.bold(), status);
                 }
             }
-            
-            debug_log!("Cache summary: {} providers, {} total models", provider_count, total_models);
-            
+
+            debug_log!(
+                "Cache summary: {} providers, {} total models",
+                provider_count,
+                total_models
+            );
+
             println!("\nSummary:");
             println!("  Providers: {}", provider_count);
             println!("  Total Models: {}", total_models);
@@ -3091,60 +3767,66 @@ pub async fn handle_models_command(
         }
         Some(ModelsCommands::Embed) => {
             debug_log!("Handling embedding models command");
-            
+
             // Use unified cache for embedding models command
             debug_log!("Loading all cached models from unified cache");
-            let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
-            
+            let enhanced_models =
+                crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
+
             debug_log!("Loaded {} models from cache", enhanced_models.len());
-            
+
             // If no cached models found, refresh all providers
             if enhanced_models.is_empty() {
                 debug_log!("No cached models found, refreshing all providers");
                 println!("No cached models found. Refreshing all providers...");
                 crate::unified_cache::UnifiedCache::refresh_all_providers().await?;
-                let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
-                
+                let enhanced_models =
+                    crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
+
                 debug_log!("After refresh, loaded {} models", enhanced_models.len());
-                
+
                 if enhanced_models.is_empty() {
                     debug_log!("Still no models found after refresh");
                     println!("No models found after refresh.");
                     return Ok(());
                 }
             }
-            
+
             debug_log!("Filtering for embedding models");
-            
+
             // Filter for embedding models only
-            let embedding_models: Vec<_> = enhanced_models.into_iter()
-                .filter(|model| matches!(model.model_type, crate::model_metadata::ModelType::Embedding))
+            let embedding_models: Vec<_> = enhanced_models
+                .into_iter()
+                .filter(|model| {
+                    matches!(
+                        model.model_type,
+                        crate::model_metadata::ModelType::Embedding
+                    )
+                })
                 .collect();
-            
+
             debug_log!("Found {} embedding models", embedding_models.len());
-            
+
             if embedding_models.is_empty() {
                 println!("No embedding models found.");
                 return Ok(());
             }
-            
+
             // Display results
             debug_log!("Displaying {} embedding models", embedding_models.len());
             display_embedding_models(&embedding_models)?;
         }
-        Some(ModelsCommands::Path { command }) => {
-            match command {
-                ModelsPathCommands::List => {
-                    crate::model_metadata::list_model_paths()?;
-                }
-                ModelsPathCommands::Add { path } => {
-                    crate::model_metadata::add_model_path(path)?;
-                }
-                ModelsPathCommands::Delete { path } => {
-                    crate::model_metadata::remove_model_path(path)?;
-                }
+        Some(ModelsCommands::Path { command }) => match command {
+            ModelsPathCommands::List => {
+                crate::model_metadata::list_model_paths()?;
             }
-        }
+            ModelsPathCommands::Add { path } => {
+                crate::model_metadata::add_model_path(path)?;
+            }
+            ModelsPathCommands::Delete { path } => {
+                crate::model_metadata::remove_model_path(path)?;
+            }
+        },
         Some(ModelsCommands::Tags { command }) => {
             match command {
                 ModelsTagsCommands::List => {
@@ -3159,27 +3841,52 @@ pub async fn handle_models_command(
         Some(ModelsCommands::Filter { tags: filter_tags }) => {
             // Load all models
             let models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
-            
+
             // Parse tags
             let required_tags: Vec<&str> = filter_tags.split(',').map(|s| s.trim()).collect();
-            
+
             // Filter models based on tags
-            let filtered: Vec<_> = models.into_iter().filter(|model| {
-                for tag in &required_tags {
-                    match *tag {
-                        "tools" => if !model.supports_tools && !model.supports_function_calling { return false; }
-                        "vision" => if !model.supports_vision { return false; }
-                        "audio" => if !model.supports_audio { return false; }
-                        "reasoning" => if !model.supports_reasoning { return false; }
-                        "code" => if !model.supports_code { return false; }
-                        _ => {
-                            // Check for context length filters like "ctx>100k"
-                            if tag.starts_with("ctx") {
-                                if let Some(ctx) = model.context_length {
-                                    if tag.contains('>') {
-                                        if let Some(min_str) = tag.split('>').nth(1) {
-                                            if let Ok(min_ctx) = parse_token_count(min_str) {
-                                                if ctx < min_ctx { return false; }
+            let filtered: Vec<_> = models
+                .into_iter()
+                .filter(|model| {
+                    for tag in &required_tags {
+                        match *tag {
+                            "tools" => {
+                                if !model.supports_tools && !model.supports_function_calling {
+                                    return false;
+                                }
+                            }
+                            "vision" => {
+                                if !model.supports_vision {
+                                    return false;
+                                }
+                            }
+                            "audio" => {
+                                if !model.supports_audio {
+                                    return false;
+                                }
+                            }
+                            "reasoning" => {
+                                if !model.supports_reasoning {
+                                    return false;
+                                }
+                            }
+                            "code" => {
+                                if !model.supports_code {
+                                    return false;
+                                }
+                            }
+                            _ => {
+                                // Check for context length filters like "ctx>100k"
+                                if tag.starts_with("ctx") {
+                                    if let Some(ctx) = model.context_length {
+                                        if tag.contains('>') {
+                                            if let Some(min_str) = tag.split('>').nth(1) {
+                                                if let Ok(min_ctx) = parse_token_count(min_str) {
+                                                    if ctx < min_ctx {
+                                                        return false;
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -3187,24 +3894,29 @@ pub async fn handle_models_command(
                             }
                         }
                     }
-                }
-                true
-            }).collect();
-            
+                    true
+                })
+                .collect();
+
             if filtered.is_empty() {
                 println!("No models found with tags: {}", filter_tags);
             } else {
-                println!("\n{} Models with tags [{}] ({} found):", "Filtered Results:".bold().blue(), filter_tags, filtered.len());
-                
+                println!(
+                    "\n{} Models with tags [{}] ({} found):",
+                    "Filtered Results:".bold().blue(),
+                    filter_tags,
+                    filtered.len()
+                );
+
                 let mut current_provider = String::new();
                 for model in filtered {
                     if model.provider != current_provider {
                         current_provider = model.provider.clone();
                         println!("\n{}", format!("{}:", current_provider).bold().green());
                     }
-                    
+
                     print!("  {} {}", "•".blue(), model.id.bold());
-                    
+
                     // Show capabilities
                     let mut capabilities = Vec::new();
                     if model.supports_tools || model.supports_function_calling {
@@ -3222,12 +3934,13 @@ pub async fn handle_models_command(
                     if model.supports_code {
                         capabilities.push("💻 code".green());
                     }
-                    
+
                     if !capabilities.is_empty() {
-                        let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+                        let capability_strings: Vec<String> =
+                            capabilities.iter().map(|c| c.to_string()).collect();
                         print!(" [{}]", capability_strings.join(" "));
                     }
-                    
+
                     // Show context info
                     if let Some(ctx) = model.context_length {
                         if ctx >= 1000 {
@@ -3236,46 +3949,49 @@ pub async fn handle_models_command(
                             print!(" ({} ctx)", ctx);
                         }
                     }
-                    
+
                     println!();
                 }
             }
         }
         None => {
             debug_log!("Handling global models command");
-            
+
             // Use unified cache for global models command
             debug_log!("Loading all cached models from unified cache");
-            let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
-            
+            let enhanced_models =
+                crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
+
             debug_log!("Loaded {} models from cache", enhanced_models.len());
-            
+
             // If no cached models found, refresh all providers
             if enhanced_models.is_empty() {
                 debug_log!("No cached models found, refreshing all providers");
                 println!("No cached models found. Refreshing all providers...");
                 crate::unified_cache::UnifiedCache::refresh_all_providers().await?;
-                let enhanced_models = crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
-                
+                let enhanced_models =
+                    crate::unified_cache::UnifiedCache::load_all_cached_models().await?;
+
                 debug_log!("After refresh, loaded {} models", enhanced_models.len());
-                
+
                 if enhanced_models.is_empty() {
                     debug_log!("Still no models found after refresh");
                     println!("No models found after refresh.");
                     return Ok(());
                 }
             }
-            
+
             debug_log!("Applying filters to {} models", enhanced_models.len());
-            
+
             // Parse tags if provided
             let tag_filters = if let Some(ref tag_str) = tags {
-                let tags_vec: Vec<String> = tag_str.split(',').map(|s| s.trim().to_string()).collect();
+                let tags_vec: Vec<String> =
+                    tag_str.split(',').map(|s| s.trim().to_string()).collect();
                 Some(tags_vec)
             } else {
                 None
             };
-            
+
             // Apply filters
             let filtered_models = apply_model_filters_with_tags(
                 enhanced_models,
@@ -3287,28 +4003,28 @@ pub async fn handle_models_command(
                 input_price,
                 output_price,
             )?;
-            
+
             debug_log!("After filtering, {} models remain", filtered_models.len());
-            
+
             if filtered_models.is_empty() {
                 debug_log!("No models match the specified criteria");
                 println!("No models found matching the specified criteria.");
                 return Ok(());
             }
-            
+
             // Display results
             debug_log!("Displaying {} filtered models", filtered_models.len());
             display_enhanced_models(&filtered_models, &query)?;
         }
     }
-    
+
     Ok(())
 }
 
 // Template command handlers
 pub async fn handle_template_command(command: TemplateCommands) -> Result<()> {
     use colored::Colorize;
-    
+
     match command {
         TemplateCommands::Add { name, prompt } => {
             let mut config = config::Config::load()?;
@@ -3325,7 +4041,7 @@ pub async fn handle_template_command(command: TemplateCommands) -> Result<()> {
         TemplateCommands::List => {
             let config = config::Config::load()?;
             let templates = config.list_templates();
-            
+
             if templates.is_empty() {
                 println!("No templates configured.");
             } else {
@@ -3341,7 +4057,7 @@ pub async fn handle_template_command(command: TemplateCommands) -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -3355,28 +4071,35 @@ pub async fn handle_proxy_command(
     generate_key: bool,
 ) -> Result<()> {
     use crate::proxy;
-    
+
     // Handle API key generation
     let final_api_key = if generate_key {
         let generated_key = proxy::generate_api_key();
-        println!("{} Generated API key: {}", "🔑".green(), generated_key.bold());
+        println!(
+            "{} Generated API key: {}",
+            "🔑".green(),
+            generated_key.bold()
+        );
         Some(generated_key)
     } else {
         api_key
     };
-    
+
     // Validate provider if specified
     if let Some(ref provider_name) = provider {
         let config = config::Config::load()?;
         if !config.has_provider(provider_name) {
-            anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", provider_name);
+            anyhow::bail!(
+                "Provider '{}' not found. Add it first with 'lc providers add'",
+                provider_name
+            );
         }
     }
-    
+
     // Validate model if specified (could be alias or provider:model format)
     if let Some(ref model_name) = model {
         let config = config::Config::load()?;
-        
+
         // Check if it's an alias
         if let Some(_alias_target) = config.get_alias(model_name) {
             // Valid alias
@@ -3386,7 +4109,11 @@ pub async fn handle_proxy_command(
             if parts.len() == 2 {
                 let provider_name = parts[0];
                 if !config.has_provider(provider_name) {
-                    anyhow::bail!("Provider '{}' not found in model specification '{}'", provider_name, model_name);
+                    anyhow::bail!(
+                        "Provider '{}' not found in model specification '{}'",
+                        provider_name,
+                        model_name
+                    );
                 }
             }
         } else {
@@ -3394,69 +4121,82 @@ pub async fn handle_proxy_command(
             // This will be validated when requests come in
         }
     }
-    
+
     // Show configuration summary
     println!("\n{}", "Proxy Server Configuration:".bold().blue());
     println!("  {} {}:{}", "Address:".bold(), host, port);
-    
+
     if let Some(ref provider_filter) = provider {
-        println!("  {} {}", "Provider Filter:".bold(), provider_filter.green());
+        println!(
+            "  {} {}",
+            "Provider Filter:".bold(),
+            provider_filter.green()
+        );
     } else {
-        println!("  {} {}", "Provider Filter:".bold(), "All providers".dimmed());
+        println!(
+            "  {} {}",
+            "Provider Filter:".bold(),
+            "All providers".dimmed()
+        );
     }
-    
+
     if let Some(ref model_filter) = model {
         println!("  {} {}", "Model Filter:".bold(), model_filter.green());
     } else {
         println!("  {} {}", "Model Filter:".bold(), "All models".dimmed());
     }
-    
+
     if final_api_key.is_some() {
         println!("  {} {}", "Authentication:".bold(), "Enabled".green());
     } else {
         println!("  {} {}", "Authentication:".bold(), "Disabled".yellow());
     }
-    
+
     println!("\n{}", "Available endpoints:".bold().blue());
     println!("  {} http://{}:{}/models", "•".blue(), host, port);
     println!("  {} http://{}:{}/v1/models", "•".blue(), host, port);
     println!("  {} http://{}:{}/chat/completions", "•".blue(), host, port);
-    println!("  {} http://{}:{}/v1/chat/completions", "•".blue(), host, port);
-    
+    println!(
+        "  {} http://{}:{}/v1/chat/completions",
+        "•".blue(),
+        host,
+        port
+    );
+
     println!("\n{} Press Ctrl+C to stop the server\n", "💡".yellow());
-    
+
     // Start the proxy server
     proxy::start_proxy_server(host, port, provider, model, final_api_key).await?;
-    
+
     Ok(())
 }
 
 // Dump models data function
 async fn dump_models_data() -> Result<()> {
-    use crate::{config::Config, chat};
-    
+    use crate::{chat, config::Config};
+
     println!("{} Dumping /models for each provider...", "🔍".blue());
-    
+
     // Load configuration
     let config = Config::load()?;
-    
+
     // Create models directory if it doesn't exist
     std::fs::create_dir_all("models")?;
-    
+
     let mut successful_dumps = 0;
     let mut total_providers = 0;
-    
+
     for (provider_name, provider_config) in &config.providers {
         total_providers += 1;
-        
+
         // Skip providers without API keys
         if provider_config.api_key.is_none() {
             println!("{} Skipping {} (no API key)", "⚠️".yellow(), provider_name);
             continue;
         }
-        
+
         println!("{} Fetching models from {}...", "📡".blue(), provider_name);
-        
+
         // Create authenticated client
         let mut config_mut = config.clone();
         match chat::create_authenticated_client(&mut config_mut, provider_name).await {
@@ -3468,38 +4208,57 @@ async fn dump_models_data() -> Result<()> {
                         let filename = format!("models/{}.json", provider_name);
                         match std::fs::write(&filename, &raw_response) {
                             Ok(_) => {
-                                println!("{} Saved {} models data to {}", "✅".green(), provider_name, filename);
+                                println!(
+                                    "{} Saved {} models data to {}",
+                                    "✅".green(),
+                                    provider_name,
+                                    filename
+                                );
                                 successful_dumps += 1;
                             }
                             Err(e) => {
-                                println!("{} Failed to save {} models data: {}", "❌".red(), provider_name, e);
+                                println!(
+                                    "{} Failed to save {} models data: {}",
+                                    "❌".red(),
+                                    provider_name,
+                                    e
+                                );
                             }
                         }
                     }
                     Err(e) => {
-                        println!("{} Failed to fetch models from {}: {}", "❌".red(), provider_name, e);
+                        println!(
+                            "{} Failed to fetch models from {}: {}",
+                            "❌".red(),
+                            provider_name,
+                            e
+                        );
                     }
                 }
             }
             Err(e) => {
-                println!("{} Failed to create client for {}: {}", "❌".red(), provider_name, e);
+                println!(
+                    "{} Failed to create client for {}: {}",
+                    "❌".red(),
+                    provider_name,
+                    e
+                );
             }
         }
     }
-    
+
     println!("\n{} Summary:", "📊".blue());
     println!("   Total providers: {}", total_providers);
     println!("   Successful dumps: {}", successful_dumps);
     println!("   Models data saved to: ./models/");
-    
+
     if successful_dumps > 0 {
         println!("\n{} Model data collection complete!", "🎉".green());
         println!("   Next step: Analyze the JSON files to extract metadata patterns");
     }
-    
+
     Ok(())
 }
-
 
 fn apply_model_filters_with_tags(
     models: Vec<crate::model_metadata::ModelMetadata>,
@@ -3512,23 +4271,30 @@ fn apply_model_filters_with_tags(
     output_price: Option<f64>,
 ) -> Result<Vec<crate::model_metadata::ModelMetadata>> {
     let mut filtered = models;
-    
+
     // Apply text search filter
     if let Some(ref search_query) = query {
         let query_lower = search_query.to_lowercase();
         filtered.retain(|model| {
-            model.id.to_lowercase().contains(&query_lower) ||
-            model.display_name.as_ref().map_or(false, |name| name.to_lowercase().contains(&query_lower)) ||
-            model.description.as_ref().map_or(false, |desc| desc.to_lowercase().contains(&query_lower))
+            model.id.to_lowercase().contains(&query_lower)
+                || model
+                    .display_name
+                    .as_ref()
+                    .map_or(false, |name| name.to_lowercase().contains(&query_lower))
+                || model
+                    .description
+                    .as_ref()
+                    .map_or(false, |desc| desc.to_lowercase().contains(&query_lower))
         });
     }
-    
+
     // Apply tag filters if provided
     if let Some(tags) = tag_filters {
         for tag in tags {
             match tag.as_str() {
                 "tools" => {
-                    filtered.retain(|model| model.supports_tools || model.supports_function_calling);
+                    filtered
+                        .retain(|model| model.supports_tools || model.supports_function_calling);
                 }
                 "reasoning" => {
                     filtered.retain(|model| model.supports_reasoning);
@@ -3548,86 +4314,104 @@ fn apply_model_filters_with_tags(
             }
         }
     }
-    
+
     // Apply context length filter
     if let Some(ref ctx_str) = context_length {
         let min_ctx = parse_token_count(ctx_str)?;
-        filtered.retain(|model| {
-            model.context_length.map_or(false, |ctx| ctx >= min_ctx)
-        });
+        filtered.retain(|model| model.context_length.map_or(false, |ctx| ctx >= min_ctx));
     }
-    
+
     // Apply input length filter
     if let Some(ref input_str) = input_length {
         let min_input = parse_token_count(input_str)?;
         filtered.retain(|model| {
-            model.max_input_tokens.map_or(false, |input| input >= min_input) ||
-            model.context_length.map_or(false, |ctx| ctx >= min_input)
+            model
+                .max_input_tokens
+                .map_or(false, |input| input >= min_input)
+                || model.context_length.map_or(false, |ctx| ctx >= min_input)
         });
     }
-    
+
     // Apply output length filter
     if let Some(ref output_str) = output_length {
         let min_output = parse_token_count(output_str)?;
         filtered.retain(|model| {
-            model.max_output_tokens.map_or(false, |output| output >= min_output)
+            model
+                .max_output_tokens
+                .map_or(false, |output| output >= min_output)
         });
     }
-    
+
     // Apply price filters
     if let Some(max_input_price) = input_price {
         filtered.retain(|model| {
-            model.input_price_per_m.map_or(true, |price| price <= max_input_price)
+            model
+                .input_price_per_m
+                .map_or(true, |price| price <= max_input_price)
         });
     }
-    
+
     if let Some(max_output_price) = output_price {
         filtered.retain(|model| {
-            model.output_price_per_m.map_or(true, |price| price <= max_output_price)
+            model
+                .output_price_per_m
+                .map_or(true, |price| price <= max_output_price)
         });
     }
-    
+
     // Sort by provider, then by model name
-    filtered.sort_by(|a, b| {
-        a.provider.cmp(&b.provider).then(a.id.cmp(&b.id))
-    });
-    
+    filtered.sort_by(|a, b| a.provider.cmp(&b.provider).then(a.id.cmp(&b.id)));
+
     Ok(filtered)
 }
-
 
 fn parse_token_count(input: &str) -> Result<u32> {
     let input = input.to_lowercase();
     if let Some(num_str) = input.strip_suffix('k') {
-        let num: f32 = num_str.parse()
+        let num: f32 = num_str
+            .parse()
             .map_err(|_| anyhow::anyhow!("Invalid token count format: '{}'", input))?;
         Ok((num * 1000.0) as u32)
     } else if let Some(num_str) = input.strip_suffix('m') {
-        let num: f32 = num_str.parse()
+        let num: f32 = num_str
+            .parse()
             .map_err(|_| anyhow::anyhow!("Invalid token count format: '{}'", input))?;
         Ok((num * 1000000.0) as u32)
     } else {
-        input.parse()
+        input
+            .parse()
             .map_err(|_| anyhow::anyhow!("Invalid token count format: '{}'", input))
     }
 }
 
-fn display_enhanced_models(models: &[crate::model_metadata::ModelMetadata], query: &Option<String>) -> Result<()> {
+fn display_enhanced_models(
+    models: &[crate::model_metadata::ModelMetadata],
+    query: &Option<String>,
+) -> Result<()> {
     use colored::Colorize;
-    
+
     if let Some(ref search_query) = query {
-        println!("\n{} Models matching '{}' ({} found):", "Search Results:".bold().blue(), search_query, models.len());
+        println!(
+            "\n{} Models matching '{}' ({} found):",
+            "Search Results:".bold().blue(),
+            search_query,
+            models.len()
+        );
     } else {
-        println!("\n{} Available models ({} total):", "Models:".bold().blue(), models.len());
+        println!(
+            "\n{} Available models ({} total):",
+            "Models:".bold().blue(),
+            models.len()
+        );
     }
-    
+
     let mut current_provider = String::new();
     for model in models {
         if model.provider != current_provider {
             current_provider = model.provider.clone();
             println!("\n{}", format!("{}:", current_provider).bold().green());
         }
-        
+
         // Build capability indicators
         let mut capabilities = Vec::new();
         if model.supports_tools || model.supports_function_calling {
@@ -3645,7 +4429,7 @@ fn display_enhanced_models(models: &[crate::model_metadata::ModelMetadata], quer
         if model.supports_code {
             capabilities.push("💻 code".green());
         }
-        
+
         // Build context info
         let mut context_info = Vec::new();
         if let Some(ctx) = model.context_length {
@@ -3654,34 +4438,38 @@ fn display_enhanced_models(models: &[crate::model_metadata::ModelMetadata], quer
         if let Some(max_out) = model.max_output_tokens {
             context_info.push(format!("{}k out", max_out / 1000));
         }
-        
+
         // Display model with metadata
         let model_display = if let Some(ref display_name) = model.display_name {
             format!("{} ({})", model.id, display_name)
         } else {
             model.id.clone()
         };
-        
+
         print!("  {} {}", "•".blue(), model_display.bold());
-        
+
         if !capabilities.is_empty() {
-            let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+            let capability_strings: Vec<String> =
+                capabilities.iter().map(|c| c.to_string()).collect();
             print!(" [{}]", capability_strings.join(" "));
         }
-        
+
         if !context_info.is_empty() {
             print!(" ({})", context_info.join(", ").dimmed());
         }
-        
+
         println!();
     }
-    
+
     Ok(())
 }
 
-pub async fn fetch_raw_models_response(_client: &crate::chat::LLMClient, provider_config: &crate::config::ProviderConfig) -> Result<String> {
+pub async fn fetch_raw_models_response(
+    _client: &crate::chat::LLMClient,
+    provider_config: &crate::config::ProviderConfig,
+) -> Result<String> {
     use serde_json::Value;
-    
+
     // Use the shared optimized HTTP client
     // Create optimized HTTP client with connection pooling and keep-alive settings
     let http_client = reqwest::Client::builder()
@@ -3691,18 +4479,18 @@ pub async fn fetch_raw_models_response(_client: &crate::chat::LLMClient, provide
         .timeout(std::time::Duration::from_secs(60))
         .connect_timeout(std::time::Duration::from_secs(10))
         .build()?;
-    
+
     let url = provider_config.get_models_url();
-    
+
     debug_log!("Making API request to: {}", url);
     debug_log!("Request timeout: 60 seconds");
-    
+
     let mut req = http_client
         .get(&url)
         .header("Content-Type", "application/json");
-    
+
     debug_log!("Added Content-Type: application/json header");
-    
+
     // Add custom headers first
     let mut has_custom_headers = false;
     for (name, value) in &provider_config.headers {
@@ -3710,30 +4498,33 @@ pub async fn fetch_raw_models_response(_client: &crate::chat::LLMClient, provide
         req = req.header(name, value);
         has_custom_headers = true;
     }
-    
+
     // Only add Authorization header if no custom headers are present
     if !has_custom_headers {
-        req = req.header("Authorization", format!("Bearer {}", provider_config.api_key.as_ref().unwrap()));
+        req = req.header(
+            "Authorization",
+            format!("Bearer {}", provider_config.api_key.as_ref().unwrap()),
+        );
         debug_log!("Added Authorization header with API key");
     } else {
         debug_log!("Skipping Authorization header due to custom headers present");
     }
-    
+
     debug_log!("Sending HTTP GET request...");
     let response = req.send().await?;
-    
+
     let status = response.status();
     debug_log!("Received response with status: {}", status);
-    
+
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
         debug_log!("API request failed with error response: {}", text);
         anyhow::bail!("API request failed with status {}: {}", status, text);
     }
-    
+
     let response_text = response.text().await?;
     debug_log!("Received response body ({} bytes)", response_text.len());
-    
+
     // Pretty print the JSON for better readability
     match serde_json::from_str::<Value>(&response_text) {
         Ok(json_value) => {
@@ -3751,7 +4542,7 @@ pub async fn fetch_raw_models_response(_client: &crate::chat::LLMClient, provide
 // Alias command handlers
 pub async fn handle_alias_command(command: AliasCommands) -> Result<()> {
     use colored::Colorize;
-    
+
     match command {
         AliasCommands::Add { name, target } => {
             let mut config = config::Config::load()?;
@@ -3768,7 +4559,7 @@ pub async fn handle_alias_command(command: AliasCommands) -> Result<()> {
         AliasCommands::List => {
             let config = config::Config::load()?;
             let aliases = config.list_aliases();
-            
+
             if aliases.is_empty() {
                 println!("No aliases configured.");
             } else {
@@ -3779,27 +4570,32 @@ pub async fn handle_alias_command(command: AliasCommands) -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 
 // Load enhanced models for a specific provider
-async fn load_provider_enhanced_models(provider_name: &str) -> Result<Vec<crate::model_metadata::ModelMetadata>> {
+async fn load_provider_enhanced_models(
+    provider_name: &str,
+) -> Result<Vec<crate::model_metadata::ModelMetadata>> {
     use crate::model_metadata::MetadataExtractor;
     use std::fs;
-    
+
     let filename = format!("models/{}.json", provider_name);
-    
+
     if !std::path::Path::new(&filename).exists() {
         return Ok(Vec::new());
     }
-    
+
     match fs::read_to_string(&filename) {
         Ok(json_content) => {
             match MetadataExtractor::extract_from_provider(provider_name, &json_content) {
                 Ok(models) => Ok(models),
                 Err(e) => {
-                    eprintln!("Warning: Failed to extract metadata from {}: {}", provider_name, e);
+                    eprintln!(
+                        "Warning: Failed to extract metadata from {}: {}",
+                        provider_name, e
+                    );
                     Ok(Vec::new())
                 }
             }
@@ -3814,14 +4610,19 @@ async fn load_provider_enhanced_models(provider_name: &str) -> Result<Vec<crate:
 // Display provider models with metadata
 fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> Result<()> {
     use colored::Colorize;
-    
+
     for model in models {
         // Safety check: log if all capability flags are false to catch defaulting bugs
-        if !model.supports_tools && !model.supports_function_calling && !model.supports_vision && 
-           !model.supports_audio && !model.supports_reasoning && !model.supports_code {
+        if !model.supports_tools
+            && !model.supports_function_calling
+            && !model.supports_vision
+            && !model.supports_audio
+            && !model.supports_reasoning
+            && !model.supports_code
+        {
             debug_log!("All capability flags are false for model '{}' - this might indicate a defaulting bug", model.id);
         }
-        
+
         // Build capability indicators
         let mut capabilities = Vec::new();
         if model.supports_tools || model.supports_function_calling {
@@ -3839,7 +4640,7 @@ fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> R
         if model.supports_code {
             capabilities.push("💻 code".green());
         }
-        
+
         // Build context and pricing info
         let mut info_parts = Vec::new();
         if let Some(ctx) = model.context_length {
@@ -3864,7 +4665,7 @@ fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> R
         if let Some(output_price) = model.output_price_per_m {
             info_parts.push(format!("${:.2}/M out", output_price));
         }
-        
+
         // Display model with metadata
         let model_display = if let Some(ref display_name) = model.display_name {
             if display_name != &model.id {
@@ -3875,21 +4676,22 @@ fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> R
         } else {
             model.id.clone()
         };
-        
+
         print!("  {} {}", "•".blue(), model_display.bold());
-        
+
         if !capabilities.is_empty() {
-            let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+            let capability_strings: Vec<String> =
+                capabilities.iter().map(|c| c.to_string()).collect();
             print!(" [{}]", capability_strings.join(" "));
         }
-        
+
         if !info_parts.is_empty() {
             print!(" ({})", info_parts.join(", ").dimmed());
         }
-        
+
         println!();
     }
-    
+
     Ok(())
 }
 
@@ -3897,31 +4699,42 @@ fn display_provider_models(models: &[crate::model_metadata::ModelMetadata]) -> R
 pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> {
     use crate::mcp::{McpConfig, McpServerType as ConfigMcpServerType};
     use colored::Colorize;
-    
+
     match command {
-        crate::cli::McpCommands::Add { name, command_or_url, server_type, env } => {
+        crate::cli::McpCommands::Add {
+            name,
+            command_or_url,
+            server_type,
+            env,
+        } => {
             let mut config = McpConfig::load()?;
-            
+
             // Convert CLI enum to config enum
             let config_server_type = match server_type {
                 crate::cli::McpServerType::Stdio => ConfigMcpServerType::Stdio,
                 crate::cli::McpServerType::Sse => ConfigMcpServerType::Sse,
                 crate::cli::McpServerType::Streamable => ConfigMcpServerType::Streamable,
             };
-            
+
             // Convert env vec to HashMap
             let env_map: HashMap<String, String> = env.into_iter().collect();
-            
+
             // For npx commands without -y, add it to ensure package download
-            let final_command_or_url = if command_or_url.starts_with("npx ") && !command_or_url.contains(" -y ") {
-                command_or_url.replacen("npx ", "npx -y ", 1)
-            } else {
-                command_or_url.clone()
-            };
-            
-            config.add_server_with_env(name.clone(), final_command_or_url.clone(), config_server_type, env_map.clone())?;
+            let final_command_or_url =
+                if command_or_url.starts_with("npx ") && !command_or_url.contains(" -y ") {
+                    command_or_url.replacen("npx ", "npx -y ", 1)
+                } else {
+                    command_or_url.clone()
+                };
+
+            config.add_server_with_env(
+                name.clone(),
+                final_command_or_url.clone(),
+                config_server_type,
+                env_map.clone(),
+            )?;
             config.save()?;
-            
+
             println!("{} MCP server '{}' added successfully", "✓".green(), name);
             println!("  Type: {:?}", server_type);
             println!("  Command/URL: {}", final_command_or_url);
@@ -3934,26 +4747,27 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
         }
         crate::cli::McpCommands::Delete { name } => {
             let mut config = McpConfig::load()?;
-            
+
             if config.get_server(&name).is_none() {
                 anyhow::bail!("MCP server '{}' not found", name);
             }
-            
+
             config.delete_server(&name)?;
             config.save()?;
-            
+
             println!("{} MCP server '{}' deleted successfully", "✓".green(), name);
         }
         crate::cli::McpCommands::List => {
             let config = McpConfig::load()?;
             let servers = config.list_servers();
-            
+
             if servers.is_empty() {
                 println!("No MCP servers configured.");
             } else {
                 println!("\n{} Configured MCP servers:", "Servers:".bold().blue());
                 for (name, server_config) in servers {
-                    println!("  {} {} - {:?} ({})",
+                    println!(
+                        "  {} {} - {:?} ({})",
                         "•".blue(),
                         name.bold(),
                         server_config.server_type,
@@ -3964,53 +4778,88 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
         }
         crate::cli::McpCommands::Stop { name } => {
             println!("{} Closing MCP server connection '{}'...", "🛑".red(), name);
-            
+
             let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
             match daemon_client.close_server(&name).await {
                 Ok(_) => {
-                    println!("{} MCP server '{}' connection closed successfully", "✓".green(), name);
+                    println!(
+                        "{} MCP server '{}' connection closed successfully",
+                        "✓".green(),
+                        name
+                    );
                 }
                 Err(e) => {
-                    println!("{} Failed to close MCP server '{}': {}", "⚠️".yellow(), name, e);
+                    println!(
+                        "{} Failed to close MCP server '{}': {}",
+                        "⚠️".yellow(),
+                        name,
+                        e
+                    );
                 }
             }
         }
         crate::cli::McpCommands::Functions { name } => {
             let config = McpConfig::load()?;
-            
+
             if config.get_server(&name).is_some() {
-                println!("{} Listing functions for MCP server '{}'...", "🔍".blue(), name);
-                
+                println!(
+                    "{} Listing functions for MCP server '{}'...",
+                    "🔍".blue(),
+                    name
+                );
+
                 // Use daemon client for persistent connections
                 let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
-                
+
                 crate::debug_log!("CLI: Starting MCP functions listing for server '{}'", name);
-                
+
                 // Ensure server is connected via daemon
                 match daemon_client.ensure_server_connected(&name).await {
                     Ok(_) => {
                         crate::debug_log!("CLI: Server '{}' connected successfully", name);
                         match daemon_client.list_tools(&name).await {
                             Ok(all_tools) => {
-                                crate::debug_log!("CLI: Received tools response with {} servers", all_tools.len());
+                                crate::debug_log!(
+                                    "CLI: Received tools response with {} servers",
+                                    all_tools.len()
+                                );
                                 if let Some(tools) = all_tools.get(&name) {
-                                    crate::debug_log!("CLI: Server '{}' has {} tools", name, tools.len());
+                                    crate::debug_log!(
+                                        "CLI: Server '{}' has {} tools",
+                                        name,
+                                        tools.len()
+                                    );
                                     if tools.is_empty() {
                                         println!("No functions found for server '{}'", name);
                                     } else {
-                                        println!("\n{} Available functions:", "Functions:".bold().blue());
+                                        println!(
+                                            "\n{} Available functions:",
+                                            "Functions:".bold().blue()
+                                        );
                                         for tool in tools {
-                                            println!("  {} {} - {}",
+                                            println!(
+                                                "  {} {} - {}",
                                                 "•".blue(),
                                                 tool.name.bold(),
-                                                tool.description.as_ref().map(|s| s.as_ref()).unwrap_or("No description")
+                                                tool.description
+                                                    .as_ref()
+                                                    .map(|s| s.as_ref())
+                                                    .unwrap_or("No description")
                                             );
-                                            
-                                            if let Some(properties) = tool.input_schema.get("properties") {
+
+                                            if let Some(properties) =
+                                                tool.input_schema.get("properties")
+                                            {
                                                 if let Some(props_obj) = properties.as_object() {
                                                     if !props_obj.is_empty() {
-                                                        println!("    Parameters: {}",
-                                                            props_obj.keys().map(|k| k.as_str()).collect::<Vec<_>>().join(", ").dimmed()
+                                                        println!(
+                                                            "    Parameters: {}",
+                                                            props_obj
+                                                                .keys()
+                                                                .map(|k| k.as_str())
+                                                                .collect::<Vec<_>>()
+                                                                .join(", ")
+                                                                .dimmed()
                                                         );
                                                     }
                                                 }
@@ -4018,13 +4867,20 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                                         }
                                     }
                                 } else {
-                                    crate::debug_log!("CLI: No tools found for server '{}' in response", name);
+                                    crate::debug_log!(
+                                        "CLI: No tools found for server '{}' in response",
+                                        name
+                                    );
                                     println!("No functions found for server '{}'", name);
                                 }
                             }
                             Err(e) => {
                                 crate::debug_log!("CLI: Failed to list tools: {}", e);
-                                anyhow::bail!("Failed to list functions from MCP server '{}': {}", name, e);
+                                anyhow::bail!(
+                                    "Failed to list functions from MCP server '{}': {}",
+                                    name,
+                                    e
+                                );
                             }
                         }
                     }
@@ -4037,18 +4893,27 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 anyhow::bail!("MCP server '{}' not found", name);
             }
         }
-        crate::cli::McpCommands::Invoke { name, function, args } => {
+        crate::cli::McpCommands::Invoke {
+            name,
+            function,
+            args,
+        } => {
             let config = McpConfig::load()?;
-            
+
             if config.get_server(&name).is_some() {
-                println!("{} Invoking function '{}' on MCP server '{}'...", "⚡".yellow(), function, name);
+                println!(
+                    "{} Invoking function '{}' on MCP server '{}'...",
+                    "⚡".yellow(),
+                    function,
+                    name
+                );
                 if !args.is_empty() {
                     println!("Arguments: {}", args.join(", ").dimmed());
                 }
-                
+
                 // Use daemon client for persistent connections
                 let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
-                
+
                 // Ensure server is connected via daemon
                 match daemon_client.ensure_server_connected(&name).await {
                     Ok(_) => {
@@ -4061,25 +4926,37 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                                 if let Some((key, value)) = arg.split_once('=') {
                                     params_obj.insert(key.to_string(), serde_json::json!(value));
                                 } else {
-                                    anyhow::bail!("Invalid argument format: '{}'. Expected 'key=value'", arg);
+                                    anyhow::bail!(
+                                        "Invalid argument format: '{}'. Expected 'key=value'",
+                                        arg
+                                    );
                                 }
                             }
                             serde_json::json!(params_obj)
                         };
-                        
+
                         match daemon_client.call_tool(&name, &function, params).await {
                             Ok(result) => {
                                 println!("\n{} Result:", "Response:".bold().green());
                                 println!("{}", serde_json::to_string_pretty(&result)?);
                             }
                             Err(e) => {
-                                anyhow::bail!("Failed to invoke function '{}' on MCP server '{}': {}", function, name, e);
+                                anyhow::bail!(
+                                    "Failed to invoke function '{}' on MCP server '{}': {}",
+                                    function,
+                                    name,
+                                    e
+                                );
                             }
                         }
-                        
+
                         // Connection persists in daemon - browser stays open!
                         println!("\n{} Tool invocation completed. Server connection remains active in daemon.", "ℹ️".blue());
-                        println!("{} Use 'lc mcp stop {}' if you want to close the server connection.", "💡".yellow(), name);
+                        println!(
+                            "{} Use 'lc mcp stop {}' if you want to close the server connection.",
+                            "💡".yellow(),
+                            name
+                        );
                     }
                     Err(e) => {
                         anyhow::bail!("Failed to connect to MCP server '{}': {}", name, e);
@@ -4090,32 +4967,34 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
             }
         }
     }
-    
+
     Ok(())
 }
 
 // Helper function to fetch MCP tools and convert them to OpenAI function format
-pub async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provider::Tool>>, Vec<String>)> {
+pub async fn fetch_mcp_tools(
+    tools_str: &str,
+) -> Result<(Option<Vec<crate::provider::Tool>>, Vec<String>)> {
     use crate::mcp::McpConfig;
-    
+
     // Parse comma-separated server names
     let server_names: Vec<&str> = tools_str.split(',').map(|s| s.trim()).collect();
     let mut all_tools = Vec::new();
     let mut valid_server_names = Vec::new();
-    
+
     // Load MCP configuration
     let config = McpConfig::load()?;
-    
+
     // Use daemon client for persistent connections
     let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
-    
+
     for server_name in server_names {
         if server_name.is_empty() {
             continue;
         }
-        
+
         crate::debug_log!("Fetching tools from MCP server '{}'", server_name);
-        
+
         // Check if server exists in configuration
         if config.get_server(server_name).is_some() {
             // Ensure server is connected via daemon
@@ -4125,53 +5004,75 @@ pub async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provi
                     valid_server_names.push(server_name.to_string());
                 }
                 Err(e) => {
-                    eprintln!("Warning: Failed to connect to MCP server '{}': {}", server_name, e);
+                    eprintln!(
+                        "Warning: Failed to connect to MCP server '{}': {}",
+                        server_name, e
+                    );
                     continue;
                 }
             }
         } else {
-            eprintln!("Warning: MCP server '{}' not found in configuration", server_name);
+            eprintln!(
+                "Warning: MCP server '{}' not found in configuration",
+                server_name
+            );
             continue;
         }
     }
-    
+
     // Get all tools from connected servers using daemon client
     for server_name in &valid_server_names {
         match daemon_client.list_tools(server_name).await {
             Ok(server_tools) => {
                 if let Some(tools) = server_tools.get(server_name) {
-                    crate::debug_log!("Retrieved {} tools from server '{}'", tools.len(), server_name);
-                    
+                    crate::debug_log!(
+                        "Retrieved {} tools from server '{}'",
+                        tools.len(),
+                        server_name
+                    );
+
                     for tool in tools {
                         // Convert MCP tool to OpenAI tool format
                         let openai_tool = crate::provider::Tool {
                             tool_type: "function".to_string(),
                             function: crate::provider::Function {
                                 name: tool.name.to_string(),
-                                description: tool.description.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "No description".to_string()),
-                                parameters: serde_json::to_value(&*tool.input_schema).unwrap_or_else(|_| {
-                                    serde_json::json!({
-                                        "type": "object",
-                                        "properties": {},
-                                        "required": []
-                                    })
-                                }),
+                                description: tool
+                                    .description
+                                    .as_ref()
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| "No description".to_string()),
+                                parameters: serde_json::to_value(&*tool.input_schema)
+                                    .unwrap_or_else(|_| {
+                                        serde_json::json!({
+                                            "type": "object",
+                                            "properties": {},
+                                            "required": []
+                                        })
+                                    }),
                             },
                         };
-                        
+
                         all_tools.push(openai_tool);
-                        crate::debug_log!("Added tool '{}' from server '{}'", tool.name, server_name);
+                        crate::debug_log!(
+                            "Added tool '{}' from server '{}'",
+                            tool.name,
+                            server_name
+                        );
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to list tools from MCP server '{}': {}", server_name, e);
+                eprintln!(
+                    "Warning: Failed to list tools from MCP server '{}': {}",
+                    server_name, e
+                );
             }
         }
     }
-    
+
     // Connections persist in daemon - no cleanup needed
-    
+
     if all_tools.is_empty() {
         crate::debug_log!("No tools found from any specified MCP servers");
         Ok((None, valid_server_names))
@@ -4184,16 +5085,20 @@ pub async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<crate::provi
 // Display embedding models with metadata
 fn display_embedding_models(models: &[crate::model_metadata::ModelMetadata]) -> Result<()> {
     use colored::Colorize;
-    
-    println!("\n{} Available embedding models ({} total):", "Embedding Models:".bold().blue(), models.len());
-    
+
+    println!(
+        "\n{} Available embedding models ({} total):",
+        "Embedding Models:".bold().blue(),
+        models.len()
+    );
+
     let mut current_provider = String::new();
     for model in models {
         if model.provider != current_provider {
             current_provider = model.provider.clone();
             println!("\n{}", format!("{}:", current_provider).bold().green());
         }
-        
+
         // Build context and pricing info
         let mut info_parts = Vec::new();
         if let Some(ctx) = model.context_length {
@@ -4208,7 +5113,7 @@ fn display_embedding_models(models: &[crate::model_metadata::ModelMetadata]) -> 
         if let Some(input_price) = model.input_price_per_m {
             info_parts.push(format!("${:.2}/M", input_price));
         }
-        
+
         // Display model with metadata
         let model_display = if let Some(ref display_name) = model.display_name {
             if display_name != &model.id {
@@ -4219,80 +5124,99 @@ fn display_embedding_models(models: &[crate::model_metadata::ModelMetadata]) -> 
         } else {
             model.id.clone()
         };
-        
+
         print!("  {} {}", "•".blue(), model_display.bold());
-        
+
         if !info_parts.is_empty() {
             print!(" ({})", info_parts.join(", ").dimmed());
         }
-        
+
         println!();
     }
-    
+
     Ok(())
 }
 
 // Embed command handler
-pub async fn handle_embed_command(model: String, provider: Option<String>, database: Option<String>, files: Vec<String>, text: Option<String>, debug: bool) -> Result<()> {
+pub async fn handle_embed_command(
+    model: String,
+    provider: Option<String>,
+    database: Option<String>,
+    files: Vec<String>,
+    text: Option<String>,
+    debug: bool,
+) -> Result<()> {
     use colored::Colorize;
-    
+
     // Set debug mode if requested
     if debug {
         set_debug_mode(true);
     }
-    
+
     // Validate input: either text or files must be provided
     if text.is_none() && files.is_empty() {
         anyhow::bail!("Either text or files must be provided for embedding");
     }
-    
+
     let config = config::Config::load()?;
-    
+
     // Resolve provider and model using the same logic as direct prompts
-    let (provider_name, resolved_model) = resolve_model_and_provider(&config, provider, Some(model))?;
-    
+    let (provider_name, resolved_model) =
+        resolve_model_and_provider(&config, provider, Some(model))?;
+
     // Get provider config
     let provider_config = config.get_provider(&provider_name)?;
-    
+
     if provider_config.api_key.is_none() {
-        anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
+        anyhow::bail!(
+            "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
+            provider_name,
+            provider_name
+        );
     }
-    
+
     let mut config_mut = config.clone();
     let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
-    
+
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
         config_mut.save()?;
     }
-    
+
     println!("{} Starting embedding process...", "🔄".blue());
     println!("{} Model: {}", "📊".blue(), resolved_model);
     println!("{} Provider: {}", "🏢".blue(), provider_name);
-    
+
     let mut total_embeddings = 0;
     let mut total_tokens = 0;
-    
+
     // Process files if provided
     if !files.is_empty() {
         println!("{} Processing files with glob patterns...", "📁".blue());
-        
+
         // Expand file patterns and filter for text files
         let file_paths = crate::vector_db::FileProcessor::expand_file_patterns(&files)?;
-        
+
         if file_paths.is_empty() {
-            println!("{} No text files found matching the patterns", "⚠️".yellow());
+            println!(
+                "{} No text files found matching the patterns",
+                "⚠️".yellow()
+            );
         } else {
-            println!("{} Found {} text files to process", "✅".green(), file_paths.len());
-            
+            println!(
+                "{} Found {} text files to process",
+                "✅".green(),
+                file_paths.len()
+            );
+
             for file_path in file_paths {
                 println!("\n{} Processing file: {}", "📄".blue(), file_path.display());
-                
+
                 // Read and chunk the file
                 match crate::vector_db::FileProcessor::process_file(&file_path) {
                     Ok(chunks) => {
                         println!("{} Split into {} chunks", "✂️".blue(), chunks.len());
-                        
+
                         // Process each chunk
                         for (chunk_index, chunk) in chunks.iter().enumerate() {
                             let embedding_request = crate::provider::EmbeddingRequest {
@@ -4300,13 +5224,13 @@ pub async fn handle_embed_command(model: String, provider: Option<String>, datab
                                 input: chunk.clone(),
                                 encoding_format: Some("float".to_string()),
                             };
-                            
+
                             match client.embeddings(&embedding_request).await {
                                 Ok(response) => {
                                     if let Some(embedding_data) = response.data.first() {
                                         total_embeddings += 1;
                                         total_tokens += response.usage.total_tokens;
-                                        
+
                                         // Store in vector database if specified
                                         if let Some(db_name) = &database {
                                             match crate::vector_db::VectorDatabase::new(db_name) {
@@ -4319,7 +5243,7 @@ pub async fn handle_embed_command(model: String, provider: Option<String>, datab
                                                         &provider_name,
                                                         Some(&file_path_str),
                                                         Some(chunk_index as i32),
-                                                        Some(chunks.len() as i32)
+                                                        Some(chunks.len() as i32),
                                                     ) {
                                                         Ok(id) => {
                                                             println!("  {} Chunk {}/{} stored with ID: {}",
@@ -4336,82 +5260,128 @@ pub async fn handle_embed_command(model: String, provider: Option<String>, datab
                                             }
                                         } else {
                                             // Just show progress without storing
-                                            println!("  {} Chunk {}/{} embedded ({} dimensions)",
-                                                "✅".green(), chunk_index + 1, chunks.len(), embedding_data.embedding.len());
+                                            println!(
+                                                "  {} Chunk {}/{} embedded ({} dimensions)",
+                                                "✅".green(),
+                                                chunk_index + 1,
+                                                chunks.len(),
+                                                embedding_data.embedding.len()
+                                            );
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("  Warning: Failed to embed chunk {}: {}", chunk_index + 1, e);
+                                    eprintln!(
+                                        "  Warning: Failed to embed chunk {}: {}",
+                                        chunk_index + 1,
+                                        e
+                                    );
                                 }
                             }
                         }
                     }
                     Err(e) => {
-                        eprintln!("Warning: Failed to process file '{}': {}", file_path.display(), e);
+                        eprintln!(
+                            "Warning: Failed to process file '{}': {}",
+                            file_path.display(),
+                            e
+                        );
                     }
                 }
             }
         }
     }
-    
+
     // Process text if provided
     if let Some(text_content) = text {
         println!("\n{} Processing text input...", "📝".blue());
-        println!("{} Text: \"{}\"", "📝".blue(), if text_content.len() > 50 { format!("{}...", &text_content[..50]) } else { text_content.clone() });
-        
+        println!(
+            "{} Text: \"{}\"",
+            "📝".blue(),
+            if text_content.len() > 50 {
+                format!("{}...", &text_content[..50])
+            } else {
+                text_content.clone()
+            }
+        );
+
         let embedding_request = crate::provider::EmbeddingRequest {
             model: resolved_model.clone(),
             input: text_content.clone(),
             encoding_format: Some("float".to_string()),
         };
-        
+
         match client.embeddings(&embedding_request).await {
             Ok(response) => {
                 if let Some(embedding_data) = response.data.first() {
                     total_embeddings += 1;
                     total_tokens += response.usage.total_tokens;
-                    
-                    println!("{} Vector dimensions: {}", "📏".blue(), embedding_data.embedding.len());
-                    
+
+                    println!(
+                        "{} Vector dimensions: {}",
+                        "📏".blue(),
+                        embedding_data.embedding.len()
+                    );
+
                     // Display vector preview
                     let embedding = &embedding_data.embedding;
                     if embedding.len() > 10 {
                         println!("\n{} Vector preview:", "🔍".blue());
                         print!("  [");
                         for (i, val) in embedding.iter().take(5).enumerate() {
-                            if i > 0 { print!(", "); }
+                            if i > 0 {
+                                print!(", ");
+                            }
                             print!("{:.6}", val);
                         }
                         print!(" ... ");
                         for (i, val) in embedding.iter().skip(embedding.len() - 5).enumerate() {
-                            if i > 0 { print!(", "); }
+                            if i > 0 {
+                                print!(", ");
+                            }
                             print!("{:.6}", val);
                         }
                         println!("]");
                     }
-                    
+
                     // Store in vector database if specified
                     if let Some(db_name) = &database {
                         match crate::vector_db::VectorDatabase::new(db_name) {
                             Ok(vector_db) => {
-                                match vector_db.add_vector(&text_content, &embedding, &resolved_model, &provider_name) {
+                                match vector_db.add_vector(
+                                    &text_content,
+                                    &embedding,
+                                    &resolved_model,
+                                    &provider_name,
+                                ) {
                                     Ok(id) => {
-                                        println!("\n{} Stored in vector database '{}' with ID: {}", "💾".green(), db_name, id);
+                                        println!(
+                                            "\n{} Stored in vector database '{}' with ID: {}",
+                                            "💾".green(),
+                                            db_name,
+                                            id
+                                        );
                                     }
                                     Err(e) => {
-                                        eprintln!("Warning: Failed to store in vector database: {}", e);
+                                        eprintln!(
+                                            "Warning: Failed to store in vector database: {}",
+                                            e
+                                        );
                                     }
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Warning: Failed to create/open vector database '{}': {}", db_name, e);
+                                eprintln!(
+                                    "Warning: Failed to create/open vector database '{}': {}",
+                                    db_name, e
+                                );
                             }
                         }
                     }
-                    
+
                     // Output full vector as JSON for programmatic use
-                    if files.is_empty() { // Only show full vector for single text input
+                    if files.is_empty() {
+                        // Only show full vector for single text input
                         println!("\n{} Full vector (JSON):", "📋".dimmed());
                         println!("{}", serde_json::to_string(&embedding)?);
                     }
@@ -4422,91 +5392,138 @@ pub async fn handle_embed_command(model: String, provider: Option<String>, datab
             }
         }
     }
-    
+
     // Summary
     println!("\n{} Embedding process completed!", "🎉".green());
-    println!("{} Total embeddings generated: {}", "📊".blue(), total_embeddings);
+    println!(
+        "{} Total embeddings generated: {}",
+        "📊".blue(),
+        total_embeddings
+    );
     println!("{} Total tokens used: {}", "💰".yellow(), total_tokens);
-    
+
     if let Some(db_name) = &database {
-        println!("{} All embeddings stored in database: {}", "💾".green(), db_name);
+        println!(
+            "{} All embeddings stored in database: {}",
+            "💾".green(),
+            db_name
+        );
     }
-    
+
     Ok(())
 }
 
 // Similar command handler
-pub async fn handle_similar_command(model: Option<String>, provider: Option<String>, database: String, limit: usize, query: String) -> Result<()> {
+pub async fn handle_similar_command(
+    model: Option<String>,
+    provider: Option<String>,
+    database: String,
+    limit: usize,
+    query: String,
+) -> Result<()> {
     use colored::Colorize;
-    
+
     // Open the vector database
     let vector_db = crate::vector_db::VectorDatabase::new(&database)?;
-    
+
     // Check if database has any vectors
     let count = vector_db.count()?;
     if count == 0 {
-        anyhow::bail!("Vector database '{}' is empty. Add some vectors first using 'lc embed -d {}'", database, database);
+        anyhow::bail!(
+            "Vector database '{}' is empty. Add some vectors first using 'lc embed -d {}'",
+            database,
+            database
+        );
     }
-    
+
     // Get model info from database if not provided
     let (resolved_model, resolved_provider) = match (&model, &provider) {
         (Some(m), Some(p)) => (m.clone(), p.clone()),
         _ => {
             if let Some((db_model, db_provider)) = vector_db.get_model_info()? {
                 if model.is_some() || provider.is_some() {
-                    println!("{} Using model from database: {}:{}", "ℹ️".blue(), db_provider, db_model);
+                    println!(
+                        "{} Using model from database: {}:{}",
+                        "ℹ️".blue(),
+                        db_provider,
+                        db_model
+                    );
                 }
                 (db_model, db_provider)
             } else {
-                anyhow::bail!("No model specified and database '{}' has no stored model info", database);
+                anyhow::bail!(
+                    "No model specified and database '{}' has no stored model info",
+                    database
+                );
             }
         }
     };
-    
+
     let config = config::Config::load()?;
-    
+
     // Resolve provider and model
-    let (provider_name, model_name) = resolve_model_and_provider(&config, Some(resolved_provider), Some(resolved_model))?;
-    
+    let (provider_name, model_name) =
+        resolve_model_and_provider(&config, Some(resolved_provider), Some(resolved_model))?;
+
     // Get provider config
     let provider_config = config.get_provider(&provider_name)?;
-    
+
     if provider_config.api_key.is_none() {
-        anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
+        anyhow::bail!(
+            "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
+            provider_name,
+            provider_name
+        );
     }
-    
+
     let mut config_mut = config.clone();
     let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
-    
+
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
         config_mut.save()?;
     }
-    
+
     // Generate embedding for query
     let embedding_request = crate::provider::EmbeddingRequest {
         model: model_name.clone(),
         input: query.clone(),
         encoding_format: Some("float".to_string()),
     };
-    
+
     println!("{} Searching for similar content...", "🔍".blue());
     println!("{} Database: {}", "📊".blue(), database);
-    println!("{} Query: \"{}\"", "📝".blue(), if query.len() > 50 { format!("{}...", &query[..50]) } else { query.clone() });
-    
+    println!(
+        "{} Query: \"{}\"",
+        "📝".blue(),
+        if query.len() > 50 {
+            format!("{}...", &query[..50])
+        } else {
+            query.clone()
+        }
+    );
+
     match client.embeddings(&embedding_request).await {
         Ok(response) => {
             if let Some(embedding_data) = response.data.first() {
                 let query_vector = &embedding_data.embedding;
-                
+
                 // Find similar vectors
                 let similar_results = vector_db.find_similar(query_vector, limit)?;
-                
+
                 if similar_results.is_empty() {
-                    println!("\n{} No similar content found in database '{}'", "❌".red(), database);
+                    println!(
+                        "\n{} No similar content found in database '{}'",
+                        "❌".red(),
+                        database
+                    );
                 } else {
-                    println!("\n{} Found {} similar results:", "✅".green(), similar_results.len());
-                    
+                    println!(
+                        "\n{} Found {} similar results:",
+                        "✅".green(),
+                        similar_results.len()
+                    );
+
                     for (i, (entry, similarity)) in similar_results.iter().enumerate() {
                         let similarity_percent = (similarity * 100.0).round() as u32;
                         let similarity_color = if similarity_percent >= 80 {
@@ -4516,14 +5533,22 @@ pub async fn handle_similar_command(model: Option<String>, provider: Option<Stri
                         } else {
                             format!("{}%", similarity_percent).red()
                         };
-                        
-                        println!("\n{} {} (Similarity: {})",
+
+                        println!(
+                            "\n{} {} (Similarity: {})",
                             format!("{}.", i + 1).bold(),
                             similarity_color,
                             format!("ID: {}", entry.id).dimmed()
                         );
                         println!("   {}", entry.text);
-                        println!("   {}", format!("Added: {}", entry.created_at.format("%Y-%m-%d %H:%M:%S UTC")).dimmed());
+                        println!(
+                            "   {}",
+                            format!(
+                                "Added: {}",
+                                entry.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+                            )
+                            .dimmed()
+                        );
                     }
                 }
             } else {
@@ -4534,36 +5559,39 @@ pub async fn handle_similar_command(model: Option<String>, provider: Option<Stri
             anyhow::bail!("Failed to generate query embedding: {}", e);
         }
     }
-    
+
     Ok(())
 }
 
 // Vectors command handler
 pub async fn handle_vectors_command(command: crate::cli::VectorCommands) -> Result<()> {
     use colored::Colorize;
-    
+
     match command {
         crate::cli::VectorCommands::List => {
             let databases = crate::vector_db::VectorDatabase::list_databases()?;
-            
+
             if databases.is_empty() {
                 println!("No vector databases found.");
-                println!("Create one by running: {}", "lc embed -d <name> -m <model> \"your text\"".dimmed());
+                println!(
+                    "Create one by running: {}",
+                    "lc embed -d <name> -m <model> \"your text\"".dimmed()
+                );
             } else {
                 println!("\n{} Vector databases:", "📊".bold().blue());
-                
+
                 for db_name in databases {
                     match crate::vector_db::VectorDatabase::new(&db_name) {
                         Ok(db) => {
                             let count = db.count().unwrap_or(0);
                             let model_info = db.get_model_info().unwrap_or(None);
-                            
+
                             print!("  {} {} ({} vectors)", "•".blue(), db_name.bold(), count);
-                            
+
                             if let Some((model, provider)) = model_info {
                                 print!(" - {}:{}", provider.dimmed(), model.dimmed());
                             }
-                            
+
                             println!();
                         }
                         Err(_) => {
@@ -4579,29 +5607,33 @@ pub async fn handle_vectors_command(command: crate::cli::VectorCommands) -> Resu
             if !databases.contains(&name) {
                 anyhow::bail!("Vector database '{}' not found", name);
             }
-            
+
             crate::vector_db::VectorDatabase::delete_database(&name)?;
-            println!("{} Vector database '{}' deleted successfully", "✓".green(), name);
+            println!(
+                "{} Vector database '{}' deleted successfully",
+                "✓".green(),
+                name
+            );
         }
         crate::cli::VectorCommands::Info { name } => {
             let databases = crate::vector_db::VectorDatabase::list_databases()?;
             if !databases.contains(&name) {
                 anyhow::bail!("Vector database '{}' not found", name);
             }
-            
+
             let db = crate::vector_db::VectorDatabase::new(&name)?;
             let count = db.count()?;
             let model_info = db.get_model_info()?;
-            
+
             println!("\n{} Vector database: {}", "📊".bold().blue(), name.bold());
             println!("Vectors: {}", count);
-            
+
             if let Some((model, provider)) = model_info {
                 println!("Model: {}:{}", provider, model);
             } else {
                 println!("Model: {}", "Not set".dimmed());
             }
-            
+
             if count > 0 {
                 println!("\n{} Recent entries:", "📝".bold().blue());
                 let vectors = db.get_all_vectors()?;
@@ -4611,9 +5643,11 @@ pub async fn handle_vectors_command(command: crate::cli::VectorCommands) -> Resu
                     } else {
                         entry.text.clone()
                     };
-                    
+
                     let source_info = if let Some(ref file_path) = entry.file_path {
-                        if let (Some(chunk_idx), Some(total_chunks)) = (entry.chunk_index, entry.total_chunks) {
+                        if let (Some(chunk_idx), Some(total_chunks)) =
+                            (entry.chunk_index, entry.total_chunks)
+                        {
                             format!(" [{}:{}/{}]", file_path, chunk_idx + 1, total_chunks)
                         } else {
                             format!(" [{}]", file_path)
@@ -4621,22 +5655,27 @@ pub async fn handle_vectors_command(command: crate::cli::VectorCommands) -> Resu
                     } else {
                         String::new()
                     };
-                    
-                    println!("  {}. {}{} ({})",
+
+                    println!(
+                        "  {}. {}{} ({})",
                         i + 1,
                         preview,
                         source_info.dimmed(),
-                        entry.created_at.format("%Y-%m-%d %H:%M").to_string().dimmed()
+                        entry
+                            .created_at
+                            .format("%Y-%m-%d %H:%M")
+                            .to_string()
+                            .dimmed()
                     );
                 }
-                
+
                 if vectors.len() > 5 {
                     println!("  ... and {} more", vectors.len() - 5);
                 }
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -4646,14 +5685,18 @@ pub async fn retrieve_rag_context(
     query: &str,
     _client: &crate::chat::LLMClient,
     _model: &str,
-    _provider: &str
+    _provider: &str,
 ) -> Result<String> {
-    crate::debug_log!("RAG: Starting context retrieval for database '{}' with query '{}'", db_name, query);
-    
+    crate::debug_log!(
+        "RAG: Starting context retrieval for database '{}' with query '{}'",
+        db_name,
+        query
+    );
+
     // Open the vector database
     let vector_db = crate::vector_db::VectorDatabase::new(db_name)?;
     crate::debug_log!("RAG: Successfully opened vector database '{}'", db_name);
-    
+
     // Check if database has any vectors
     let count = vector_db.count()?;
     crate::debug_log!("RAG: Database '{}' contains {} vectors", db_name, count);
@@ -4661,7 +5704,7 @@ pub async fn retrieve_rag_context(
         crate::debug_log!("RAG: Database is empty, returning empty context");
         return Ok(String::new());
     }
-    
+
     // Get model info from database
     let (db_model, db_provider) = if let Some((m, p)) = vector_db.get_model_info()? {
         crate::debug_log!("RAG: Using database model '{}' from provider '{}'", m, p);
@@ -4670,54 +5713,67 @@ pub async fn retrieve_rag_context(
         crate::debug_log!("RAG: No model info in database, returning empty context");
         return Ok(String::new());
     };
-    
+
     // Create a client for the embedding provider (not the chat provider)
     let config = config::Config::load()?;
     let mut config_mut = config.clone();
     let embedding_client = chat::create_authenticated_client(&mut config_mut, &db_provider).await?;
-    crate::debug_log!("RAG: Created embedding client for provider '{}'", db_provider);
-    
+    crate::debug_log!(
+        "RAG: Created embedding client for provider '{}'",
+        db_provider
+    );
+
     // Use the database's embedding model for consistency
     let embedding_request = crate::provider::EmbeddingRequest {
         model: db_model.clone(),
         input: query.to_string(),
         encoding_format: Some("float".to_string()),
     };
-    
-    crate::debug_log!("RAG: Generating embedding for query using model '{}'", db_model);
-    
+
+    crate::debug_log!(
+        "RAG: Generating embedding for query using model '{}'",
+        db_model
+    );
+
     // Generate embedding for query using the correct provider
     let response = embedding_client.embeddings(&embedding_request).await?;
     crate::debug_log!("RAG: Successfully generated embedding for query");
-    
+
     if let Some(embedding_data) = response.data.first() {
         let query_vector = &embedding_data.embedding;
         crate::debug_log!("RAG: Query vector has {} dimensions", query_vector.len());
-        
+
         // Find top 3 most similar vectors for context
         let similar_results = vector_db.find_similar(query_vector, 3)?;
         crate::debug_log!("RAG: Found {} similar results", similar_results.len());
-        
+
         if similar_results.is_empty() {
             crate::debug_log!("RAG: No similar results found, returning empty context");
             return Ok(String::new());
         }
-        
+
         // Format context
         let mut context = String::new();
         let mut included_count = 0;
         for (entry, similarity) in similar_results {
-            crate::debug_log!("RAG: Result similarity: {:.3} for text: '{}'", similarity, &entry.text[..50.min(entry.text.len())]);
+            crate::debug_log!(
+                "RAG: Result similarity: {:.3} for text: '{}'",
+                similarity,
+                &entry.text[..50.min(entry.text.len())]
+            );
             // Only include results with reasonable similarity (>0.3)
             if similarity > 0.3 {
                 context.push_str(&format!("- {}\n", entry.text));
                 included_count += 1;
             }
         }
-        
-        crate::debug_log!("RAG: Included {} results in context (similarity > 0.3)", included_count);
+
+        crate::debug_log!(
+            "RAG: Included {} results in context (similarity > 0.3)",
+            included_count
+        );
         crate::debug_log!("RAG: Final context length: {} characters", context.len());
-        
+
         Ok(context)
     } else {
         crate::debug_log!("RAG: No embedding data in response, returning empty context");
@@ -4728,20 +5784,25 @@ pub async fn retrieve_rag_context(
 // WebChatProxy command handlers
 pub async fn handle_webchatproxy_command(command: WebChatProxyCommands) -> Result<()> {
     match command {
-        WebChatProxyCommands::Providers { command } => {
-            match command {
-                Some(WebChatProxyProviderCommands::List) => {
-                    handle_webchatproxy_providers_list().await?;
-                }
-                Some(WebChatProxyProviderCommands::Kagi { command }) => {
-                    handle_webchatproxy_kagi_command(command).await?;
-                }
-                None => {
-                    handle_webchatproxy_providers_list().await?;
-                }
+        WebChatProxyCommands::Providers { command } => match command {
+            Some(WebChatProxyProviderCommands::List) => {
+                handle_webchatproxy_providers_list().await?;
             }
-        }
-        WebChatProxyCommands::Start { provider, port, host, key, generate_key, daemon } => {
+            Some(WebChatProxyProviderCommands::Kagi { command }) => {
+                handle_webchatproxy_kagi_command(command).await?;
+            }
+            None => {
+                handle_webchatproxy_providers_list().await?;
+            }
+        },
+        WebChatProxyCommands::Start {
+            provider,
+            port,
+            host,
+            key,
+            generate_key,
+            daemon,
+        } => {
             handle_webchatproxy_start(provider, port, host, key, generate_key, daemon).await?;
         }
         WebChatProxyCommands::Stop { provider } => {
@@ -4756,13 +5817,21 @@ pub async fn handle_webchatproxy_command(command: WebChatProxyCommands) -> Resul
 
 async fn handle_webchatproxy_providers_list() -> Result<()> {
     use colored::Colorize;
-    
+
     println!("\n{}", "Supported WebChatProxy Providers:".bold().blue());
     println!("  {} {} - Kagi Assistant API", "•".blue(), "kagi".bold());
     println!("\n{}", "Usage:".bold().blue());
-    println!("  {} Set auth: {}", "•".blue(), "lc w providers set kagi auth <token>".dimmed());
-    println!("  {} Start proxy: {}", "•".blue(), "lc w start kagi".dimmed());
-    
+    println!(
+        "  {} Set auth: {}",
+        "•".blue(),
+        "lc w providers set kagi auth <token>".dimmed()
+    );
+    println!(
+        "  {} Start proxy: {}",
+        "•".blue(),
+        "lc w start kagi".dimmed()
+    );
+
     Ok(())
 }
 
@@ -4773,7 +5842,7 @@ async fn fetch_kagi_models() -> Result<Vec<crate::webchatproxy::KagiModelProfile
 async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> Result<()> {
     use colored::Colorize;
     use std::io::{self, Write};
-    
+
     match command {
         WebChatProxyKagiCommands::Auth { token } => {
             let auth_token = if let Some(token) = token {
@@ -4784,12 +5853,12 @@ async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> 
                 io::stdout().flush()?;
                 rpassword::read_password()?
             };
-            
+
             // Store the auth token in webchatproxy config
             let mut config = crate::webchatproxy::WebChatProxyConfig::load()?;
             config.set_provider_auth("kagi", &auth_token)?;
             config.save()?;
-            
+
             println!("{} Authentication set for provider 'kagi'", "✓".green());
         }
         WebChatProxyKagiCommands::Models => {
@@ -4805,7 +5874,7 @@ async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> 
                         if model.personalizations {
                             capabilities.push("👤 personal".magenta());
                         }
-                        
+
                         let mut info_parts = Vec::new();
                         if let Some(ctx) = model.model_input_limit {
                             if ctx >= 1000000 {
@@ -4816,26 +5885,32 @@ async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> 
                                 info_parts.push(format!("{} ctx", ctx));
                             }
                         }
-                        
-                        print!("  {} {} ({})", "•".blue(), model.model_name.bold(), model.model);
-                        
+
+                        print!(
+                            "  {} {} ({})",
+                            "•".blue(),
+                            model.model_name.bold(),
+                            model.model
+                        );
+
                         if !capabilities.is_empty() {
-                            let capability_strings: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+                            let capability_strings: Vec<String> =
+                                capabilities.iter().map(|c| c.to_string()).collect();
                             print!(" [{}]", capability_strings.join(" "));
                         }
-                        
+
                         if !info_parts.is_empty() {
                             print!(" ({})", info_parts.join(", ").dimmed());
                         }
-                        
+
                         if let Some(description) = &model.scorecard.description {
                             print!(" - {}", description.dimmed());
                         }
-                        
+
                         if model.scorecard.recommended {
                             print!(" {}", "⭐ recommended".yellow());
                         }
-                        
+
                         println!();
                     }
                 }
@@ -4847,83 +5922,123 @@ async fn handle_webchatproxy_kagi_command(command: WebChatProxyKagiCommands) -> 
             }
         }
     }
-    
+
     Ok(())
 }
 
-async fn handle_webchatproxy_start(provider: String, port: u16, host: String, key: Option<String>, generate_key: bool, daemon: bool) -> Result<()> {
+async fn handle_webchatproxy_start(
+    provider: String,
+    port: u16,
+    host: String,
+    key: Option<String>,
+    generate_key: bool,
+    daemon: bool,
+) -> Result<()> {
     use colored::Colorize;
-    
+
     if provider != "kagi" {
-        anyhow::bail!("Unsupported provider '{}'. Currently only 'kagi' is supported.", provider);
+        anyhow::bail!(
+            "Unsupported provider '{}'. Currently only 'kagi' is supported.",
+            provider
+        );
     }
-    
+
     // Generate API key if requested
     let final_key = if generate_key {
         let generated_key = crate::proxy::generate_api_key();
-        println!("{} Generated API key: {}", "🔑".green(), generated_key.bold());
+        println!(
+            "{} Generated API key: {}",
+            "🔑".green(),
+            generated_key.bold()
+        );
         Some(generated_key)
     } else {
         key
     };
-    
+
     println!("\n{}", "WebChatProxy Server Configuration:".bold().blue());
     println!("  {} {}:{}", "Address:".bold(), host, port);
     println!("  {} {}", "Provider:".bold(), provider.green());
-    
+
     if final_key.is_some() {
         println!("  {} {}", "Authentication:".bold(), "Enabled".green());
     } else {
         println!("  {} {}", "Authentication:".bold(), "Disabled".yellow());
     }
-    
+
     println!("\n{}", "Available endpoints:".bold().blue());
     println!("  {} http://{}:{}/chat/completions", "•".blue(), host, port);
-    println!("  {} http://{}:{}/v1/chat/completions", "•".blue(), host, port);
-    
+    println!(
+        "  {} http://{}:{}/v1/chat/completions",
+        "•".blue(),
+        host,
+        port
+    );
+
     if daemon {
         println!("\n{} Starting in daemon mode...", "🔄".blue());
-        println!("{} Logs will be written to: ~/Library/Application Support/lc/{}.log", "📝".blue(), provider);
-        
+        println!(
+            "{} Logs will be written to: ~/Library/Application Support/lc/{}.log",
+            "📝".blue(),
+            provider
+        );
+
         // Start the webchatproxy server in daemon mode
-        crate::webchatproxy::start_webchatproxy_daemon(host, port, provider.clone(), final_key).await?;
+        crate::webchatproxy::start_webchatproxy_daemon(host, port, provider.clone(), final_key)
+            .await?;
     } else {
         println!("\n{} Press Ctrl+C to stop the server\n", "💡".yellow());
-        
+
         // Start the webchatproxy server
         crate::webchatproxy::start_webchatproxy_server(host, port, provider, final_key).await?;
     }
-    
+
     Ok(())
 }
 
 async fn handle_webchatproxy_stop(provider: String) -> Result<()> {
     use colored::Colorize;
-    
+
     if provider != "kagi" {
-        anyhow::bail!("Unsupported provider '{}'. Currently only 'kagi' is supported.", provider);
+        anyhow::bail!(
+            "Unsupported provider '{}'. Currently only 'kagi' is supported.",
+            provider
+        );
     }
-    
-    println!("{} Stopping webchatproxy server for '{}'...", "🛑".red(), provider);
-    
+
+    println!(
+        "{} Stopping webchatproxy server for '{}'...",
+        "🛑".red(),
+        provider
+    );
+
     // Stop the webchatproxy daemon
     match crate::webchatproxy::stop_webchatproxy_daemon(&provider).await {
         Ok(_) => {
-            println!("{} WebChatProxy server for '{}' stopped successfully", "✓".green(), provider);
+            println!(
+                "{} WebChatProxy server for '{}' stopped successfully",
+                "✓".green(),
+                provider
+            );
         }
         Err(e) => {
-            println!("{} Failed to stop WebChatProxy server for '{}': {}", "⚠️".yellow(), provider, e);
+            println!(
+                "{} Failed to stop WebChatProxy server for '{}': {}",
+                "⚠️".yellow(),
+                provider,
+                e
+            );
         }
     }
-    
+
     Ok(())
 }
 
 async fn handle_webchatproxy_list() -> Result<()> {
     use colored::Colorize;
-    
+
     println!("\n{} Running WebChatProxy servers:", "📊".bold().blue());
-    
+
     // List running webchatproxy daemons
     match crate::webchatproxy::list_webchatproxy_daemons().await {
         Ok(servers) => {
@@ -4931,7 +6046,8 @@ async fn handle_webchatproxy_list() -> Result<()> {
                 println!("No WebChatProxy servers currently running.");
             } else {
                 for (provider, info) in servers {
-                    println!("  {} {} - {}:{} (PID: {})",
+                    println!(
+                        "  {} {} - {}:{} (PID: {})",
                         "•".blue(),
                         provider.bold(),
                         info.host,
@@ -4942,27 +6058,47 @@ async fn handle_webchatproxy_list() -> Result<()> {
             }
         }
         Err(e) => {
-            println!("{} Failed to list WebChatProxy servers: {}", "⚠️".yellow(), e);
+            println!(
+                "{} Failed to list WebChatProxy servers: {}",
+                "⚠️".yellow(),
+                e
+            );
         }
     }
-    
+
     Ok(())
 }
 
 // Sync command handlers
 pub async fn handle_sync_command(command: SyncCommands) -> Result<()> {
     match command {
-        SyncCommands::Providers => {
-            crate::sync::handle_sync_providers().await
-        }
+        SyncCommands::Providers => crate::sync::handle_sync_providers().await,
         SyncCommands::Configure { provider, command } => {
             crate::sync::handle_sync_configure(&provider, command).await
         }
-        SyncCommands::To { provider, encrypted } => {
-            crate::sync::handle_sync_to(&provider, encrypted).await
+        SyncCommands::To {
+            provider,
+            encrypted,
+            debug,
+            yes,
+        } => {
+            // Set debug mode if requested
+            if debug {
+                set_debug_mode(true);
+            }
+            crate::sync::handle_sync_to(&provider, encrypted, yes).await
         }
-        SyncCommands::From { provider, encrypted } => {
-            crate::sync::handle_sync_from(&provider, encrypted).await
+        SyncCommands::From {
+            provider,
+            encrypted,
+            debug,
+            yes,
+        } => {
+            // Set debug mode if requested
+            if debug {
+                set_debug_mode(true);
+            }
+            crate::sync::handle_sync_from(&provider, encrypted, yes).await
         }
     }
 }
@@ -4970,35 +6106,41 @@ pub async fn handle_sync_command(command: SyncCommands) -> Result<()> {
 // Search command handlers
 pub async fn handle_search_command(command: SearchCommands) -> Result<()> {
     use colored::Colorize;
-    
+
     match command {
-        SearchCommands::Provider { command } => {
-            handle_search_provider_command(command).await
-        }
-        SearchCommands::Query { provider, query, format, count } => {
+        SearchCommands::Provider { command } => handle_search_provider_command(command).await,
+        SearchCommands::Query {
+            provider,
+            query,
+            format,
+            count,
+        } => {
             let engine = crate::search::SearchEngine::new()?;
-            
-            println!("{} Searching with {} for: '{}'", "🔍".blue(), provider.bold(), query);
-            
+
+            println!(
+                "{} Searching with {} for: '{}'",
+                "🔍".blue(),
+                provider.bold(),
+                query
+            );
+
             match engine.search(&provider, &query, Some(count)).await {
-                Ok(results) => {
-                    match format.as_str() {
-                        "json" => {
-                            println!("{}", engine.format_results_json(&results)?);
-                        }
-                        "md" | "markdown" => {
-                            println!("{}", engine.format_results_markdown(&results));
-                        }
-                        _ => {
-                            anyhow::bail!("Invalid format '{}'. Use 'json' or 'md'", format);
-                        }
+                Ok(results) => match format.as_str() {
+                    "json" => {
+                        println!("{}", engine.format_results_json(&results)?);
                     }
-                }
+                    "md" | "markdown" => {
+                        println!("{}", engine.format_results_markdown(&results));
+                    }
+                    _ => {
+                        anyhow::bail!("Invalid format '{}'. Use 'json' or 'md'", format);
+                    }
+                },
                 Err(e) => {
                     anyhow::bail!("Search failed: {}", e);
                 }
             }
-            
+
             Ok(())
         }
     }
@@ -5006,29 +6148,39 @@ pub async fn handle_search_command(command: SearchCommands) -> Result<()> {
 
 async fn handle_search_provider_command(command: SearchProviderCommands) -> Result<()> {
     use colored::Colorize;
-    
+
     match command {
         SearchProviderCommands::Add { name, url } => {
             let mut config = crate::search::SearchConfig::load()?;
-            
+
             // Auto-detect provider type from URL
             match config.add_provider_auto(name.clone(), url.clone()) {
                 Ok(_) => {
                     config.save()?;
-                    
+
                     // Get the detected provider type for display
                     let provider_config = config.get_provider(&name)?;
                     let provider_type = &provider_config.provider_type;
-                    
-                    println!("{} Search provider '{}' added successfully", "✓".green(), name);
-                    println!("  Type: {} (auto-detected)", format!("{:?}", provider_type).to_lowercase());
+
+                    println!(
+                        "{} Search provider '{}' added successfully",
+                        "✓".green(),
+                        name
+                    );
+                    println!(
+                        "  Type: {} (auto-detected)",
+                        format!("{:?}", provider_type).to_lowercase()
+                    );
                     println!("  URL: {}", url);
-                    
+
                     // Provider-specific instructions using the new API key header method
                     let api_key_header = provider_type.api_key_header();
                     if !api_key_header.is_empty() {
                         println!("\n{} Don't forget to set the API key:", "💡".yellow());
-                        println!("  lc search provider set {} {} <your-api-key>", name, api_key_header);
+                        println!(
+                            "  lc search provider set {} {} <your-api-key>",
+                            name, api_key_header
+                        );
                     } else {
                         println!("\n{} No API key required for this provider!", "✅".green());
                     }
@@ -5042,59 +6194,80 @@ async fn handle_search_provider_command(command: SearchProviderCommands) -> Resu
             let mut config = crate::search::SearchConfig::load()?;
             config.delete_provider(&name)?;
             config.save()?;
-            
-            println!("{} Search provider '{}' deleted successfully", "✓".green(), name);
+
+            println!(
+                "{} Search provider '{}' deleted successfully",
+                "✓".green(),
+                name
+            );
         }
-        SearchProviderCommands::Set { provider, header_name, header_value } => {
+        SearchProviderCommands::Set {
+            provider,
+            header_name,
+            header_value,
+        } => {
             let mut config = crate::search::SearchConfig::load()?;
             config.set_header(&provider, header_name.clone(), header_value)?;
             config.save()?;
-            
-            println!("{} Header '{}' set for search provider '{}'", "✓".green(), header_name, provider);
+
+            println!(
+                "{} Header '{}' set for search provider '{}'",
+                "✓".green(),
+                header_name,
+                provider
+            );
         }
         SearchProviderCommands::List => {
             let config = crate::search::SearchConfig::load()?;
             let providers = config.list_providers();
-            
+
             if providers.is_empty() {
                 println!("No search providers configured.");
-                println!("Add one with: {}", "lc search provider add <name> <url>".dimmed());
+                println!(
+                    "Add one with: {}",
+                    "lc search provider add <name> <url>".dimmed()
+                );
             } else {
                 println!("\n{}", "Search Providers:".bold().blue());
-                
+
                 for (name, provider_config) in providers {
-                    let has_auth = provider_config.headers.contains_key("X-Subscription-Token") ||
-                                  provider_config.headers.contains_key("Authorization") ||
-                                  provider_config.headers.contains_key("x-api-key") ||
-                                  provider_config.headers.contains_key("X-API-KEY");
+                    let has_auth = provider_config.headers.contains_key("X-Subscription-Token")
+                        || provider_config.headers.contains_key("Authorization")
+                        || provider_config.headers.contains_key("x-api-key")
+                        || provider_config.headers.contains_key("X-API-KEY");
                     let auth_status = if has_auth { "✓".green() } else { "✗".red() };
-                    
-                    println!("  {} {} - {} (Auth: {})",
+
+                    println!(
+                        "  {} {} - {} (Auth: {})",
                         "•".blue(),
                         name.bold(),
                         provider_config.url,
                         auth_status
                     );
-                    
+
                     if !provider_config.headers.is_empty() {
                         println!("    Headers: {}", provider_config.headers.len());
                     }
                 }
-                
+
                 if let Some(default) = config.get_default_provider() {
                     println!("\n{} {}", "Default provider:".bold(), default.green());
                 }
             }
         }
     }
-    
+
     Ok(())
 }
 
 // Helper function to integrate search results as context
-async fn integrate_search_context(search_spec: &str, query: &str, enhanced_prompt: &mut String) -> Result<bool> {
+async fn integrate_search_context(
+    search_spec: &str,
+    query: &str,
+    enhanced_prompt: &mut String,
+) -> Result<bool> {
     use colored::Colorize;
-    
+
     // Parse search spec: can be "provider" or "provider:query"
     let (provider, search_query) = if search_spec.contains(':') {
         let parts: Vec<&str> = search_spec.splitn(2, ':').collect();
@@ -5103,45 +6276,65 @@ async fn integrate_search_context(search_spec: &str, query: &str, enhanced_promp
         // Use the original prompt as the search query
         (search_spec.to_string(), query.to_string())
     };
-    
+
     // Check if provider is configured
     let search_config = crate::search::SearchConfig::load()?;
     if !search_config.has_provider(&provider) {
         // Try to use default provider if available
         if let Some(default_provider) = search_config.get_default_provider() {
             if provider == "default" || provider.is_empty() {
-                println!("{} Using default search provider: {}", "🔍".blue(), default_provider);
-                return integrate_search_with_provider(default_provider, &search_query, enhanced_prompt).await;
+                println!(
+                    "{} Using default search provider: {}",
+                    "🔍".blue(),
+                    default_provider
+                );
+                return integrate_search_with_provider(
+                    default_provider,
+                    &search_query,
+                    enhanced_prompt,
+                )
+                .await;
             }
         }
-        anyhow::bail!("Search provider '{}' not found. Configure it with 'lc search provider add'", provider);
+        anyhow::bail!(
+            "Search provider '{}' not found. Configure it with 'lc search provider add'",
+            provider
+        );
     }
-    
+
     integrate_search_with_provider(&provider, &search_query, enhanced_prompt).await
 }
 
-async fn integrate_search_with_provider(provider: &str, search_query: &str, enhanced_prompt: &mut String) -> Result<bool> {
+async fn integrate_search_with_provider(
+    provider: &str,
+    search_query: &str,
+    enhanced_prompt: &mut String,
+) -> Result<bool> {
     use colored::Colorize;
-    
+
     let engine = crate::search::SearchEngine::new()?;
-    
+
     println!("{} Searching for: '{}'", "🔍".blue(), search_query);
-    
+
     match engine.search(provider, search_query, Some(5)).await {
         Ok(results) => {
             if results.results.is_empty() {
                 println!("{} No search results found", "⚠️".yellow());
                 return Ok(false);
             }
-            
-            println!("{} Found {} search results", "✅".green(), results.results.len());
-            
+
+            println!(
+                "{} Found {} search results",
+                "✅".green(),
+                results.results.len()
+            );
+
             // Extract context from search results
             let search_context = engine.extract_context_for_llm(&results, 5);
-            
+
             // Prepend search context to the enhanced prompt
             *enhanced_prompt = format!("{}\n\nUser query: {}", search_context, enhanced_prompt);
-            
+
             Ok(true)
         }
         Err(e) => {
@@ -5162,39 +6355,48 @@ pub async fn handle_image_command(
 ) -> Result<()> {
     use colored::Colorize;
     use std::fs;
-    use std::path::Path;
     use std::io::{self, Write};
-    
+    use std::path::Path;
+
     // Set debug mode if requested
     if debug {
         set_debug_mode(true);
     }
-    
+
     let config = config::Config::load()?;
-    
+
     // Resolve provider and model using the same logic as other commands
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider, model)?;
-    
+
     // Get provider config
     let provider_config = config.get_provider(&provider_name)?;
-    
+
     if provider_config.api_key.is_none() {
-        anyhow::bail!("No API key configured for provider '{}'. Add one with 'lc keys add {}'", provider_name, provider_name);
+        anyhow::bail!(
+            "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
+            provider_name,
+            provider_name
+        );
     }
-    
+
     let mut config_mut = config.clone();
     let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
-    
+
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
         config_mut.save()?;
     }
-    
-    println!("{} Generating {} image(s) with prompt: \"{}\"", "🎨".blue(), count, prompt);
+
+    println!(
+        "{} Generating {} image(s) with prompt: \"{}\"",
+        "🎨".blue(),
+        count,
+        prompt
+    );
     println!("{} Model: {}", "🤖".blue(), model_name);
     println!("{} Provider: {}", "🏢".blue(), provider_name);
     println!("{} Size: {}", "📐".blue(), size);
-    
+
     // Create image generation request
     let image_request = crate::provider::ImageGenerationRequest {
         prompt: prompt.clone(),
@@ -5205,16 +6407,20 @@ pub async fn handle_image_command(
         style: None,
         response_format: Some("url".to_string()),
     };
-    
+
     // Generate images
     print!("{} ", "Generating...".dimmed());
     io::stdout().flush()?;
-    
+
     match client.generate_images(&image_request).await {
         Ok(response) => {
             print!("\r{}\r", " ".repeat(20)); // Clear "Generating..."
-            println!("{} Successfully generated {} image(s)!", "✅".green(), response.data.len());
-            
+            println!(
+                "{} Successfully generated {} image(s)!",
+                "✅".green(),
+                response.data.len()
+            );
+
             // Create output directory if specified
             let output_dir = if let Some(dir) = output {
                 let path = Path::new(&dir);
@@ -5226,29 +6432,35 @@ pub async fn handle_image_command(
             } else {
                 None
             };
-            
+
             // Process each generated image
             for (i, image_data) in response.data.iter().enumerate() {
                 let image_num = i + 1;
-                
+
                 if let Some(url) = &image_data.url {
-                    println!("\n{} Image {}/{}", "🖼️".blue(), image_num, response.data.len());
+                    println!(
+                        "\n{} Image {}/{}",
+                        "🖼️".blue(),
+                        image_num,
+                        response.data.len()
+                    );
                     println!("   URL: {}", url);
-                    
+
                     if let Some(revised_prompt) = &image_data.revised_prompt {
                         if revised_prompt != &prompt {
                             println!("   Revised prompt: {}", revised_prompt.dimmed());
                         }
                     }
-                    
+
                     // Download image if output directory is specified
                     if let Some(ref dir) = output_dir {
-                        let filename = format!("image_{}_{}.png",
+                        let filename = format!(
+                            "image_{}_{}.png",
                             chrono::Utc::now().format("%Y%m%d_%H%M%S"),
                             image_num
                         );
                         let filepath = Path::new(dir).join(&filename);
-                        
+
                         match download_image(url, &filepath).await {
                             Ok(_) => {
                                 println!("   {} Saved to: {}", "💾".green(), filepath.display());
@@ -5259,15 +6471,21 @@ pub async fn handle_image_command(
                         }
                     }
                 } else if let Some(b64_data) = &image_data.b64_json {
-                    println!("\n{} Image {}/{} (Base64)", "🖼️".blue(), image_num, response.data.len());
-                    
+                    println!(
+                        "\n{} Image {}/{} (Base64)",
+                        "🖼️".blue(),
+                        image_num,
+                        response.data.len()
+                    );
+
                     if let Some(ref dir) = output_dir {
-                        let filename = format!("image_{}_{}.png",
+                        let filename = format!(
+                            "image_{}_{}.png",
                             chrono::Utc::now().format("%Y%m%d_%H%M%S"),
                             image_num
                         );
                         let filepath = Path::new(dir).join(&filename);
-                        
+
                         match save_base64_image(b64_data, &filepath) {
                             Ok(_) => {
                                 println!("   {} Saved to: {}", "💾".green(), filepath.display());
@@ -5281,9 +6499,12 @@ pub async fn handle_image_command(
                     }
                 }
             }
-            
+
             if output_dir.is_none() {
-                println!("\n{} Use --output <directory> to automatically download images", "💡".yellow());
+                println!(
+                    "\n{} Use --output <directory> to automatically download images",
+                    "💡".yellow()
+                );
             }
         }
         Err(e) => {
@@ -5291,38 +6512,38 @@ pub async fn handle_image_command(
             anyhow::bail!("Failed to generate images: {}", e);
         }
     }
-    
+
     Ok(())
 }
 
 // Helper function to download image from URL
 async fn download_image(url: &str, filepath: &std::path::Path) -> Result<()> {
     let response = reqwest::get(url).await?;
-    
+
     if !response.status().is_success() {
         anyhow::bail!("Failed to download image: HTTP {}", response.status());
     }
-    
+
     let bytes = response.bytes().await?;
     std::fs::write(filepath, bytes)?;
-    
+
     Ok(())
 }
 
 // Helper function to save base64 image data
 fn save_base64_image(b64_data: &str, filepath: &std::path::Path) -> Result<()> {
-    use base64::{Engine as _, engine::general_purpose};
-    
+    use base64::{engine::general_purpose, Engine as _};
+
     let image_bytes = general_purpose::STANDARD.decode(b64_data)?;
     std::fs::write(filepath, image_bytes)?;
-    
+
     Ok(())
 }
 
 // Dump metadata command handler
 pub async fn handle_dump_metadata_command(provider: Option<String>, list: bool) -> Result<()> {
     use crate::dump_metadata::MetadataDumper;
-    
+
     if list {
         // List available cached metadata files
         MetadataDumper::list_cached_metadata().await?;
@@ -5333,7 +6554,7 @@ pub async fn handle_dump_metadata_command(provider: Option<String>, list: bool) 
         // Dump metadata for all providers
         MetadataDumper::dump_all_metadata().await?;
     }
-    
+
     Ok(())
 }
 

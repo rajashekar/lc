@@ -98,40 +98,39 @@ pub async fn search(
     count: Option<usize>,
 ) -> Result<SearchResults> {
     let client = reqwest::Client::new();
-    
+
     let request_body = SerperRequest {
         q: query.to_string(),
         num: count,
     };
-    
+
     // Handle URL construction to avoid duplication
     let url = if config.url.ends_with("/search") {
         config.url.clone()
     } else {
         format!("{}/search", config.url.trim_end_matches('/'))
     };
-    
-    let mut request = client
-        .post(&url)
-        .json(&request_body);
-    
+
+    let mut request = client.post(&url).json(&request_body);
+
     // Add headers
     for (key, value) in &config.headers {
         request = request.header(key, value);
     }
-    
+
     let response = request.send().await?;
-    
+
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
         anyhow::bail!("Serper API error ({}): {}", status, error_text);
     }
-    
+
     let serper_response: SerperResponse = response.json().await?;
-    
+
     // Convert Serper results to our common format
-    let results: Vec<SearchResult> = serper_response.organic
+    let results: Vec<SearchResult> = serper_response
+        .organic
         .into_iter()
         .map(|result| SearchResult {
             title: result.title,
@@ -142,7 +141,7 @@ pub async fn search(
             author: None,
         })
         .collect();
-    
+
     Ok(SearchResults {
         query: query.to_string(),
         provider: "serper".to_string(),
@@ -155,7 +154,7 @@ pub async fn search(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_serper_response_parsing() {
         let json_response = r#"{
@@ -180,11 +179,14 @@ mod tests {
                 }
             ]
         }"#;
-        
+
         let response: SerperResponse = serde_json::from_str(json_response).unwrap();
         assert_eq!(response.organic.len(), 2);
         assert_eq!(response.organic[0].title, "Apple");
         assert_eq!(response.organic[0].position, 1);
-        assert_eq!(response.organic[1].published_date, Some("2024-01-15".to_string()));
+        assert_eq!(
+            response.organic[1].published_date,
+            Some("2024-01-15".to_string())
+        );
     }
 }

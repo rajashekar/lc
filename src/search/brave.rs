@@ -1,6 +1,6 @@
+use super::{SearchProviderConfig, SearchResult, SearchResults};
 use anyhow::Result;
 use serde::Deserialize;
-use super::{SearchProviderConfig, SearchResult, SearchResults};
 
 #[derive(Debug, Deserialize)]
 struct BraveSearchResponse {
@@ -78,18 +78,24 @@ pub async fn search(
 
     // Get the response text first to debug
     let response_text = response.text().await?;
-    
+
     // Try to parse as JSON
-    let brave_response: BraveSearchResponse = serde_json::from_str(&response_text)
-        .map_err(|e| anyhow::anyhow!("Failed to parse JSON response: {}. Response was: '{}'", e, response_text))?;
-    
+    let brave_response: BraveSearchResponse =
+        serde_json::from_str(&response_text).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to parse JSON response: {}. Response was: '{}'",
+                e,
+                response_text
+            )
+        })?;
+
     let mut results = SearchResults::new(query.to_string(), "brave".to_string());
     results.set_search_time(search_time_ms);
 
     if let Some(web_results) = brave_response.web {
         for brave_result in web_results.results {
             let mut snippet = brave_result.description.clone();
-            
+
             // Append extra snippets if available
             if let Some(extra) = &brave_result.extra_snippets {
                 if !extra.is_empty() {
@@ -139,7 +145,7 @@ mod tests {
         let response: BraveSearchResponse = serde_json::from_str(json_response).unwrap();
         assert_eq!(response.query.original, "rust programming");
         assert!(response.web.is_some());
-        
+
         let web_results = response.web.unwrap();
         assert_eq!(web_results.results.len(), 1);
         assert_eq!(web_results.results[0].title, "Rust Programming Language");

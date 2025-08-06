@@ -4,20 +4,32 @@
 //! connections, allowing browser sessions and other stateful resources to persist
 //! across multiple CLI command invocations.
 
-use anyhow::{Result, anyhow};
+use crate::mcp::{
+    create_sse_server_config, create_stdio_server_config, McpConfig, McpServerType, SdkMcpManager,
+};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tokio::net::{UnixListener, UnixStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use crate::mcp::{SdkMcpManager, McpConfig, McpServerType, create_stdio_server_config, create_sse_server_config};
+use tokio::net::{UnixListener, UnixStream};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DaemonRequest {
-    ListTools { server_name: String },
-    CallTool { server_name: String, tool_name: String, arguments: serde_json::Value },
-    EnsureServerConnected { server_name: String },
-    CloseServer { server_name: String },
+    ListTools {
+        server_name: String,
+    },
+    CallTool {
+        server_name: String,
+        tool_name: String,
+        arguments: serde_json::Value,
+    },
+    EnsureServerConnected {
+        server_name: String,
+    },
+    CloseServer {
+        server_name: String,
+    },
     ListConnectedServers,
     Shutdown,
 }
@@ -79,42 +91,36 @@ impl McpDaemon {
     async fn handle_client(&mut self, mut stream: UnixStream) -> Result<()> {
         // Read request with timeout and larger buffer
         let mut buffer = vec![0; 32768];
-        
+
         // Add timeout for read operation
-        let n = tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            stream.read(&mut buffer)
-        ).await??;
-        
+        let n = tokio::time::timeout(std::time::Duration::from_secs(30), stream.read(&mut buffer))
+            .await??;
+
         if n == 0 {
             return Ok(());
         }
 
         // Deserialize in a separate task to avoid blocking
         let request_data = buffer[..n].to_vec();
-        let request: DaemonRequest = tokio::task::spawn_blocking(move || {
-            serde_json::from_slice(&request_data)
-        }).await??;
-        
+        let request: DaemonRequest =
+            tokio::task::spawn_blocking(move || serde_json::from_slice(&request_data)).await??;
+
         crate::debug_log!("Daemon received request: {:?}", request);
 
         let response = self.process_request(request).await;
-        
+
         // Serialize response in a separate task to avoid blocking
-        let response_data = tokio::task::spawn_blocking(move || {
-            serde_json::to_vec(&response)
-        }).await??;
-        
+        let response_data =
+            tokio::task::spawn_blocking(move || serde_json::to_vec(&response)).await??;
+
         // Write response with timeout
         let response_len = response_data.len() as u32;
-        tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            async {
-                stream.write_all(&response_len.to_le_bytes()).await?;
-                stream.write_all(&response_data).await?;
-                stream.flush().await
-            }
-        ).await??;
+        tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            stream.write_all(&response_len.to_le_bytes()).await?;
+            stream.write_all(&response_data).await?;
+            stream.flush().await
+        })
+        .await??;
 
         Ok(())
     }
@@ -130,9 +136,12 @@ impl McpDaemon {
             DaemonRequest::ListTools { server_name } => {
                 // First ensure the server is connected
                 if let Err(e) = self.ensure_server_connected(&server_name).await {
-                    return DaemonResponse::Error(format!("Failed to connect to server '{}': {}", server_name, e));
+                    return DaemonResponse::Error(format!(
+                        "Failed to connect to server '{}': {}",
+                        server_name, e
+                    ));
                 }
-                
+
                 match self.manager.list_all_tools().await {
                     Ok(tools) => {
                         if let Some(server_tools) = tools.get(&server_name) {
@@ -146,8 +155,16 @@ impl McpDaemon {
                     Err(e) => DaemonResponse::Error(e.to_string()),
                 }
             }
-            DaemonRequest::CallTool { server_name, tool_name, arguments } => {
-                match self.manager.call_tool(&server_name, &tool_name, arguments).await {
+            DaemonRequest::CallTool {
+                server_name,
+                tool_name,
+                arguments,
+            } => {
+                match self
+                    .manager
+                    .call_tool(&server_name, &tool_name, arguments)
+                    .await
+                {
                     Ok(result) => DaemonResponse::ToolResult(result),
                     Err(e) => DaemonResponse::Error(e.to_string()),
                 }
@@ -176,28 +193,48 @@ impl McpDaemon {
     async fn ensure_server_connected(&mut self, server_name: &str) -> Result<()> {
         // Check if server is already connected
         if self.manager.clients.contains_key(server_name) {
-            crate::debug_log!("DAEMON: MCP server '{}' already connected. Total connections: {}", server_name, self.manager.clients.len());
+            crate::debug_log!(
+                "DAEMON: MCP server '{}' already connected. Total connections: {}",
+                server_name,
+                self.manager.clients.len()
+            );
             return Ok(());
         }
 
-        crate::debug_log!("DAEMON: Loading MCP configuration for server '{}'", server_name);
-        
+        crate::debug_log!(
+            "DAEMON: Loading MCP configuration for server '{}'",
+            server_name
+        );
+
         // Load configuration and connect to server
         let config = McpConfig::load()?;
         if let Some(server_config) = config.get_server(server_name) {
-            crate::debug_log!("DAEMON: Found server config for '{}': {:?} ({})", server_name, server_config.server_type, server_config.command_or_url);
-            
+            crate::debug_log!(
+                "DAEMON: Found server config for '{}': {:?} ({})",
+                server_name,
+                server_config.server_type,
+                server_config.command_or_url
+            );
+
             let sdk_config = match server_config.server_type {
                 McpServerType::Stdio => {
-                    let parts: Vec<String> = server_config.command_or_url.split_whitespace()
+                    let parts: Vec<String> = server_config
+                        .command_or_url
+                        .split_whitespace()
                         .map(|s| s.to_string())
                         .collect();
-                    crate::debug_log!("DAEMON: Creating STDIO config with command parts: {:?}", parts);
+                    crate::debug_log!(
+                        "DAEMON: Creating STDIO config with command parts: {:?}",
+                        parts
+                    );
                     let env = if server_config.env.is_empty() {
                         crate::debug_log!("DAEMON: No environment variables to add");
                         None
                     } else {
-                        crate::debug_log!("DAEMON: Adding {} environment variables", server_config.env.len());
+                        crate::debug_log!(
+                            "DAEMON: Adding {} environment variables",
+                            server_config.env.len()
+                        );
                         for (key, value) in &server_config.env {
                             crate::debug_log!("DAEMON: Env var: {}={}", key, value);
                         }
@@ -206,30 +243,59 @@ impl McpDaemon {
                     create_stdio_server_config(server_name.to_string(), parts, env, None)
                 }
                 McpServerType::Sse => {
-                    crate::debug_log!("DAEMON: Creating SSE config with URL: {}", server_config.command_or_url);
-                    create_sse_server_config(server_name.to_string(), server_config.command_or_url.clone())
+                    crate::debug_log!(
+                        "DAEMON: Creating SSE config with URL: {}",
+                        server_config.command_or_url
+                    );
+                    create_sse_server_config(
+                        server_name.to_string(),
+                        server_config.command_or_url.clone(),
+                    )
                 }
                 McpServerType::Streamable => {
-                    crate::debug_log!("DAEMON: Creating Streamable config (treating as SSE) with URL: {}", server_config.command_or_url);
+                    crate::debug_log!(
+                        "DAEMON: Creating Streamable config (treating as SSE) with URL: {}",
+                        server_config.command_or_url
+                    );
                     // For now, treat as SSE (closest equivalent)
-                    create_sse_server_config(server_name.to_string(), server_config.command_or_url.clone())
+                    create_sse_server_config(
+                        server_name.to_string(),
+                        server_config.command_or_url.clone(),
+                    )
                 }
             };
 
-            crate::debug_log!("DAEMON: Attempting to connect to MCP server '{}'", server_name);
+            crate::debug_log!(
+                "DAEMON: Attempting to connect to MCP server '{}'",
+                server_name
+            );
             match self.manager.add_server(sdk_config).await {
                 Ok(_) => {
-                    crate::debug_log!("DAEMON: Successfully connected to MCP server '{}'. Total connections: {}", server_name, self.manager.clients.len());
+                    crate::debug_log!(
+                        "DAEMON: Successfully connected to MCP server '{}'. Total connections: {}",
+                        server_name,
+                        self.manager.clients.len()
+                    );
                     Ok(())
                 }
                 Err(e) => {
-                    crate::debug_log!("DAEMON: Failed to connect to MCP server '{}': {}", server_name, e);
+                    crate::debug_log!(
+                        "DAEMON: Failed to connect to MCP server '{}': {}",
+                        server_name,
+                        e
+                    );
                     Err(e)
                 }
             }
         } else {
-            crate::debug_log!("DAEMON: Server '{}' not found in configuration", server_name);
-            Err(anyhow!("MCP server '{}' not found in configuration", server_name))
+            crate::debug_log!(
+                "DAEMON: Server '{}' not found in configuration",
+                server_name
+            );
+            Err(anyhow!(
+                "MCP server '{}' not found in configuration",
+                server_name
+            ))
         }
     }
 }
@@ -247,13 +313,17 @@ impl DaemonClient {
     }
 
     pub async fn is_daemon_running(&self) -> bool {
-        self.socket_path.exists() && self.send_request(DaemonRequest::ListConnectedServers).await.is_ok()
+        self.socket_path.exists()
+            && self
+                .send_request(DaemonRequest::ListConnectedServers)
+                .await
+                .is_ok()
     }
 
     pub async fn start_daemon_if_needed(&self) -> Result<()> {
         if !self.is_daemon_running().await {
             crate::debug_log!("Starting MCP daemon...");
-            
+
             // Start daemon in background
             let daemon_binary = std::env::current_exe()?;
             tokio::process::Command::new(daemon_binary)
@@ -262,18 +332,18 @@ impl DaemonClient {
 
             // Wait a bit for daemon to start
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            
+
             // Verify daemon started
             let mut retries = 10;
             while retries > 0 && !self.is_daemon_running().await {
                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                 retries -= 1;
             }
-            
+
             if !self.is_daemon_running().await {
                 return Err(anyhow!("Failed to start MCP daemon"));
             }
-            
+
             crate::debug_log!("MCP daemon started successfully");
         }
         Ok(())
@@ -281,7 +351,7 @@ impl DaemonClient {
 
     pub async fn send_request(&self, request: DaemonRequest) -> Result<DaemonResponse> {
         let mut stream = UnixStream::connect(&self.socket_path).await?;
-        
+
         let request_data = serde_json::to_vec(&request)?;
         stream.write_all(&request_data).await?;
         stream.flush().await?;
@@ -290,7 +360,7 @@ impl DaemonClient {
         let mut len_buffer = [0u8; 4];
         stream.read_exact(&mut len_buffer).await?;
         let response_len = u32::from_le_bytes(len_buffer) as usize;
-        
+
         // Read the actual response data
         let mut response_buffer = vec![0; response_len];
         stream.read_exact(&mut response_buffer).await?;
@@ -301,55 +371,85 @@ impl DaemonClient {
 
     pub async fn ensure_server_connected(&self, server_name: &str) -> Result<()> {
         self.start_daemon_if_needed().await?;
-        
-        match self.send_request(DaemonRequest::EnsureServerConnected { 
-            server_name: server_name.to_string() 
-        }).await? {
+
+        match self
+            .send_request(DaemonRequest::EnsureServerConnected {
+                server_name: server_name.to_string(),
+            })
+            .await?
+        {
             DaemonResponse::ServerConnected => Ok(()),
             DaemonResponse::Error(e) => Err(anyhow!(e)),
             _ => Err(anyhow!("Unexpected response from daemon")),
         }
     }
 
-    pub async fn call_tool(&self, server_name: &str, tool_name: &str, arguments: serde_json::Value) -> Result<serde_json::Value> {
-        match self.send_request(DaemonRequest::CallTool {
-            server_name: server_name.to_string(),
-            tool_name: tool_name.to_string(),
-            arguments,
-        }).await? {
+    pub async fn call_tool(
+        &self,
+        server_name: &str,
+        tool_name: &str,
+        arguments: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        match self
+            .send_request(DaemonRequest::CallTool {
+                server_name: server_name.to_string(),
+                tool_name: tool_name.to_string(),
+                arguments,
+            })
+            .await?
+        {
             DaemonResponse::ToolResult(result) => Ok(result),
             DaemonResponse::Error(e) => Err(anyhow!(e)),
             _ => Err(anyhow!("Unexpected response from daemon")),
         }
     }
 
-    pub async fn list_tools(&self, server_name: &str) -> Result<HashMap<String, Vec<rmcp::model::Tool>>> {
-        crate::debug_log!("DaemonClient: Requesting tools for server '{}'", server_name);
-        match self.send_request(DaemonRequest::ListTools {
-            server_name: server_name.to_string(),
-        }).await? {
+    pub async fn list_tools(
+        &self,
+        server_name: &str,
+    ) -> Result<HashMap<String, Vec<rmcp::model::Tool>>> {
+        crate::debug_log!(
+            "DaemonClient: Requesting tools for server '{}'",
+            server_name
+        );
+        match self
+            .send_request(DaemonRequest::ListTools {
+                server_name: server_name.to_string(),
+            })
+            .await?
+        {
             DaemonResponse::Tools(tools) => {
-                crate::debug_log!("DaemonClient: Received tools response with {} servers", tools.len());
+                crate::debug_log!(
+                    "DaemonClient: Received tools response with {} servers",
+                    tools.len()
+                );
                 for (name, server_tools) in &tools {
-                    crate::debug_log!("DaemonClient: Server '{}' has {} tools", name, server_tools.len());
+                    crate::debug_log!(
+                        "DaemonClient: Server '{}' has {} tools",
+                        name,
+                        server_tools.len()
+                    );
                 }
                 Ok(tools)
-            },
+            }
             DaemonResponse::Error(e) => {
                 crate::debug_log!("DaemonClient: Received error response: {}", e);
                 Err(anyhow!(e))
-            },
+            }
             response => {
                 crate::debug_log!("DaemonClient: Received unexpected response: {:?}", response);
                 Err(anyhow!("Unexpected response from daemon"))
-            },
+            }
         }
     }
 
     pub async fn close_server(&self, server_name: &str) -> Result<()> {
-        match self.send_request(DaemonRequest::CloseServer {
-            server_name: server_name.to_string(),
-        }).await? {
+        match self
+            .send_request(DaemonRequest::CloseServer {
+                server_name: server_name.to_string(),
+            })
+            .await?
+        {
             DaemonResponse::ServerClosed => Ok(()),
             DaemonResponse::Error(e) => Err(anyhow!(e)),
             _ => Err(anyhow!("Unexpected response from daemon")),

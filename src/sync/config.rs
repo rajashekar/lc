@@ -1,11 +1,11 @@
 //! Sync configuration management for storing cloud provider settings
 
 use anyhow::Result;
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use colored::Colorize;
 
 /// Sync configuration for all providers
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -31,7 +31,7 @@ impl SyncConfig {
     /// Load sync configuration from file
     pub fn load() -> Result<Self> {
         let config_path = Self::config_file_path()?;
-        
+
         if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
             let config: SyncConfig = toml::from_str(&content)?;
@@ -40,42 +40,41 @@ impl SyncConfig {
             Ok(SyncConfig::default())
         }
     }
-    
+
     /// Save sync configuration to file
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_file_path()?;
-        
+
         // Ensure config directory exists
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         let content = toml::to_string_pretty(self)?;
         fs::write(&config_path, content)?;
         Ok(())
     }
-    
+
     /// Get the path to the sync configuration file
     fn config_file_path() -> Result<PathBuf> {
         let config_dir = crate::config::Config::config_dir()?;
         Ok(config_dir.join("sync.toml"))
     }
-    
+
     /// Add or update a provider configuration
     pub fn set_provider(&mut self, name: String, config: ProviderConfig) {
         self.providers.insert(name, config);
     }
-    
+
     /// Get a provider configuration
     pub fn get_provider(&self, name: &str) -> Option<&ProviderConfig> {
         self.providers.get(name)
     }
-    
+
     /// Remove a provider configuration
     pub fn remove_provider(&mut self, name: &str) -> bool {
         self.providers.remove(name).is_some()
     }
-    
 }
 
 impl ProviderConfig {
@@ -95,22 +94,28 @@ impl ProviderConfig {
             endpoint_url,
         }
     }
-    
+
     /// Display provider configuration (hiding sensitive data)
     pub fn display(&self) -> String {
         match self {
-            ProviderConfig::S3 { bucket_name, region, access_key_id, endpoint_url, .. } => {
+            ProviderConfig::S3 {
+                bucket_name,
+                region,
+                access_key_id,
+                endpoint_url,
+                ..
+            } => {
                 let mut info = format!(
                     "S3 Configuration:\n  Bucket: {}\n  Region: {}\n  Access Key: {}***",
                     bucket_name,
                     region,
                     &access_key_id[..access_key_id.len().min(8)]
                 );
-                
+
                 if let Some(endpoint) = endpoint_url {
                     info.push_str(&format!("\n  Endpoint: {}", endpoint));
                 }
-                
+
                 info
             }
         }
@@ -123,7 +128,7 @@ pub async fn handle_sync_configure(
     command: Option<crate::cli::ConfigureCommands>,
 ) -> Result<()> {
     use crate::cli::ConfigureCommands;
-    
+
     match command {
         Some(ConfigureCommands::Setup) | None => {
             // Setup provider configuration
@@ -132,46 +137,72 @@ pub async fn handle_sync_configure(
                     setup_s3_config().await?;
                 }
                 _ => {
-                    anyhow::bail!("Unsupported provider '{}'. Supported providers: s3", provider_name);
+                    anyhow::bail!(
+                        "Unsupported provider '{}'. Supported providers: s3",
+                        provider_name
+                    );
                 }
             }
         }
         Some(ConfigureCommands::Show) => {
             // Show provider configuration
             let config = SyncConfig::load()?;
-            
+
             if let Some(provider_config) = config.get_provider(provider_name) {
-                println!("\n{}", format!("Configuration for '{}':", provider_name).bold().blue());
+                println!(
+                    "\n{}",
+                    format!("Configuration for '{}':", provider_name)
+                        .bold()
+                        .blue()
+                );
                 println!("{}", provider_config.display());
             } else {
-                println!("{} No configuration found for provider '{}'", "ℹ️".blue(), provider_name);
-                println!("Run {} to set up configuration", format!("lc sync configure {} setup", provider_name).dimmed());
+                println!(
+                    "{} No configuration found for provider '{}'",
+                    "ℹ️".blue(),
+                    provider_name
+                );
+                println!(
+                    "Run {} to set up configuration",
+                    format!("lc sync configure {} setup", provider_name).dimmed()
+                );
             }
         }
         Some(ConfigureCommands::Remove) => {
             // Remove provider configuration
             let mut config = SyncConfig::load()?;
-            
+
             if config.remove_provider(provider_name) {
                 config.save()?;
-                println!("{} Configuration for '{}' removed successfully", "✓".green(), provider_name);
+                println!(
+                    "{} Configuration for '{}' removed successfully",
+                    "✓".green(),
+                    provider_name
+                );
             } else {
-                println!("{} No configuration found for provider '{}'", "ℹ️".blue(), provider_name);
+                println!(
+                    "{} No configuration found for provider '{}'",
+                    "ℹ️".blue(),
+                    provider_name
+                );
             }
         }
     }
-    
+
     Ok(())
 }
 
 /// Setup S3 configuration interactively
 async fn setup_s3_config() -> Result<()> {
     use std::io::{self, Write};
-    
+
     println!("{} Setting up S3 configuration", "🔧".blue());
-    println!("{} This will be stored in your lc config directory", "ℹ️".blue());
+    println!(
+        "{} This will be stored in your lc config directory",
+        "ℹ️".blue()
+    );
     println!();
-    
+
     // Get bucket name
     print!("Enter S3 bucket name: ");
     // Deliberately flush stdout to ensure prompt appears before user input
@@ -182,7 +213,7 @@ async fn setup_s3_config() -> Result<()> {
     if bucket_name.is_empty() {
         anyhow::bail!("Bucket name cannot be empty");
     }
-    
+
     // Get region
     print!("Enter AWS region (default: us-east-1): ");
     // Deliberately flush stdout to ensure prompt appears before user input
@@ -195,7 +226,7 @@ async fn setup_s3_config() -> Result<()> {
     } else {
         region
     };
-    
+
     // Get access key ID
     print!("Enter AWS Access Key ID: ");
     // Deliberately flush stdout to ensure prompt appears before user input
@@ -206,7 +237,7 @@ async fn setup_s3_config() -> Result<()> {
     if access_key_id.is_empty() {
         anyhow::bail!("Access Key ID cannot be empty");
     }
-    
+
     // Get secret access key (hidden input)
     print!("Enter AWS Secret Access Key: ");
     // Deliberately flush stdout to ensure prompt appears before password input
@@ -215,7 +246,7 @@ async fn setup_s3_config() -> Result<()> {
     if secret_access_key.is_empty() {
         anyhow::bail!("Secret Access Key cannot be empty");
     }
-    
+
     // Get optional endpoint URL
     print!("Enter custom S3 endpoint URL (optional, for Backblaze/Cloudflare R2/etc., press Enter to skip): ");
     // Deliberately flush stdout to ensure prompt appears before user input
@@ -228,7 +259,7 @@ async fn setup_s3_config() -> Result<()> {
     } else {
         Some(endpoint_url)
     };
-    
+
     // Create and save configuration
     let provider_config = ProviderConfig::new_s3(
         bucket_name.clone(),
@@ -237,25 +268,31 @@ async fn setup_s3_config() -> Result<()> {
         secret_access_key,
         endpoint_url.clone(),
     );
-    
+
     let mut config = SyncConfig::load()?;
     config.set_provider("s3".to_string(), provider_config);
     config.save()?;
-    
+
     println!("\n{} S3 configuration saved successfully!", "✓".green());
     println!("{} Configuration details:", "📋".blue());
     println!("  Bucket: {}", bucket_name);
     println!("  Region: {}", region);
-    println!("  Access Key: {}***", &access_key_id[..access_key_id.len().min(8)]);
+    println!(
+        "  Access Key: {}***",
+        &access_key_id[..access_key_id.len().min(8)]
+    );
     if let Some(endpoint) = endpoint_url {
         println!("  Endpoint: {}", endpoint);
     }
-    
+
     println!("\n{} You can now use:", "💡".yellow());
     println!("  {} - Sync to S3", "lc sync to s3".dimmed());
     println!("  {} - Sync from S3", "lc sync from s3".dimmed());
-    println!("  {} - View configuration", "lc sync configure s3 show".dimmed());
-    
+    println!(
+        "  {} - View configuration",
+        "lc sync configure s3 show".dimmed()
+    );
+
     Ok(())
 }
 
@@ -272,7 +309,7 @@ mod tests {
             "test-secret".to_string(),
             None,
         );
-        
+
         // Test that the config was created successfully
         assert!(matches!(config, ProviderConfig::S3 { .. }));
         assert!(config.display().contains("test-bucket"));
@@ -282,7 +319,7 @@ mod tests {
     #[test]
     fn test_sync_config_operations() {
         let mut config = SyncConfig::default();
-        
+
         let provider_config = ProviderConfig::new_s3(
             "test-bucket".to_string(),
             "us-east-1".to_string(),
@@ -290,16 +327,16 @@ mod tests {
             "test-secret".to_string(),
             None,
         );
-        
+
         // Test adding provider
         config.set_provider("s3".to_string(), provider_config);
         assert!(config.get_provider("s3").is_some());
         assert_eq!(config.providers.len(), 1);
-        
+
         // Test getting provider
         let retrieved = config.get_provider("s3");
         assert!(retrieved.is_some());
-        
+
         // Test removing provider
         assert!(config.remove_provider("s3"));
         assert!(config.get_provider("s3").is_none());

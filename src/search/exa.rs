@@ -1,6 +1,6 @@
+use super::{SearchProviderConfig, SearchResult, SearchResults};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use super::{SearchProviderConfig, SearchResult, SearchResults};
 
 #[derive(Debug, Serialize)]
 struct ExaSearchRequest {
@@ -57,9 +57,7 @@ pub async fn search(
         // URL is just the base, append the endpoint
         format!("{}/search", base_url)
     };
-    let mut request = client
-        .post(&url)
-        .json(&request_body);
+    let mut request = client.post(&url).json(&request_body);
 
     // Add headers
     for (name, value) in &provider_config.headers {
@@ -77,7 +75,7 @@ pub async fn search(
     }
 
     let exa_response: ExaSearchResponse = response.json().await?;
-    
+
     let mut results = SearchResults::new(query.to_string(), "exa".to_string());
     results.set_search_time(search_time_ms);
 

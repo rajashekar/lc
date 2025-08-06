@@ -1,11 +1,11 @@
 //! Integration tests for key management commands
-//! 
+//!
 //! This module contains integration tests for API key management
 //! commands (lc keys add, list, get, remove).
 
 mod common;
 
-use common::{create_config_with_providers, assertions};
+use common::{assertions, create_config_with_providers};
 use lc::config::Config;
 use std::collections::HashMap;
 
@@ -18,10 +18,7 @@ mod key_add_tests {
         let mut config = create_config_with_providers();
 
         // Test setting API key for existing provider
-        let result = config.set_api_key(
-            "openai".to_string(),
-            "sk-test123".to_string()
-        );
+        let result = config.set_api_key("openai".to_string(), "sk-test123".to_string());
 
         assert!(result.is_ok());
         assertions::assert_provider_api_key(&config, "openai", "sk-test123");
@@ -32,10 +29,7 @@ mod key_add_tests {
         let mut config = create_config_with_providers();
 
         // Test setting API key for non-existent provider
-        let result = config.set_api_key(
-            "nonexistent".to_string(),
-            "sk-test123".to_string()
-        );
+        let result = config.set_api_key("nonexistent".to_string(), "sk-test123".to_string());
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
@@ -45,10 +39,7 @@ mod key_add_tests {
     fn test_key_add_multiple_providers() {
         let mut config = create_config_with_providers();
 
-        let test_keys = vec![
-            ("openai", "sk-openai-123"),
-            ("anthropic", "sk-ant-456"),
-        ];
+        let test_keys = vec![("openai", "sk-openai-123"), ("anthropic", "sk-ant-456")];
 
         for (provider, key) in test_keys {
             let result = config.set_api_key(provider.to_string(), key.to_string());
@@ -84,8 +75,10 @@ mod key_list_tests {
         let mut config = create_config_with_providers();
 
         // Set API keys for some providers
-        config.set_api_key("openai".to_string(), "sk-openai-123".to_string()).unwrap();
-        
+        config
+            .set_api_key("openai".to_string(), "sk-openai-123".to_string())
+            .unwrap();
+
         // Check which providers have keys
         let openai_provider = config.get_provider("openai").unwrap();
         let anthropic_provider = config.get_provider("anthropic").unwrap();
@@ -104,7 +97,9 @@ mod key_list_tests {
         }
 
         // Set API key for another
-        config.set_api_key("openai".to_string(), "sk-openai-123".to_string()).unwrap();
+        config
+            .set_api_key("openai".to_string(), "sk-openai-123".to_string())
+            .unwrap();
 
         // Check status
         let openai_provider = config.get_provider("openai").unwrap();
@@ -122,7 +117,9 @@ mod key_get_tests {
     #[test]
     fn test_key_get_existing() {
         let mut config = create_config_with_providers();
-        config.set_api_key("openai".to_string(), "sk-test-key".to_string()).unwrap();
+        config
+            .set_api_key("openai".to_string(), "sk-test-key".to_string())
+            .unwrap();
 
         let provider = config.get_provider("openai").unwrap();
         assert_eq!(provider.api_key.as_ref().unwrap(), "sk-test-key");
@@ -140,7 +137,7 @@ mod key_get_tests {
     #[test]
     fn test_key_get_provider_without_key() {
         let mut config = create_config_with_providers();
-        
+
         // Remove API key
         if let Some(provider_config) = config.providers.get_mut("openai") {
             provider_config.api_key = None;
@@ -158,7 +155,9 @@ mod key_remove_tests {
     #[test]
     fn test_key_remove_existing() {
         let mut config = create_config_with_providers();
-        config.set_api_key("openai".to_string(), "sk-test-key".to_string()).unwrap();
+        config
+            .set_api_key("openai".to_string(), "sk-test-key".to_string())
+            .unwrap();
 
         // Verify key exists
         assertions::assert_provider_has_api_key(&config, "openai");
@@ -185,7 +184,7 @@ mod key_remove_tests {
     #[test]
     fn test_key_remove_already_empty() {
         let mut config = create_config_with_providers();
-        
+
         // Remove API key first
         if let Some(provider_config) = config.providers.get_mut("openai") {
             provider_config.api_key = None;

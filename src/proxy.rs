@@ -1,3 +1,4 @@
+use crate::{chat, config::Config, models_cache::ModelsCache, provider::ChatRequest};
 use anyhow::Result;
 use axum::{
     extract::{Query, State},
@@ -6,11 +7,10 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
-use crate::{config::Config, chat, provider::ChatRequest, models_cache::ModelsCache};
-use colored::Colorize;
 
 #[derive(Clone)]
 pub struct ProxyState {
@@ -80,21 +80,17 @@ pub async fn start_proxy_server(
     api_key: Option<String>,
 ) -> Result<()> {
     let config = Config::load()?;
-    
+
     // Generate API key if requested
-    let final_api_key = if api_key.is_some() {
-        api_key
-    } else {
-        None
-    };
-    
+    let final_api_key = if api_key.is_some() { api_key } else { None };
+
     let state = ProxyState {
         config,
         api_key: final_api_key.clone(),
         provider_filter,
         model_filter,
     };
-    
+
     let app = Router::new()
         .route("/models", get(list_models))
         .route("/v1/models", get(list_models))
@@ -102,21 +98,25 @@ pub async fn start_proxy_server(
         .route("/v1/chat/completions", post(chat_completions))
         .layer(CorsLayer::permissive())
         .with_state(Arc::new(state));
-    
+
     let addr = format!("{}:{}", host, port);
     println!("{} Starting proxy server on {}", "🚀".blue(), addr.bold());
-    
+
     if let Some(ref key) = final_api_key {
-        println!("{} Authentication enabled with API key: {}", "🔐".yellow(), key);
+        println!(
+            "{} Authentication enabled with API key: {}",
+            "🔐".yellow(),
+            key
+        );
     } else {
         println!("{} No authentication required", "⚠️".yellow());
     }
-    
+
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     println!("{} Server listening on http://{}", "✓".green(), addr);
-    
+
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }
 
@@ -143,16 +143,16 @@ async fn list_models(
 ) -> Result<Json<ProxyModelsResponse>, StatusCode> {
     // Authenticate if API key is configured
     authenticate(&headers, &state).await?;
-    
+
     let mut models = Vec::new();
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     // Use models cache for fast response
     let cache = ModelsCache::load().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Check if cache needs refresh and refresh in background if needed
     if cache.needs_refresh() {
         // Refresh cache in background, but don't block the response
@@ -162,36 +162,36 @@ async fn list_models(
             }
         });
     }
-    
+
     // Get cached models
     let cached_models = cache.get_all_models();
-    
+
     for cached_model in cached_models {
         let provider_name = &cached_model.provider;
         let model_name = &cached_model.model;
         let model_id = format!("{}:{}", provider_name, model_name);
-        
+
         // Apply provider filter if specified
         if let Some(ref provider_filter) = state.provider_filter {
             if provider_name != provider_filter {
                 continue;
             }
         }
-        
+
         // Apply query provider filter if specified
         if let Some(ref query_provider) = query.provider {
             if provider_name != query_provider {
                 continue;
             }
         }
-        
+
         // Apply model filter if specified
         if let Some(ref model_filter) = state.model_filter {
             if !model_id.contains(model_filter) && model_name != model_filter {
                 continue;
             }
         }
-        
+
         models.push(ProxyModel {
             id: model_id,
             object: "model".to_string(),
@@ -199,12 +199,12 @@ async fn list_models(
             owned_by: provider_name.clone(),
         });
     }
-    
+
     let response = ProxyModelsResponse {
         object: "list".to_string(),
         data: models,
     };
-    
+
     Ok(Json(response))
 }
 
@@ -215,52 +215,53 @@ async fn chat_completions(
 ) -> Result<Json<ProxyChatResponse>, StatusCode> {
     // Authenticate if API key is configured
     authenticate(&headers, &state).await?;
-    
+
     // Parse the model to determine provider and model name
-    let (provider_name, model_name) = parse_model_string(&request.model, &state.config)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+    let (provider_name, model_name) =
+        parse_model_string(&request.model, &state.config).map_err(|_| StatusCode::BAD_REQUEST)?;
+
     // Check if provider is allowed by filter
     if let Some(ref provider_filter) = state.provider_filter {
         if provider_name != *provider_filter {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
-    
+
     // Check if model is allowed by filter
     if let Some(ref model_filter) = state.model_filter {
         if !request.model.contains(model_filter) && model_name != *model_filter {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
-    
+
     // Create client for the provider
     let mut config_mut = state.config.clone();
     let client = chat::create_authenticated_client(&mut config_mut, &provider_name)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Convert to internal chat request format
     let chat_request = ChatRequest {
         model: model_name.clone(),
         messages: request.messages,
         max_tokens: request.max_tokens,
         temperature: request.temperature,
-        tools: None, // Proxy doesn't support tools yet
+        tools: None,  // Proxy doesn't support tools yet
         stream: None, // Proxy doesn't support streaming yet
     };
-    
+
     // Send the request
-    let response_text = client.chat(&chat_request, &model_name)
+    let response_text = client
+        .chat(&chat_request, &model_name)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Create response in OpenAI format
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     let response = ProxyChatResponse {
         id: format!("chatcmpl-{}", uuid::Uuid::new_v4()),
         object: "chat.completion".to_string(),
@@ -270,7 +271,9 @@ async fn chat_completions(
             index: 0,
             message: crate::provider::Message {
                 role: "assistant".to_string(),
-                content_type: crate::provider::MessageContent::Text { content: Some(response_text) },
+                content_type: crate::provider::MessageContent::Text {
+                    content: Some(response_text),
+                },
                 tool_calls: None,
                 tool_call_id: None,
             },
@@ -282,7 +285,7 @@ async fn chat_completions(
             total_tokens: 0,
         },
     };
-    
+
     Ok(Json(response))
 }
 
@@ -297,40 +300,43 @@ pub fn parse_model_string(model: &str, config: &Config) -> Result<(String, Strin
         }
         return Err(anyhow::anyhow!("Invalid alias target format"));
     }
-    
+
     // Check if it contains provider:model format
     if model.contains(':') {
         let parts: Vec<&str> = model.splitn(2, ':').collect();
         if parts.len() == 2 {
             let provider_name = parts[0].to_string();
             let model_name = parts[1].to_string();
-            
+
             // Validate provider exists
             if config.has_provider(&provider_name) {
                 return Ok((provider_name, model_name));
             }
         }
     }
-    
+
     // If no provider specified, use default provider
     if let Some(default_provider) = &config.default_provider {
         return Ok((default_provider.clone(), model.to_string()));
     }
-    
-    Err(anyhow::anyhow!("Could not determine provider for model: {}", model))
+
+    Err(anyhow::anyhow!(
+        "Could not determine provider for model: {}",
+        model
+    ))
 }
 
 pub fn generate_api_key() -> String {
     use rand::Rng;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let mut rng = rand::thread_rng();
-    
+
     let key: String = (0..32)
         .map(|_| {
             let idx = rng.gen_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect();
-    
+
     format!("sk-{}", key)
 }

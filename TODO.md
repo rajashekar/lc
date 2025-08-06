@@ -4,7 +4,6 @@
 - Check audio
 - Support other vector dbs like milvus, pinecone, qdrant
 - Support other web proxy chats
-- Add support to sync db to cloud
 - make sure package works with brew, linux, windows
 - clean up code
 - Add support to multi line chat

@@ -2,17 +2,29 @@
 
 use anyhow::Result;
 use lc::sync::{CloudProvider, ConfigFile};
-use tempfile::TempDir;
 use std::fs;
+use tempfile::TempDir;
 
 #[test]
 fn test_cloud_provider_parsing() {
     // Test valid providers
-    assert!(matches!(CloudProvider::from_str("s3"), Ok(CloudProvider::S3)));
-    assert!(matches!(CloudProvider::from_str("S3"), Ok(CloudProvider::S3)));
-    assert!(matches!(CloudProvider::from_str("amazon-s3"), Ok(CloudProvider::S3)));
-    assert!(matches!(CloudProvider::from_str("aws-s3"), Ok(CloudProvider::S3)));
-    
+    assert!(matches!(
+        CloudProvider::from_str("s3"),
+        Ok(CloudProvider::S3)
+    ));
+    assert!(matches!(
+        CloudProvider::from_str("S3"),
+        Ok(CloudProvider::S3)
+    ));
+    assert!(matches!(
+        CloudProvider::from_str("amazon-s3"),
+        Ok(CloudProvider::S3)
+    ));
+    assert!(matches!(
+        CloudProvider::from_str("aws-s3"),
+        Ok(CloudProvider::S3)
+    ));
+
     // Test invalid provider
     assert!(CloudProvider::from_str("invalid").is_err());
     assert!(CloudProvider::from_str("").is_err());
@@ -32,7 +44,7 @@ fn test_config_file_creation() {
         path: std::path::PathBuf::from("/tmp/test.toml"),
         content: b"test content".to_vec(),
     };
-    
+
     assert_eq!(config_file.name, "test.toml");
     assert_eq!(config_file.content, b"test content");
 }
@@ -43,34 +55,36 @@ fn test_config_resolver_with_temp_dir() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let config_dir = temp_dir.path().join("lc");
     fs::create_dir_all(&config_dir)?;
-    
+
     // Create some test .toml files
     fs::write(config_dir.join("config.toml"), "test_config = true")?;
     fs::write(config_dir.join("mcp.toml"), "test_mcp = true")?;
     fs::write(config_dir.join("not_toml.txt"), "should be ignored")?;
-    
+
     // This test would need to mock the config directory
     // For now, we just test that the structure works
     assert!(config_dir.exists());
     assert!(config_dir.join("config.toml").exists());
     assert!(config_dir.join("mcp.toml").exists());
-    
+
     Ok(())
 }
 
 #[cfg(test)]
 mod encryption_tests {
-    use lc::sync::{derive_key_from_password, encrypt_data, decrypt_data, encode_base64, decode_base64};
+    use lc::sync::{
+        decode_base64, decrypt_data, derive_key_from_password, encode_base64, encrypt_data,
+    };
 
     #[test]
     fn test_key_derivation_consistency() {
         let password = "test_password_123";
         let key1 = derive_key_from_password(password).unwrap();
         let key2 = derive_key_from_password(password).unwrap();
-        
+
         // Same password should produce same key
         assert_eq!(key1, key2);
-        
+
         // Different password should produce different key
         let key3 = derive_key_from_password("different_password").unwrap();
         assert_ne!(key1, key3);
@@ -81,12 +95,12 @@ mod encryption_tests {
         let data = b"Hello, World! This is test configuration data.";
         let password = "test_password_123";
         let key = derive_key_from_password(password).unwrap();
-        
+
         // Encrypt
         let encrypted = encrypt_data(data, &key).unwrap();
         assert_ne!(encrypted.as_slice(), data);
         assert!(encrypted.len() > data.len()); // Should be larger due to nonce + auth tag
-        
+
         // Decrypt
         let decrypted = decrypt_data(&encrypted, &key).unwrap();
         assert_eq!(decrypted.as_slice(), data);
@@ -97,9 +111,9 @@ mod encryption_tests {
         let data = b"Hello, World!";
         let key1 = derive_key_from_password("password1").unwrap();
         let key2 = derive_key_from_password("password2").unwrap();
-        
+
         let encrypted = encrypt_data(data, &key1).unwrap();
-        
+
         // Decryption with wrong key should fail
         assert!(decrypt_data(&encrypted, &key2).is_err());
     }
@@ -109,7 +123,7 @@ mod encryption_tests {
         let data = b"Hello, World! This is binary data: \x00\x01\x02\x03";
         let encoded = encode_base64(data);
         let decoded = decode_base64(&encoded).unwrap();
-        
+
         assert_eq!(decoded.as_slice(), data);
     }
 
@@ -121,10 +135,10 @@ mod encryption_tests {
     #[test]
     fn test_decrypt_invalid_data_fails() {
         let key = derive_key_from_password("test").unwrap();
-        
+
         // Too short data should fail
         assert!(decrypt_data(b"short", &key).is_err());
-        
+
         // Invalid data should fail
         let invalid_data = vec![0u8; 20];
         assert!(decrypt_data(&invalid_data, &key).is_err());
@@ -148,14 +162,20 @@ mod integration_tests {
     async fn test_sync_to_invalid_provider() {
         let result = lc::sync::handle_sync_to("invalid_provider", false).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unsupported cloud provider"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Unsupported cloud provider"));
     }
 
     #[tokio::test]
     async fn test_sync_from_invalid_provider() {
         let result = lc::sync::handle_sync_from("invalid_provider", false).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unsupported cloud provider"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Unsupported cloud provider"));
     }
 
     // Note: S3 integration tests would require AWS credentials and a test bucket
@@ -172,7 +192,7 @@ mod integration_tests {
         // This would test actual S3 operations
         // For now, just ensure the S3Provider can be created
         let result = lc::sync::S3Provider::new().await;
-        
+
         match result {
             Ok(_) => {
                 println!("S3Provider created successfully");
@@ -182,7 +202,7 @@ mod integration_tests {
                 // Don't fail the test if AWS isn't properly configured
             }
         }
-        
+
         Ok(())
     }
 }

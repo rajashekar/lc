@@ -6,14 +6,14 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tower_http::cors::CorsLayer;
 use colored::Colorize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 // Configuration for webchatproxy
@@ -30,7 +30,7 @@ pub struct WebChatProxyProviderConfig {
 impl WebChatProxyConfig {
     pub fn load() -> Result<Self> {
         let config_path = Self::config_file_path()?;
-        
+
         if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
             let config: WebChatProxyConfig = toml::from_str(&content)?;
@@ -40,24 +40,24 @@ impl WebChatProxyConfig {
             let config = WebChatProxyConfig {
                 providers: HashMap::new(),
             };
-            
+
             // Ensure config directory exists
             if let Some(parent) = config_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            
+
             config.save()?;
             Ok(config)
         }
     }
-    
+
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_file_path()?;
         let content = toml::to_string_pretty(self)?;
         fs::write(&config_path, content)?;
         Ok(())
     }
-    
+
     pub fn set_provider_auth(&mut self, provider: &str, auth_token: &str) -> Result<()> {
         let provider_config = WebChatProxyProviderConfig {
             auth_token: Some(auth_token.to_string()),
@@ -65,15 +65,15 @@ impl WebChatProxyConfig {
         self.providers.insert(provider.to_string(), provider_config);
         Ok(())
     }
-    
+
     pub fn get_provider_auth(&self, provider: &str) -> Option<&String> {
         self.providers.get(provider)?.auth_token.as_ref()
     }
-    
+
     fn config_file_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
-        
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+
         Ok(config_dir.join("lc").join("webchatproxy.toml"))
     }
 }
@@ -218,7 +218,7 @@ pub struct DaemonRegistry {
 impl DaemonRegistry {
     pub fn load() -> Result<Self> {
         let registry_path = Self::registry_file_path()?;
-        
+
         if registry_path.exists() {
             let content = fs::read_to_string(&registry_path)?;
             let registry: DaemonRegistry = toml::from_str(&content)?;
@@ -229,41 +229,41 @@ impl DaemonRegistry {
             })
         }
     }
-    
+
     pub fn save(&self) -> Result<()> {
         let registry_path = Self::registry_file_path()?;
-        
+
         // Ensure directory exists
         if let Some(parent) = registry_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         let content = toml::to_string_pretty(self)?;
         fs::write(&registry_path, content)?;
         Ok(())
     }
-    
+
     pub fn add_daemon(&mut self, provider: String, info: DaemonInfo) {
         self.daemons.insert(provider, info);
     }
-    
+
     pub fn remove_daemon(&mut self, provider: &str) -> Option<DaemonInfo> {
         self.daemons.remove(provider)
     }
-    
+
     #[allow(dead_code)]
     pub fn get_daemon(&self, provider: &str) -> Option<&DaemonInfo> {
         self.daemons.get(provider)
     }
-    
+
     pub fn list_daemons(&self) -> &HashMap<String, DaemonInfo> {
         &self.daemons
     }
-    
+
     fn registry_file_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
-        
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+
         Ok(config_dir.join("lc").join("webchatproxy_daemons.toml"))
     }
 }
@@ -276,13 +276,13 @@ pub async fn start_webchatproxy_server(
     api_key: Option<String>,
 ) -> Result<()> {
     let config = WebChatProxyConfig::load()?;
-    
+
     let state = WebChatProxyState {
         provider: provider.clone(),
         api_key,
         config,
     };
-    
+
     let app = Router::new()
         .route("/chat/completions", post(chat_completions))
         .route("/v1/chat/completions", post(chat_completions))
@@ -290,15 +290,19 @@ pub async fn start_webchatproxy_server(
         .route("/v1/models", get(list_models))
         .layer(CorsLayer::permissive())
         .with_state(Arc::new(state));
-    
+
     let addr = format!("{}:{}", host, port);
-    println!("{} Starting webchatproxy server on {}", "🚀".blue(), addr.bold());
-    
+    println!(
+        "{} Starting webchatproxy server on {}",
+        "🚀".blue(),
+        addr.bold()
+    );
+
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     println!("{} Server listening on http://{}", "✓".green(), addr);
-    
+
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }
 
@@ -325,20 +329,23 @@ async fn chat_completions(
     headers: HeaderMap,
     Json(request): Json<ChatCompletionRequest>,
 ) -> Result<Json<ChatCompletionResponse>, StatusCode> {
-    println!("🔄 Received chat completion request for provider: {}", state.provider);
-    
+    println!(
+        "🔄 Received chat completion request for provider: {}",
+        state.provider
+    );
+
     // Authenticate if API key is configured
     if let Err(e) = authenticate(&headers, &state).await {
         println!("❌ Authentication failed");
         return Err(e);
     }
-    
+
     match state.provider.as_str() {
         "kagi" => handle_kagi_request(&state, request).await,
         _ => {
             println!("❌ Unsupported provider: {}", state.provider);
             Err(StatusCode::BAD_REQUEST)
-        },
+        }
     }
 }
 
@@ -347,20 +354,23 @@ async fn list_models(
     State(state): State<Arc<WebChatProxyState>>,
     headers: HeaderMap,
 ) -> Result<Json<ModelsListResponse>, StatusCode> {
-    println!("🔄 Received models list request for provider: {}", state.provider);
-    
+    println!(
+        "🔄 Received models list request for provider: {}",
+        state.provider
+    );
+
     // Authenticate if API key is configured
     if let Err(e) = authenticate(&headers, &state).await {
         println!("❌ Authentication failed");
         return Err(e);
     }
-    
+
     match state.provider.as_str() {
         "kagi" => handle_kagi_models_request(&state).await,
         _ => {
             println!("❌ Unsupported provider: {}", state.provider);
             Err(StatusCode::BAD_REQUEST)
-        },
+        }
     }
 }
 
@@ -374,7 +384,7 @@ async fn handle_kagi_models_request(
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-            
+
             let models: Vec<ModelInfo> = kagi_models
                 .into_iter()
                 .map(|model| ModelInfo {
@@ -384,13 +394,16 @@ async fn handle_kagi_models_request(
                     owned_by: model.model_provider_name.clone(),
                 })
                 .collect();
-            
+
             let response = ModelsListResponse {
                 object: "list".to_string(),
                 data: models,
             };
-            
-            println!("✅ Successfully fetched {} Kagi models", response.data.len());
+
+            println!(
+                "✅ Successfully fetched {} Kagi models",
+                response.data.len()
+            );
             Ok(Json(response))
         }
         Err(e) => {
@@ -406,16 +419,19 @@ async fn handle_kagi_request(
     request: ChatCompletionRequest,
 ) -> Result<Json<ChatCompletionResponse>, StatusCode> {
     // Get Kagi auth token
-    let auth_token = state.config.get_provider_auth("kagi")
+    let auth_token = state
+        .config
+        .get_provider_auth("kagi")
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    
+
     // Extract the user message (last message with role "user")
-    let user_message = request.messages
+    let user_message = request
+        .messages
         .iter()
         .rev()
         .find(|msg| msg.role == "user")
         .ok_or(StatusCode::BAD_REQUEST)?;
-    
+
     // Create Kagi request
     let kagi_request = KagiRequest {
         focus: KagiFocus {
@@ -431,7 +447,7 @@ async fn handle_kagi_request(
             lens_id: None,
         },
     };
-    
+
     // Make request to Kagi using optimized client with connection pooling
     let client = reqwest::Client::builder()
         .pool_max_idle_per_host(10)
@@ -449,24 +465,26 @@ async fn handle_kagi_request(
         .send()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     if !response.status().is_success() {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
-    
-    let response_text = response.text().await
+
+    let response_text = response
+        .text()
+        .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Parse Kagi response
-    let assistant_response = parse_kagi_response(&response_text)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+    let assistant_response =
+        parse_kagi_response(&response_text).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     // Create OpenAI-compatible response
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     let openai_response = ChatCompletionResponse {
         id: format!("chatcmpl-{}", Uuid::new_v4()),
         object: "chat.completion".to_string(),
@@ -486,7 +504,7 @@ async fn handle_kagi_request(
             total_tokens: 0,
         },
     };
-    
+
     println!("✅ Successfully processed Kagi request");
     Ok(Json(openai_response))
 }
@@ -494,7 +512,7 @@ async fn handle_kagi_request(
 // Parse Kagi's HTML response to extract the assistant's message
 fn parse_kagi_response(html: &str) -> Result<String> {
     let lines: Vec<&str> = html.lines().collect();
-    
+
     // Look for any <div hidden> tags that contain JSON with message content
     for line in lines.iter() {
         if line.contains("<div hidden>") && line.contains("{") {
@@ -503,7 +521,7 @@ fn parse_kagi_response(html: &str) -> Result<String> {
                 let content_start = start + 12; // Length of '<div hidden>'
                 if let Some(end) = line[content_start..].find("</div>") {
                     let json_content = &line[content_start..content_start + end];
-                    
+
                     // Decode HTML entities
                     let decoded_json = json_content
                         .replace("&quot;", "\"")
@@ -511,20 +529,23 @@ fn parse_kagi_response(html: &str) -> Result<String> {
                         .replace("&gt;", ">")
                         .replace("&amp;", "&")
                         .replace("&#39;", "'");
-                    
+
                     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&decoded_json) {
                         // Check if this has state "done" - this is the final response
                         if let Some(state) = parsed.get("state").and_then(|v| v.as_str()) {
                             if state == "done" {
                                 // First try to get the markdown content
-                                if let Some(md_content) = parsed.get("md").and_then(|v| v.as_str()) {
+                                if let Some(md_content) = parsed.get("md").and_then(|v| v.as_str())
+                                {
                                     if !md_content.trim().is_empty() {
                                         return Ok(md_content.to_string());
                                     }
                                 }
-                                
+
                                 // Fallback to reply content (HTML)
-                                if let Some(reply_content) = parsed.get("reply").and_then(|v| v.as_str()) {
+                                if let Some(reply_content) =
+                                    parsed.get("reply").and_then(|v| v.as_str())
+                                {
                                     if !reply_content.trim().is_empty() {
                                         let stripped = strip_html_tags(reply_content);
                                         return Ok(stripped);
@@ -532,14 +553,14 @@ fn parse_kagi_response(html: &str) -> Result<String> {
                                 }
                             }
                         }
-                        
+
                         // Also check for any JSON that has "md" or "reply" fields with substantial content
                         if let Some(md_content) = parsed.get("md").and_then(|v| v.as_str()) {
                             if !md_content.trim().is_empty() && md_content.len() > 10 {
                                 return Ok(md_content.to_string());
                             }
                         }
-                        
+
                         if let Some(reply_content) = parsed.get("reply").and_then(|v| v.as_str()) {
                             if !reply_content.trim().is_empty() && reply_content.len() > 10 {
                                 let stripped = strip_html_tags(reply_content);
@@ -551,7 +572,7 @@ fn parse_kagi_response(html: &str) -> Result<String> {
             }
         }
     }
-    
+
     anyhow::bail!("Could not parse Kagi response - no meaningful content found")
 }
 
@@ -559,7 +580,7 @@ fn parse_kagi_response(html: &str) -> Result<String> {
 fn strip_html_tags(html: &str) -> String {
     let mut result = String::new();
     let mut in_tag = false;
-    
+
     for ch in html.chars() {
         match ch {
             '<' => in_tag = true,
@@ -568,7 +589,7 @@ fn strip_html_tags(html: &str) -> String {
             _ => {}
         }
     }
-    
+
     // Decode common HTML entities
     result
         .replace("&lt;", "<")
@@ -586,18 +607,18 @@ pub async fn start_webchatproxy_daemon(
 ) -> Result<()> {
     use std::env;
     use std::fs::OpenOptions;
-    
+
     // Get the current executable path
     let current_exe = env::current_exe()?;
-    
+
     // Create log directory
     let log_dir = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?
         .join("lc");
     fs::create_dir_all(&log_dir)?;
-    
+
     let log_file = log_dir.join(format!("{}.log", provider));
-    
+
     // Build command arguments - remove the --daemon flag to prevent infinite recursion
     let mut args = vec![
         "w".to_string(),
@@ -608,18 +629,18 @@ pub async fn start_webchatproxy_daemon(
         "--host".to_string(),
         host.clone(),
     ];
-    
+
     if let Some(ref key) = api_key {
         args.push("--key".to_string());
         args.push(key.clone());
     }
-    
+
     // Create log file handles
     let log_file_handle = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_file)?;
-    
+
     // Start the daemon process with proper detachment
     let child = Command::new(&current_exe)
         .args(&args)
@@ -627,18 +648,18 @@ pub async fn start_webchatproxy_daemon(
         .stderr(Stdio::from(log_file_handle))
         .stdin(Stdio::null())
         .spawn()?;
-    
+
     let pid = child.id();
-    
+
     // Give the process a moment to start
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    
+
     // Check if the process is still running
     #[cfg(unix)]
     {
         use nix::sys::signal;
         use nix::unistd::Pid;
-        
+
         let process_pid = Pid::from_raw(pid as i32);
         match signal::kill(process_pid, None) {
             Ok(_) => {
@@ -651,14 +672,19 @@ pub async fn start_webchatproxy_daemon(
                     provider: provider.clone(),
                     started_at: chrono::Utc::now(),
                 };
-                
+
                 registry.add_daemon(provider.clone(), daemon_info);
                 registry.save()?;
-                
-                println!("{} WebChatProxy daemon started for '{}' (PID: {})", "✓".green(), provider, pid);
+
+                println!(
+                    "{} WebChatProxy daemon started for '{}' (PID: {})",
+                    "✓".green(),
+                    provider,
+                    pid
+                );
                 println!("{} Server running on {}:{}", "🚀".blue(), host, port);
                 println!("{} Logs: {}", "📝".blue(), log_file.display());
-                
+
                 Ok(())
             }
             Err(_) => {
@@ -666,7 +692,7 @@ pub async fn start_webchatproxy_daemon(
             }
         }
     }
-    
+
     #[cfg(not(unix))]
     {
         // On non-Unix systems, assume the process started successfully
@@ -678,28 +704,33 @@ pub async fn start_webchatproxy_daemon(
             provider: provider.clone(),
             started_at: chrono::Utc::now(),
         };
-        
+
         registry.add_daemon(provider.clone(), daemon_info);
         registry.save()?;
-        
-        println!("{} WebChatProxy daemon started for '{}' (PID: {})", "✓".green(), provider, pid);
+
+        println!(
+            "{} WebChatProxy daemon started for '{}' (PID: {})",
+            "✓".green(),
+            provider,
+            pid
+        );
         println!("{} Server running on {}:{}", "🚀".blue(), host, port);
         println!("{} Logs: {}", "📝".blue(), log_file.display());
-        
+
         Ok(())
     }
 }
 
 pub async fn stop_webchatproxy_daemon(provider: &str) -> Result<()> {
     let mut registry = DaemonRegistry::load()?;
-    
+
     if let Some(daemon_info) = registry.remove_daemon(provider) {
         // Try to kill the process
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};
             use nix::unistd::Pid;
-            
+
             let pid = Pid::from_raw(daemon_info.pid as i32);
             match signal::kill(pid, Signal::SIGTERM) {
                 Ok(_) => {
@@ -709,11 +740,15 @@ pub async fn stop_webchatproxy_daemon(provider: &str) -> Result<()> {
                 Err(e) => {
                     // Process might already be dead, remove from registry anyway
                     registry.save()?;
-                    Err(anyhow::anyhow!("Failed to kill process {}: {}", daemon_info.pid, e))
+                    Err(anyhow::anyhow!(
+                        "Failed to kill process {}: {}",
+                        daemon_info.pid,
+                        e
+                    ))
                 }
             }
         }
-        
+
         #[cfg(not(unix))]
         {
             // On non-Unix systems, just remove from registry
@@ -728,14 +763,14 @@ pub async fn stop_webchatproxy_daemon(provider: &str) -> Result<()> {
 pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> {
     let mut registry = DaemonRegistry::load()?;
     let mut active_daemons = HashMap::new();
-    
+
     // Check which processes are still alive
     for (provider, daemon_info) in registry.list_daemons().clone() {
         #[cfg(unix)]
         {
             use nix::sys::signal;
             use nix::unistd::Pid;
-            
+
             let pid = Pid::from_raw(daemon_info.pid as i32);
             match signal::kill(pid, None) {
                 Ok(_) => {
@@ -748,28 +783,29 @@ pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> 
                 }
             }
         }
-        
+
         #[cfg(not(unix))]
         {
             // On non-Unix systems, assume all registered daemons are active
             active_daemons.insert(provider, daemon_info);
         }
     }
-    
+
     // Save updated registry
     registry.save()?;
-    
+
     Ok(active_daemons)
 }
 
 // Function to fetch Kagi models from the profile_list endpoint
 pub async fn fetch_kagi_models() -> Result<Vec<KagiModelProfile>> {
     let config = WebChatProxyConfig::load()?;
-    
+
     // Get Kagi auth token
-    let auth_token = config.get_provider_auth("kagi")
-        .ok_or_else(|| anyhow::anyhow!("No Kagi authentication token configured. Set one with 'lc w p kagi auth'"))?;
-    
+    let auth_token = config.get_provider_auth("kagi").ok_or_else(|| {
+        anyhow::anyhow!("No Kagi authentication token configured. Set one with 'lc w p kagi auth'")
+    })?;
+
     // Make request to Kagi profile_list endpoint using optimized client with connection pooling
     let client = reqwest::Client::builder()
         .pool_max_idle_per_host(10)
@@ -785,13 +821,13 @@ pub async fn fetch_kagi_models() -> Result<Vec<KagiModelProfile>> {
         .json(&serde_json::json!({}))
         .send()
         .await?;
-    
+
     if !response.status().is_success() {
         anyhow::bail!("Failed to fetch Kagi models: HTTP {}", response.status());
     }
-    
+
     let response_text = response.text().await?;
-    
+
     // Parse the HTML response to extract JSON data
     parse_kagi_models_response(&response_text)
 }
@@ -799,7 +835,7 @@ pub async fn fetch_kagi_models() -> Result<Vec<KagiModelProfile>> {
 // Parse Kagi's HTML response to extract model profiles
 fn parse_kagi_models_response(html: &str) -> Result<Vec<KagiModelProfile>> {
     let lines: Vec<&str> = html.lines().collect();
-    
+
     // Look for the <div hidden> tag that contains the profiles JSON
     for line in lines.iter() {
         if line.contains("<div hidden>") && line.contains("profiles") {
@@ -808,7 +844,7 @@ fn parse_kagi_models_response(html: &str) -> Result<Vec<KagiModelProfile>> {
                 let content_start = start + 12; // Length of '<div hidden>'
                 if let Some(end) = line[content_start..].find("</div>") {
                     let json_content = &line[content_start..content_start + end];
-                    
+
                     // Decode HTML entities
                     let decoded_json = json_content
                         .replace("&quot;", "\"")
@@ -816,7 +852,7 @@ fn parse_kagi_models_response(html: &str) -> Result<Vec<KagiModelProfile>> {
                         .replace("&gt;", ">")
                         .replace("&amp;", "&")
                         .replace("&#39;", "'");
-                    
+
                     if let Ok(parsed) = serde_json::from_str::<KagiModelsResponse>(&decoded_json) {
                         return Ok(parsed.profiles);
                     }
@@ -824,6 +860,6 @@ fn parse_kagi_models_response(html: &str) -> Result<Vec<KagiModelProfile>> {
             }
         }
     }
-    
+
     anyhow::bail!("Could not parse Kagi models response - no profiles data found")
 }

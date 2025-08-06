@@ -1,14 +1,14 @@
 //! Integration tests for provider commands
-//! 
+//!
 //! This module contains comprehensive integration tests for all provider-related
 //! CLI commands, testing them as a user would interact with the CLI.
 
 mod common;
 
-use common::{create_config_with_providers, test_data, assertions};
+use chrono::Utc;
+use common::{assertions, create_config_with_providers, test_data};
 use lc::config::Config;
 use std::collections::HashMap;
-use chrono::Utc;
 
 #[cfg(test)]
 mod provider_add_tests {
@@ -31,14 +31,14 @@ mod provider_add_tests {
         // Test adding a basic provider
         let result = config.add_provider(
             "test-provider".to_string(),
-            "https://api.test.com".to_string()
+            "https://api.test.com".to_string(),
         );
 
         assert!(result.is_ok());
         assertions::assert_provider_exists(&config, "test-provider");
         assertions::assert_provider_endpoint(&config, "test-provider", "https://api.test.com");
         assertions::assert_default_provider(&config, "test-provider");
-        
+
         let provider = config.get_provider("test-provider").unwrap();
         assert_eq!(provider.models_path, "/models");
         assert_eq!(provider.chat_path, "/chat/completions");
@@ -65,12 +65,12 @@ mod provider_add_tests {
             "custom-provider".to_string(),
             "https://api.custom.com".to_string(),
             Some("/v1/models".to_string()),
-            Some("/v1/completions".to_string())
+            Some("/v1/completions".to_string()),
         );
 
         assert!(result.is_ok());
         assertions::assert_provider_exists(&config, "custom-provider");
-        
+
         let provider = config.get_provider("custom-provider").unwrap();
         assert_eq!(provider.endpoint, "https://api.custom.com");
         assert_eq!(provider.models_path, "/v1/models");
@@ -101,7 +101,7 @@ mod provider_add_tests {
 
         // First provider should be default
         assertions::assert_default_provider(&config, test_data::TEST_PROVIDERS[0].0);
-        
+
         // Verify total count
         assert_eq!(config.providers.len(), test_data::TEST_PROVIDERS.len());
     }
@@ -114,7 +114,7 @@ mod provider_add_tests {
         // Add another provider
         let result = config.add_provider(
             "new-provider".to_string(),
-            "https://api.new.com".to_string()
+            "https://api.new.com".to_string(),
         );
 
         assert!(result.is_ok());
@@ -135,7 +135,7 @@ mod provider_update_tests {
         // Update existing provider
         let result = config.add_provider(
             "openai".to_string(),
-            "https://api.openai.com/v2".to_string()
+            "https://api.openai.com/v2".to_string(),
         );
 
         assert!(result.is_ok());
@@ -150,7 +150,7 @@ mod provider_update_tests {
         // Update existing provider
         let result = config.add_provider(
             "openai".to_string(),
-            "https://api.openai.com/v2".to_string()
+            "https://api.openai.com/v2".to_string(),
         );
 
         assert!(result.is_ok());
@@ -249,7 +249,9 @@ mod provider_list_tests {
         ];
 
         for (name, url) in providers {
-            config.add_provider(name.to_string(), url.to_string()).unwrap();
+            config
+                .add_provider(name.to_string(), url.to_string())
+                .unwrap();
         }
 
         // Verify all providers exist
@@ -275,18 +277,12 @@ mod provider_api_key_tests {
         let mut config = create_config_with_providers();
 
         // Test setting API key
-        let result = config.set_api_key(
-            "openai".to_string(),
-            "new-api-key".to_string()
-        );
+        let result = config.set_api_key("openai".to_string(), "new-api-key".to_string());
         assert!(result.is_ok());
         assertions::assert_provider_api_key(&config, "openai", "new-api-key");
 
         // Test setting API key for non-existent provider
-        let result = config.set_api_key(
-            "nonexistent".to_string(),
-            "key".to_string()
-        );
+        let result = config.set_api_key("nonexistent".to_string(), "key".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -296,11 +292,15 @@ mod provider_api_key_tests {
         let mut config = create_config_with_providers();
 
         // Set initial API key
-        config.set_api_key("openai".to_string(), "key1".to_string()).unwrap();
+        config
+            .set_api_key("openai".to_string(), "key1".to_string())
+            .unwrap();
         assertions::assert_provider_api_key(&config, "openai", "key1");
 
         // Update API key
-        config.set_api_key("openai".to_string(), "key2".to_string()).unwrap();
+        config
+            .set_api_key("openai".to_string(), "key2".to_string())
+            .unwrap();
         assertions::assert_provider_api_key(&config, "openai", "key2");
     }
 
@@ -309,7 +309,9 @@ mod provider_api_key_tests {
         let mut config = create_config_with_providers();
 
         // Set API key
-        config.set_api_key("openai".to_string(), "test-key".to_string()).unwrap();
+        config
+            .set_api_key("openai".to_string(), "test-key".to_string())
+            .unwrap();
         assertions::assert_provider_has_api_key(&config, "openai");
 
         // Remove API key by setting to None
@@ -334,26 +336,20 @@ mod provider_headers_tests {
         let result = config.add_header(
             "openai".to_string(),
             "X-Custom-Header".to_string(),
-            "custom-value".to_string()
+            "custom-value".to_string(),
         );
         assert!(result.is_ok());
         assertions::assert_header_exists(&config, "openai", "X-Custom-Header", "custom-value");
 
         // Test removing header
-        let result = config.remove_header(
-            "openai".to_string(),
-            "X-Custom-Header".to_string()
-        );
+        let result = config.remove_header("openai".to_string(), "X-Custom-Header".to_string());
         assert!(result.is_ok());
 
         let headers = config.list_headers("openai").unwrap();
         assert!(!headers.contains_key("X-Custom-Header"));
 
         // Test removing non-existent header
-        let result = config.remove_header(
-            "openai".to_string(),
-            "Non-Existent".to_string()
-        );
+        let result = config.remove_header("openai".to_string(), "Non-Existent".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
@@ -361,7 +357,7 @@ mod provider_headers_tests {
         let result = config.add_header(
             "nonexistent".to_string(),
             "header".to_string(),
-            "value".to_string()
+            "value".to_string(),
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
@@ -376,7 +372,7 @@ mod provider_headers_tests {
             let result = config.add_header(
                 "openai".to_string(),
                 header_name.to_string(),
-                header_value.to_string()
+                header_value.to_string(),
             );
             assert!(result.is_ok());
             assertions::assert_header_exists(&config, "openai", header_name, header_value);
@@ -390,8 +386,20 @@ mod provider_headers_tests {
         let mut config = create_config_with_providers();
 
         // Add headers to different providers
-        config.add_header("openai".to_string(), "X-OpenAI-Version".to_string(), "2023-12-01".to_string()).unwrap();
-        config.add_header("anthropic".to_string(), "X-Anthropic-Version".to_string(), "2023-06-01".to_string()).unwrap();
+        config
+            .add_header(
+                "openai".to_string(),
+                "X-OpenAI-Version".to_string(),
+                "2023-12-01".to_string(),
+            )
+            .unwrap();
+        config
+            .add_header(
+                "anthropic".to_string(),
+                "X-Anthropic-Version".to_string(),
+                "2023-06-01".to_string(),
+            )
+            .unwrap();
 
         // Verify headers are isolated per provider
         let openai_headers = config.list_headers("openai").unwrap();
@@ -416,18 +424,19 @@ mod provider_token_url_tests {
         // Test setting token URL
         let result = config.set_token_url(
             "openai".to_string(),
-            "https://auth.openai.com/token".to_string()
+            "https://auth.openai.com/token".to_string(),
         );
         assert!(result.is_ok());
 
         let token_url = config.get_token_url("openai");
-        assert_eq!(token_url, Some(&"https://auth.openai.com/token".to_string()));
+        assert_eq!(
+            token_url,
+            Some(&"https://auth.openai.com/token".to_string())
+        );
 
         // Test setting token URL for non-existent provider
-        let result = config.set_token_url(
-            "nonexistent".to_string(),
-            "https://example.com".to_string()
-        );
+        let result =
+            config.set_token_url("nonexistent".to_string(), "https://example.com".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -441,7 +450,7 @@ mod provider_token_url_tests {
         let result = config.set_cached_token(
             "openai".to_string(),
             "cached-token-123".to_string(),
-            expires_at
+            expires_at,
         );
         assert!(result.is_ok());
 
@@ -451,11 +460,8 @@ mod provider_token_url_tests {
         assert_eq!(cached_token.unwrap().expires_at, expires_at);
 
         // Test setting cached token for non-existent provider
-        let result = config.set_cached_token(
-            "nonexistent".to_string(),
-            "token".to_string(),
-            expires_at
-        );
+        let result =
+            config.set_cached_token("nonexistent".to_string(), "token".to_string(), expires_at);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -466,19 +472,19 @@ mod provider_token_url_tests {
         let expires_at = Utc::now() + chrono::Duration::hours(1);
 
         // Set a cached token first
-        config.set_cached_token(
-            "openai".to_string(),
-            "cached-token".to_string(),
-            expires_at
-        ).unwrap();
+        config
+            .set_cached_token("openai".to_string(), "cached-token".to_string(), expires_at)
+            .unwrap();
 
         assert!(config.get_cached_token("openai").is_some());
 
         // Setting token URL should clear cached token
-        config.set_token_url(
-            "openai".to_string(),
-            "https://auth.openai.com/token".to_string()
-        ).unwrap();
+        config
+            .set_token_url(
+                "openai".to_string(),
+                "https://auth.openai.com/token".to_string(),
+            )
+            .unwrap();
 
         assert!(config.get_cached_token("openai").is_none());
     }

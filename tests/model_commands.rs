@@ -1,28 +1,28 @@
 //! Integration tests for models commands
-//! 
+//!
 //! This module contains comprehensive integration tests for all models-related
 //! CLI commands, testing the underlying functionality as the CLI would use it.
 
 mod common;
 
-use lc::unified_cache::UnifiedCache;
 use lc::model_metadata::{ModelMetadata, ModelType};
+use lc::unified_cache::UnifiedCache;
 
 #[cfg(test)]
 mod models_cache_tests {
     use super::*;
     use std::process::Command;
-    
+
     #[test]
     fn test_lc_models_list_with_capabilities() {
         let output = Command::new("cargo")
             .args(["run", "--", "models"])
             .output()
             .expect("Failed to execute command");
-        
+
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        
+
         if !output.status.success() {
             // Log error for debugging
             eprintln!("Command failed with stderr: {}", stderr);
@@ -30,39 +30,49 @@ mod models_cache_tests {
             // If the command fails, we can't test the output format, so just ensure it fails gracefully
             return;
         }
-        
+
         // This test verifies that the enhanced model display system works correctly
         // The command should at least run successfully and show some output
-        
+
         // Check if we have any providers configured
-        let has_providers = stdout.contains("openai:") || stdout.contains("claude:") ||
-                           stdout.contains("gemini:") || stdout.contains("anthropic:") ||
-                           stdout.contains("models found") || stdout.contains("total");
-        
+        let has_providers = stdout.contains("openai:")
+            || stdout.contains("claude:")
+            || stdout.contains("gemini:")
+            || stdout.contains("anthropic:")
+            || stdout.contains("models found")
+            || stdout.contains("total");
+
         if has_providers {
             // If we have providers, we should see either:
             // 1. Provider sections with models, OR
             // 2. A message about total models, OR
             // 3. Enhanced metadata (icons or context info)
-            let has_provider_sections = stdout.contains(":") && (
-                stdout.contains("openai:") || stdout.contains("claude:") ||
-                stdout.contains("gemini:") || stdout.contains("anthropic:")
-            );
-            
+            let has_provider_sections = stdout.contains(":")
+                && (stdout.contains("openai:")
+                    || stdout.contains("claude:")
+                    || stdout.contains("gemini:")
+                    || stdout.contains("anthropic:"));
+
             let has_model_count = stdout.contains("total") || stdout.contains("models found");
-            
-            let has_capability_icons = stdout.contains("🔧") || stdout.contains("👁") ||
-                                     stdout.contains("💻") || stdout.contains("🧠") || stdout.contains("🔊");
-            
+
+            let has_capability_icons = stdout.contains("🔧")
+                || stdout.contains("👁")
+                || stdout.contains("💻")
+                || stdout.contains("🧠")
+                || stdout.contains("🔊");
+
             let has_context_info = stdout.contains("ctx") || stdout.contains("out");
-            
+
             // At least one of these should be true if we have providers
             assert!(has_provider_sections || has_model_count || has_capability_icons || has_context_info,
                    "Output should show provider sections, model count, or enhanced metadata when providers are available. Got: {}", stdout);
         } else {
             // If no providers are configured, the command should still succeed
             // and show an appropriate message (like "No providers configured" or similar)
-            assert!(output.status.success(), "Command should succeed even with no providers");
+            assert!(
+                output.status.success(),
+                "Command should succeed even with no providers"
+            );
         }
     }
 
@@ -71,7 +81,7 @@ mod models_cache_tests {
         // Test that cache directory path is correctly determined
         let cache_dir = UnifiedCache::models_dir();
         assert!(cache_dir.is_ok());
-        
+
         let path = cache_dir.unwrap();
         assert!(path.to_string_lossy().contains("lc"));
         assert!(path.to_string_lossy().contains("models"));
@@ -81,7 +91,7 @@ mod models_cache_tests {
     fn test_provider_cache_path() {
         let cache_path = UnifiedCache::provider_cache_path("test-provider");
         assert!(cache_path.is_ok());
-        
+
         let path = cache_path.unwrap();
         assert!(path.to_string_lossy().ends_with("test-provider.json"));
     }
@@ -115,7 +125,7 @@ mod models_metadata_tests {
     #[test]
     fn test_model_metadata_default() {
         let metadata = ModelMetadata::default();
-        
+
         assert_eq!(metadata.id, "");
         assert_eq!(metadata.provider, "");
         assert_eq!(metadata.display_name, None);
@@ -131,7 +141,7 @@ mod models_metadata_tests {
         assert!(matches!(metadata.model_type, ModelType::Chat));
     }
 
-#[test]
+    #[test]
     fn test_model_metadata_creation() {
         let metadata = ModelMetadata {
             id: "gpt-4".to_string(),
@@ -259,13 +269,18 @@ mod models_filtering_tests {
     #[test]
     fn test_filter_by_query() {
         let models = create_test_models();
-        
+
         // Filter by "gpt" - should match gpt-4 and gpt-4-vision
-        let gpt_models: Vec<_> = models.iter()
-            .filter(|m| m.id.to_lowercase().contains("gpt") || 
-                       m.display_name.as_ref().map_or(false, |name| name.to_lowercase().contains("gpt")))
+        let gpt_models: Vec<_> = models
+            .iter()
+            .filter(|m| {
+                m.id.to_lowercase().contains("gpt")
+                    || m.display_name
+                        .as_ref()
+                        .map_or(false, |name| name.to_lowercase().contains("gpt"))
+            })
             .collect();
-        
+
         assert_eq!(gpt_models.len(), 2);
         assert!(gpt_models.iter().any(|m| m.id == "gpt-4"));
         assert!(gpt_models.iter().any(|m| m.id == "gpt-4-vision"));
@@ -274,11 +289,12 @@ mod models_filtering_tests {
     #[test]
     fn test_filter_by_tools_support() {
         let models = create_test_models();
-        
-        let tools_models: Vec<_> = models.iter()
+
+        let tools_models: Vec<_> = models
+            .iter()
             .filter(|m| m.supports_tools || m.supports_function_calling)
             .collect();
-        
+
         assert_eq!(tools_models.len(), 3); // gpt-4, gpt-4-vision, claude-3-sonnet
         assert!(tools_models.iter().any(|m| m.id == "gpt-4"));
         assert!(tools_models.iter().any(|m| m.id == "gpt-4-vision"));
@@ -288,11 +304,9 @@ mod models_filtering_tests {
     #[test]
     fn test_filter_by_vision_support() {
         let models = create_test_models();
-        
-        let vision_models: Vec<_> = models.iter()
-            .filter(|m| m.supports_vision)
-            .collect();
-        
+
+        let vision_models: Vec<_> = models.iter().filter(|m| m.supports_vision).collect();
+
         assert_eq!(vision_models.len(), 2); // gpt-4-vision, claude-3-sonnet
         assert!(vision_models.iter().any(|m| m.id == "gpt-4-vision"));
         assert!(vision_models.iter().any(|m| m.id == "claude-3-sonnet"));
@@ -301,11 +315,9 @@ mod models_filtering_tests {
     #[test]
     fn test_filter_by_audio_support() {
         let models = create_test_models();
-        
-        let audio_models: Vec<_> = models.iter()
-            .filter(|m| m.supports_audio)
-            .collect();
-        
+
+        let audio_models: Vec<_> = models.iter().filter(|m| m.supports_audio).collect();
+
         assert_eq!(audio_models.len(), 1); // whisper-1
         assert_eq!(audio_models[0].id, "whisper-1");
     }
@@ -313,11 +325,9 @@ mod models_filtering_tests {
     #[test]
     fn test_filter_by_reasoning_support() {
         let models = create_test_models();
-        
-        let reasoning_models: Vec<_> = models.iter()
-            .filter(|m| m.supports_reasoning)
-            .collect();
-        
+
+        let reasoning_models: Vec<_> = models.iter().filter(|m| m.supports_reasoning).collect();
+
         assert_eq!(reasoning_models.len(), 1); // o1-preview
         assert_eq!(reasoning_models[0].id, "o1-preview");
     }
@@ -325,11 +335,9 @@ mod models_filtering_tests {
     #[test]
     fn test_filter_by_code_support() {
         let models = create_test_models();
-        
-        let code_models: Vec<_> = models.iter()
-            .filter(|m| m.supports_code)
-            .collect();
-        
+
+        let code_models: Vec<_> = models.iter().filter(|m| m.supports_code).collect();
+
         assert_eq!(code_models.len(), 4); // All except whisper-1
         assert!(!code_models.iter().any(|m| m.id == "whisper-1"));
     }
@@ -337,27 +345,31 @@ mod models_filtering_tests {
     #[test]
     fn test_filter_by_context_length() {
         let models = create_test_models();
-        
+
         // Filter models with context length >= 100k
-        let large_context_models: Vec<_> = models.iter()
+        let large_context_models: Vec<_> = models
+            .iter()
             .filter(|m| m.context_length.map_or(false, |ctx| ctx >= 100000))
             .collect();
-        
+
         assert_eq!(large_context_models.len(), 3); // gpt-4-vision, o1-preview, claude-3-sonnet
         assert!(large_context_models.iter().any(|m| m.id == "gpt-4-vision"));
         assert!(large_context_models.iter().any(|m| m.id == "o1-preview"));
-        assert!(large_context_models.iter().any(|m| m.id == "claude-3-sonnet"));
+        assert!(large_context_models
+            .iter()
+            .any(|m| m.id == "claude-3-sonnet"));
     }
 
     #[test]
     fn test_filter_by_input_price() {
         let models = create_test_models();
-        
+
         // Filter models with input price <= $5/M
-        let affordable_models: Vec<_> = models.iter()
+        let affordable_models: Vec<_> = models
+            .iter()
             .filter(|m| m.input_price_per_m.map_or(true, |price| price <= 5.0))
             .collect();
-        
+
         assert_eq!(affordable_models.len(), 1); // claude-3-sonnet ($3/M)
         assert_eq!(affordable_models[0].id, "claude-3-sonnet");
     }
@@ -365,31 +377,30 @@ mod models_filtering_tests {
     #[test]
     fn test_filter_by_output_price() {
         let models = create_test_models();
-        
+
         // Filter models with output price <= $20/M
-        let affordable_output_models: Vec<_> = models.iter()
+        let affordable_output_models: Vec<_> = models
+            .iter()
             .filter(|m| m.output_price_per_m.map_or(true, |price| price <= 20.0))
             .collect();
-        
+
         assert_eq!(affordable_output_models.len(), 2); // whisper-1 (None), claude-3-sonnet ($15/M)
         assert!(affordable_output_models.iter().any(|m| m.id == "whisper-1"));
-        assert!(affordable_output_models.iter().any(|m| m.id == "claude-3-sonnet"));
+        assert!(affordable_output_models
+            .iter()
+            .any(|m| m.id == "claude-3-sonnet"));
     }
 
     #[test]
     fn test_filter_by_provider() {
         let models = create_test_models();
-        
-        let openai_models: Vec<_> = models.iter()
-            .filter(|m| m.provider == "openai")
-            .collect();
-        
+
+        let openai_models: Vec<_> = models.iter().filter(|m| m.provider == "openai").collect();
+
         assert_eq!(openai_models.len(), 4);
-        
-        let claude_models: Vec<_> = models.iter()
-            .filter(|m| m.provider == "claude")
-            .collect();
-        
+
+        let claude_models: Vec<_> = models.iter().filter(|m| m.provider == "claude").collect();
+
         assert_eq!(claude_models.len(), 1);
         assert_eq!(claude_models[0].id, "claude-3-sonnet");
     }
@@ -397,17 +408,18 @@ mod models_filtering_tests {
     #[test]
     fn test_combined_filters() {
         let models = create_test_models();
-        
+
         // Filter for vision + tools + context > 100k + input price < 5.0
-        let filtered_models: Vec<_> = models.iter()
+        let filtered_models: Vec<_> = models
+            .iter()
             .filter(|m| {
-                m.supports_vision &&
-                (m.supports_tools || m.supports_function_calling) &&
-                m.context_length.map_or(false, |ctx| ctx > 100000) &&
-                m.input_price_per_m.map_or(false, |price| price < 5.0)
+                m.supports_vision
+                    && (m.supports_tools || m.supports_function_calling)
+                    && m.context_length.map_or(false, |ctx| ctx > 100000)
+                    && m.input_price_per_m.map_or(false, |price| price < 5.0)
             })
             .collect();
-        
+
         assert_eq!(filtered_models.len(), 1); // claude-3-sonnet
         assert_eq!(filtered_models[0].id, "claude-3-sonnet");
     }
@@ -415,12 +427,13 @@ mod models_filtering_tests {
     #[test]
     fn test_no_matching_filters() {
         let models = create_test_models();
-        
+
         // Filter for impossible combination: audio + vision + reasoning
-        let impossible_models: Vec<_> = models.iter()
+        let impossible_models: Vec<_> = models
+            .iter()
             .filter(|m| m.supports_audio && m.supports_vision && m.supports_reasoning)
             .collect();
-        
+
         assert_eq!(impossible_models.len(), 0);
     }
 }
@@ -450,9 +463,7 @@ mod models_sorting_tests {
         ];
 
         // Sort by provider, then by model name
-        models.sort_by(|a, b| {
-            a.provider.cmp(&b.provider).then(a.id.cmp(&b.id))
-        });
+        models.sort_by(|a, b| a.provider.cmp(&b.provider).then(a.id.cmp(&b.id)));
 
         assert_eq!(models[0].provider, "alpha");
         assert_eq!(models[0].id, "alpha-model");
@@ -482,12 +493,16 @@ mod models_display_tests {
         };
 
         // With display name
-        let display_name = model_with_display.display_name.as_ref()
+        let display_name = model_with_display
+            .display_name
+            .as_ref()
             .unwrap_or(&model_with_display.id);
         assert_eq!(display_name, "GPT-4 Turbo");
 
         // Without display name (fallback to ID)
-        let display_name = model_without_display.display_name.as_ref()
+        let display_name = model_without_display
+            .display_name
+            .as_ref()
             .unwrap_or(&model_without_display.id);
         assert_eq!(display_name, "gpt-4");
     }
@@ -518,7 +533,10 @@ mod models_display_tests {
             model.supports_audio,
             model.supports_reasoning,
             model.supports_code,
-        ].iter().filter(|&&x| x).count();
+        ]
+        .iter()
+        .filter(|&&x| x)
+        .count();
 
         assert_eq!(capability_count, 4);
     }
@@ -600,7 +618,9 @@ mod models_display_tests {
 #[cfg(test)]
 mod model_metadata_config_tests {
     use super::*;
-    use lc::model_metadata::{initialize_model_metadata_config, add_model_path, remove_model_path, add_tag};
+    use lc::model_metadata::{
+        add_model_path, add_tag, initialize_model_metadata_config, remove_model_path,
+    };
     use std::fs;
     use std::sync::Mutex;
     use tempfile::TempDir;
@@ -608,19 +628,23 @@ mod model_metadata_config_tests {
     // Mutex to ensure tests run serially to avoid environment variable conflicts
     static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
-    fn setup_test_config_dir() -> (TempDir, std::path::PathBuf, std::sync::MutexGuard<'static, ()>) {
+    fn setup_test_config_dir() -> (
+        TempDir,
+        std::path::PathBuf,
+        std::sync::MutexGuard<'static, ()>,
+    ) {
         let _guard = TEST_MUTEX.lock().unwrap();
-        
+
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let config_path = temp_dir.path().join("lc");
-        
+
         // Create the lc config directory
         fs::create_dir_all(&config_path).expect("Failed to create config directory");
-        
+
         // Set environment variables to point to our temp directory
         std::env::set_var("XDG_CONFIG_HOME", temp_dir.path());
         std::env::set_var("HOME", temp_dir.path());
-        
+
         (temp_dir, config_path, _guard)
     }
 
@@ -637,40 +661,58 @@ mod model_metadata_config_tests {
     #[test]
     fn test_initialize_model_metadata_config() {
         let (_temp_dir, config_dir, _guard) = setup_test_config_dir();
-        
+
         // Initialize config files
         let result = initialize_model_metadata_config();
         assert!(result.is_ok(), "Config initialization should succeed");
-        
+
         // Check that files were created
         let model_paths_file = config_dir.join("model_paths.toml");
         let tags_file = config_dir.join("tags.toml");
-        
-        assert!(model_paths_file.exists(), "model_paths.toml should be created");
+
+        assert!(
+            model_paths_file.exists(),
+            "model_paths.toml should be created"
+        );
         assert!(tags_file.exists(), "tags.toml should be created");
-        
+
         // Check that files have default content
         let model_paths_content = fs::read_to_string(&model_paths_file).unwrap();
-        assert!(model_paths_content.contains(".data[]"), "Should contain default model paths");
-        assert!(model_paths_content.contains(".models[]"), "Should contain default model paths");
-        
+        assert!(
+            model_paths_content.contains(".data[]"),
+            "Should contain default model paths"
+        );
+        assert!(
+            model_paths_content.contains(".models[]"),
+            "Should contain default model paths"
+        );
+
         let tags_content = fs::read_to_string(&tags_file).unwrap();
-        assert!(tags_content.contains("supports_vision"), "Should contain default tags");
-        assert!(tags_content.contains("supports_tools"), "Should contain default tags");
-        assert!(tags_content.contains("context_length"), "Should contain default tags");
+        assert!(
+            tags_content.contains("supports_vision"),
+            "Should contain default tags"
+        );
+        assert!(
+            tags_content.contains("supports_tools"),
+            "Should contain default tags"
+        );
+        assert!(
+            tags_content.contains("context_length"),
+            "Should contain default tags"
+        );
     }
 
     #[test]
     fn test_add_model_path() {
         let (_temp_dir, config_dir, _guard) = setup_test_config_dir();
-        
+
         // Initialize config first
         initialize_model_metadata_config().unwrap();
-        
+
         // Add a new path
         let result = add_model_path(".results[]".to_string());
         assert!(result.is_ok(), "Adding model path should succeed");
-        
+
         // Verify the path was added
         let model_paths_file = config_dir.join("model_paths.toml");
         let content = fs::read_to_string(&model_paths_file).unwrap();
@@ -680,17 +722,20 @@ mod model_metadata_config_tests {
     #[test]
     fn test_add_duplicate_model_path() {
         let (_temp_dir, config_dir, _guard) = setup_test_config_dir();
-        
+
         // Initialize config first
         initialize_model_metadata_config().unwrap();
-        
+
         // Add the same path twice
         let result1 = add_model_path(".data[]".to_string());
         assert!(result1.is_ok(), "First add should succeed");
-        
+
         let result2 = add_model_path(".data[]".to_string());
-        assert!(result2.is_ok(), "Second add should succeed but not duplicate");
-        
+        assert!(
+            result2.is_ok(),
+            "Second add should succeed but not duplicate"
+        );
+
         // Verify only one instance exists
         let model_paths_file = config_dir.join("model_paths.toml");
         let content = fs::read_to_string(&model_paths_file).unwrap();
@@ -701,17 +746,17 @@ mod model_metadata_config_tests {
     #[test]
     fn test_remove_model_path() {
         let (_temp_dir, config_dir, _guard) = setup_test_config_dir();
-        
+
         // Initialize config first
         initialize_model_metadata_config().unwrap();
-        
+
         // Add a path first
         add_model_path(".test[]".to_string()).unwrap();
-        
+
         // Remove the path
         let result = remove_model_path(".test[]".to_string());
         assert!(result.is_ok(), "Removing model path should succeed");
-        
+
         // Verify the path was removed
         let model_paths_file = config_dir.join("model_paths.toml");
         let content = fs::read_to_string(&model_paths_file).unwrap();
@@ -721,10 +766,10 @@ mod model_metadata_config_tests {
     #[test]
     fn test_remove_nonexistent_model_path() {
         let (_temp_dir, _config_dir, _guard) = setup_test_config_dir();
-        
+
         // Initialize config first
         initialize_model_metadata_config().unwrap();
-        
+
         // Try to remove a path that doesn't exist
         let result = remove_model_path(".nonexistent[]".to_string());
         assert!(result.is_ok(), "Removing nonexistent path should not fail");
@@ -733,99 +778,129 @@ mod model_metadata_config_tests {
     #[test]
     fn test_add_tag() {
         let (_temp_dir, config_dir, _guard) = setup_test_config_dir();
-        
+
         // Initialize config first
         initialize_model_metadata_config().unwrap();
-        
+
         // Add a new tag
         let result = add_tag(
             "supports_multimodal".to_string(),
-            vec![".supports_multimodal".to_string(), ".capabilities.multimodal".to_string()],
+            vec![
+                ".supports_multimodal".to_string(),
+                ".capabilities.multimodal".to_string(),
+            ],
             "bool".to_string(),
-            None
+            None,
         );
         assert!(result.is_ok(), "Adding tag should succeed");
-        
+
         // Verify the tag was added
         let tags_file = config_dir.join("tags.toml");
         let content = fs::read_to_string(&tags_file).unwrap();
-        assert!(content.contains("supports_multimodal"), "New tag should be added");
-        assert!(content.contains(".supports_multimodal"), "Tag paths should be added");
+        assert!(
+            content.contains("supports_multimodal"),
+            "New tag should be added"
+        );
+        assert!(
+            content.contains(".supports_multimodal"),
+            "Tag paths should be added"
+        );
     }
 
     #[test]
     fn test_add_tag_with_transform() {
         let (_temp_dir, config_dir, _guard) = setup_test_config_dir();
-        
+
         // Initialize config first
         initialize_model_metadata_config().unwrap();
-        
+
         // Add a tag with transform
         let result = add_tag(
             "output_price_per_m".to_string(),
             vec![".pricing.output".to_string()],
             "f64".to_string(),
-            Some("multiply_million".to_string())
+            Some("multiply_million".to_string()),
         );
         assert!(result.is_ok(), "Adding tag with transform should succeed");
-        
+
         // Verify the tag was added with transform
         let tags_file = config_dir.join("tags.toml");
         let content = fs::read_to_string(&tags_file).unwrap();
-        assert!(content.contains("output_price_per_m"), "New tag should be added");
-        assert!(content.contains("multiply_million"), "Transform should be added");
+        assert!(
+            content.contains("output_price_per_m"),
+            "New tag should be added"
+        );
+        assert!(
+            content.contains("multiply_million"),
+            "Transform should be added"
+        );
     }
 
     #[test]
     fn test_config_files_created_on_first_run() {
         let _guard = TEST_MUTEX.lock().unwrap();
-        
+
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let config_path = temp_dir.path().join("lc");
-        
+
         // Set environment variables to point to our temp directory
         std::env::set_var("XDG_CONFIG_HOME", temp_dir.path());
         std::env::set_var("HOME", temp_dir.path());
-        
+
         // Ensure config directory doesn't exist initially
-        assert!(!config_path.exists(), "Config directory should not exist initially");
-        
+        assert!(
+            !config_path.exists(),
+            "Config directory should not exist initially"
+        );
+
         // Initialize config - should create directory and files
         let result = initialize_model_metadata_config();
         assert!(result.is_ok(), "Config initialization should succeed");
-        
+
         // Verify directory and files were created
         assert!(config_path.exists(), "Config directory should be created");
-        assert!(config_path.join("model_paths.toml").exists(), "model_paths.toml should be created");
-        assert!(config_path.join("tags.toml").exists(), "tags.toml should be created");
+        assert!(
+            config_path.join("model_paths.toml").exists(),
+            "model_paths.toml should be created"
+        );
+        assert!(
+            config_path.join("tags.toml").exists(),
+            "tags.toml should be created"
+        );
     }
 
     #[test]
     fn test_config_files_not_overwritten() {
         let (_temp_dir, config_dir, _guard) = setup_test_config_dir();
-        
+
         // Initialize config first
         initialize_model_metadata_config().unwrap();
-        
+
         // Modify the files
         let model_paths_file = config_dir.join("model_paths.toml");
         let custom_content = "paths = [\".custom[]\"]\n";
         fs::write(&model_paths_file, custom_content).unwrap();
-        
+
         // Initialize again - should not overwrite
         let result = initialize_model_metadata_config();
         assert!(result.is_ok(), "Second initialization should succeed");
-        
+
         // Verify custom content is preserved
         let content = fs::read_to_string(&model_paths_file).unwrap();
-        assert!(content.contains(".custom[]"), "Custom content should be preserved");
-        assert!(!content.contains(".data[]"), "Default content should not be restored");
+        assert!(
+            content.contains(".custom[]"),
+            "Custom content should be preserved"
+        );
+        assert!(
+            !content.contains(".data[]"),
+            "Default content should not be restored"
+        );
     }
 
     #[test]
     fn test_jq_path_array_filtering() {
-        use serde_json::json;
         use lc::model_metadata::ModelMetadataExtractor;
+        use serde_json::json;
 
         // Create a sample GitHub model JSON similar to what the user provided
         let github_model = json!({
@@ -846,13 +921,20 @@ mod model_metadata_config_tests {
         let (_temp_dir, _config_dir, _guard) = setup_test_config_dir();
 
         let extractor = ModelMetadataExtractor::new().unwrap();
-        
+
         // Test the path that should detect tool-calling support
-        let result = extractor.extract_with_jq_path(&github_model, ".capabilities[] | select(. == \"tool-calling\")");
-        
+        let result = extractor.extract_with_jq_path(
+            &github_model,
+            ".capabilities[] | select(. == \"tool-calling\")",
+        );
+
         assert!(result.is_ok(), "JQ path extraction should succeed");
         let value = result.unwrap();
-        assert_eq!(value.as_bool(), Some(true), "Should detect tool-calling support");
+        assert_eq!(
+            value.as_bool(),
+            Some(true),
+            "Should detect tool-calling support"
+        );
 
         // Test a model without tool-calling to ensure it returns false
         let model_without_tools = json!({
@@ -863,11 +945,21 @@ mod model_metadata_config_tests {
             "name": "Test Model Without Tools"
         });
 
-        let result2 = extractor.extract_with_jq_path(&model_without_tools, ".capabilities[] | select(. == \"tool-calling\")");
-        
-        assert!(result2.is_ok(), "JQ path extraction should succeed for model without tools");
+        let result2 = extractor.extract_with_jq_path(
+            &model_without_tools,
+            ".capabilities[] | select(. == \"tool-calling\")",
+        );
+
+        assert!(
+            result2.is_ok(),
+            "JQ path extraction should succeed for model without tools"
+        );
         let value2 = result2.unwrap();
-        assert_eq!(value2.as_bool(), Some(false), "Should not detect tool-calling support");
+        assert_eq!(
+            value2.as_bool(),
+            Some(false),
+            "Should not detect tool-calling support"
+        );
 
         // Test a model with empty capabilities array
         let model_empty_capabilities = json!({
@@ -876,11 +968,21 @@ mod model_metadata_config_tests {
             "name": "Test Model Empty Capabilities"
         });
 
-        let result3 = extractor.extract_with_jq_path(&model_empty_capabilities, ".capabilities[] | select(. == \"tool-calling\")");
-        
-        assert!(result3.is_ok(), "JQ path extraction should succeed for model with empty capabilities");
+        let result3 = extractor.extract_with_jq_path(
+            &model_empty_capabilities,
+            ".capabilities[] | select(. == \"tool-calling\")",
+        );
+
+        assert!(
+            result3.is_ok(),
+            "JQ path extraction should succeed for model with empty capabilities"
+        );
         let value3 = result3.unwrap();
-        assert_eq!(value3.as_bool(), Some(false), "Should not detect tool-calling support in empty array");
+        assert_eq!(
+            value3.as_bool(),
+            Some(false),
+            "Should not detect tool-calling support in empty array"
+        );
 
         // Test Novita-style model with features array containing "function-calling"
         let novita_model = json!({
@@ -892,11 +994,21 @@ mod model_metadata_config_tests {
             "display_name": "DeepSeek V3 0324"
         });
 
-        let result4 = extractor.extract_with_jq_path(&novita_model, ".features[] | select(. == \"function-calling\")");
-        
-        assert!(result4.is_ok(), "JQ path extraction should succeed for Novita model");
+        let result4 = extractor.extract_with_jq_path(
+            &novita_model,
+            ".features[] | select(. == \"function-calling\")",
+        );
+
+        assert!(
+            result4.is_ok(),
+            "JQ path extraction should succeed for Novita model"
+        );
         let value4 = result4.unwrap();
-        assert_eq!(value4.as_bool(), Some(true), "Should detect function-calling support in Novita model");
+        assert_eq!(
+            value4.as_bool(),
+            Some(true),
+            "Should detect function-calling support in Novita model"
+        );
 
         // Test Novita-style model without function-calling
         let novita_model_no_tools = json!({
@@ -907,11 +1019,21 @@ mod model_metadata_config_tests {
             "display_name": "Test Model No Function Calling"
         });
 
-        let result5 = extractor.extract_with_jq_path(&novita_model_no_tools, ".features[] | select(. == \"function-calling\")");
-        
-        assert!(result5.is_ok(), "JQ path extraction should succeed for Novita model without function-calling");
+        let result5 = extractor.extract_with_jq_path(
+            &novita_model_no_tools,
+            ".features[] | select(. == \"function-calling\")",
+        );
+
+        assert!(
+            result5.is_ok(),
+            "JQ path extraction should succeed for Novita model without function-calling"
+        );
         let value5 = result5.unwrap();
-        assert_eq!(value5.as_bool(), Some(false), "Should not detect function-calling support when not present");
+        assert_eq!(
+            value5.as_bool(),
+            Some(false),
+            "Should not detect function-calling support when not present"
+        );
     }
 }
 
@@ -924,15 +1046,18 @@ mod models_validation_tests {
         fn parse_token_count(input: &str) -> Result<u32, String> {
             let input = input.to_lowercase();
             if let Some(num_str) = input.strip_suffix('k') {
-                let num: f32 = num_str.parse()
+                let num: f32 = num_str
+                    .parse()
                     .map_err(|_| format!("Invalid token count format: '{}'", input))?;
                 Ok((num * 1000.0) as u32)
             } else if let Some(num_str) = input.strip_suffix('m') {
-                let num: f32 = num_str.parse()
+                let num: f32 = num_str
+                    .parse()
                     .map_err(|_| format!("Invalid token count format: '{}'", input))?;
                 Ok((num * 1000000.0) as u32)
             } else {
-                input.parse()
+                input
+                    .parse()
                     .map_err(|_| format!("Invalid token count format: '{}'", input))
             }
         }
@@ -985,9 +1110,11 @@ mod models_validation_tests {
     fn test_provider_name_validation() {
         // Test provider name validation
         fn validate_provider_name(name: &str) -> bool {
-            !name.is_empty() && 
-            !name.trim().is_empty() && 
-            name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            !name.is_empty()
+                && !name.trim().is_empty()
+                && name
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
         }
 
         assert!(validate_provider_name("openai"));

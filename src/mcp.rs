@@ -4,16 +4,18 @@
 //! supporting both STDIO and SSE transports. It maintains backward compatibility
 //! with the legacy configuration format while using the modern rmcp SDK internally.
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use rmcp::{
+    model::{CallToolRequestParam, ClientCapabilities, ClientInfo, Implementation, Tool},
+    service::RoleClient,
+    service::RunningService,
+    transport::{ConfigureCommandExt, SseClientTransport, TokioChildProcess},
+    ServiceExt,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::process::Command;
-use rmcp::{
-    ServiceExt, service::RunningService, service::RoleClient,
-    model::{CallToolRequestParam, ClientCapabilities, ClientInfo, Implementation, Tool},
-    transport::{SseClientTransport, TokioChildProcess, ConfigureCommandExt},
-};
 
 // Legacy configuration structures for backward compatibility
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -47,11 +49,11 @@ impl McpConfig {
     pub fn load() -> Result<Self> {
         let config_dir = crate::config::Config::config_dir()?;
         let mcp_config_path = config_dir.join("mcp.toml");
-        
+
         if !mcp_config_path.exists() {
             return Ok(Self::new());
         }
-        
+
         let content = std::fs::read_to_string(&mcp_config_path)?;
         let config: McpConfig = toml::from_str(&content)?;
         Ok(config)
@@ -60,7 +62,7 @@ impl McpConfig {
     pub fn save(&self) -> Result<()> {
         let config_dir = crate::config::Config::config_dir()?;
         std::fs::create_dir_all(&config_dir)?;
-        
+
         let mcp_config_path = config_dir.join("mcp.toml");
         let content = toml::to_string_pretty(self)?;
         std::fs::write(&mcp_config_path, content)?;
@@ -68,11 +70,22 @@ impl McpConfig {
     }
 
     #[allow(dead_code)]
-    pub fn add_server(&mut self, name: String, command_or_url: String, server_type: McpServerType) -> Result<()> {
+    pub fn add_server(
+        &mut self,
+        name: String,
+        command_or_url: String,
+        server_type: McpServerType,
+    ) -> Result<()> {
         self.add_server_with_env(name, command_or_url, server_type, HashMap::new())
     }
 
-    pub fn add_server_with_env(&mut self, name: String, command_or_url: String, server_type: McpServerType, env: HashMap<String, String>) -> Result<()> {
+    pub fn add_server_with_env(
+        &mut self,
+        name: String,
+        command_or_url: String,
+        server_type: McpServerType,
+        env: HashMap<String, String>,
+    ) -> Result<()> {
         let server_config = McpServerConfig {
             name: name.clone(),
             server_type,
@@ -124,35 +137,66 @@ pub async fn get_global_manager() -> Arc<Mutex<SdkMcpManager>> {
 pub async fn ensure_server_connected(server_name: &str, config: SdkMcpServerConfig) -> Result<()> {
     let manager = get_global_manager().await;
     let mut manager_lock = manager.lock().await;
-    
+
     // Check if server is already connected
     if !manager_lock.clients.contains_key(server_name) {
-        crate::debug_log!("GLOBAL_MANAGER: Connecting to MCP server '{}' (not already connected)", server_name);
+        crate::debug_log!(
+            "GLOBAL_MANAGER: Connecting to MCP server '{}' (not already connected)",
+            server_name
+        );
         manager_lock.add_server(config).await?;
-        crate::debug_log!("GLOBAL_MANAGER: Successfully connected to MCP server '{}'. Total connections: {}", server_name, manager_lock.clients.len());
+        crate::debug_log!(
+            "GLOBAL_MANAGER: Successfully connected to MCP server '{}'. Total connections: {}",
+            server_name,
+            manager_lock.clients.len()
+        );
     } else {
-        crate::debug_log!("GLOBAL_MANAGER: MCP server '{}' already connected. Total connections: {}", server_name, manager_lock.clients.len());
+        crate::debug_log!(
+            "GLOBAL_MANAGER: MCP server '{}' already connected. Total connections: {}",
+            server_name,
+            manager_lock.clients.len()
+        );
     }
-    
+
     Ok(())
 }
 
 #[allow(dead_code)]
-pub async fn call_global_tool(server_name: &str, tool_name: &str, arguments: serde_json::Value) -> Result<serde_json::Value> {
+pub async fn call_global_tool(
+    server_name: &str,
+    tool_name: &str,
+    arguments: serde_json::Value,
+) -> Result<serde_json::Value> {
     let manager = get_global_manager().await;
     let manager_lock = manager.lock().await;
-    
-    crate::debug_log!("GLOBAL_MANAGER: Calling tool '{}' on server '{}'. Total connections: {}", tool_name, server_name, manager_lock.clients.len());
-    
+
+    crate::debug_log!(
+        "GLOBAL_MANAGER: Calling tool '{}' on server '{}'. Total connections: {}",
+        tool_name,
+        server_name,
+        manager_lock.clients.len()
+    );
+
     if !manager_lock.clients.contains_key(server_name) {
-        crate::debug_log!("GLOBAL_MANAGER: ERROR - Server '{}' not found in global manager!", server_name);
-        return Err(anyhow::anyhow!("Server '{}' not found in global manager", server_name));
+        crate::debug_log!(
+            "GLOBAL_MANAGER: ERROR - Server '{}' not found in global manager!",
+            server_name
+        );
+        return Err(anyhow::anyhow!(
+            "Server '{}' not found in global manager",
+            server_name
+        ));
     }
-    
-    let result = manager_lock.call_tool(server_name, tool_name, arguments).await;
-    
-    crate::debug_log!("GLOBAL_MANAGER: Tool call completed. Connection still active: {}", manager_lock.clients.contains_key(server_name));
-    
+
+    let result = manager_lock
+        .call_tool(server_name, tool_name, arguments)
+        .await;
+
+    crate::debug_log!(
+        "GLOBAL_MANAGER: Tool call completed. Connection still active: {}",
+        manager_lock.clients.contains_key(server_name)
+    );
+
     result
 }
 
@@ -167,12 +211,12 @@ pub async fn list_global_tools() -> Result<HashMap<String, Vec<Tool>>> {
 pub async fn close_global_server(server_name: &str) -> Result<()> {
     let manager = get_global_manager().await;
     let mut manager_lock = manager.lock().await;
-    
+
     if let Some(client) = manager_lock.clients.remove(server_name) {
         let _ = client.cancel().await;
         crate::debug_log!("Closed connection to MCP server '{}'", server_name);
     }
-    
+
     Ok(())
 }
 
@@ -184,8 +228,12 @@ impl SdkMcpManager {
     }
 
     pub async fn add_server(&mut self, config: SdkMcpServerConfig) -> Result<()> {
-        crate::debug_log!("SdkMcpManager: Adding server '{}' with transport: {:?}", config.name, config.transport);
-        
+        crate::debug_log!(
+            "SdkMcpManager: Adding server '{}' with transport: {:?}",
+            config.name,
+            config.transport
+        );
+
         let client_info = ClientInfo {
             protocol_version: Default::default(),
             capabilities: ClientCapabilities::default(),
@@ -196,9 +244,18 @@ impl SdkMcpManager {
         };
 
         let client = match config.transport {
-            SdkMcpTransport::Stdio { command, args, env, cwd } => {
-                crate::debug_log!("SdkMcpManager: Creating STDIO transport with command: {} args: {:?}", command, args);
-                
+            SdkMcpTransport::Stdio {
+                command,
+                args,
+                env,
+                cwd,
+            } => {
+                crate::debug_log!(
+                    "SdkMcpManager: Creating STDIO transport with command: {} args: {:?}",
+                    command,
+                    args
+                );
+
                 let mut cmd = Command::new(&command);
                 if let Some(args) = args {
                     cmd.args(&args);
@@ -223,7 +280,7 @@ impl SdkMcpManager {
                 cmd.stdin(std::process::Stdio::piped());
                 cmd.stdout(std::process::Stdio::piped());
                 cmd.stderr(std::process::Stdio::piped());
-                
+
                 crate::debug_log!("SdkMcpManager: Creating TokioChildProcess transport");
                 let transport = TokioChildProcess::new(cmd.configure(|_| {}))?;
                 crate::debug_log!("SdkMcpManager: Starting client connection");
@@ -237,7 +294,10 @@ impl SdkMcpManager {
             }
         };
 
-        crate::debug_log!("SdkMcpManager: Successfully connected to server '{}'", config.name);
+        crate::debug_log!(
+            "SdkMcpManager: Successfully connected to server '{}'",
+            config.name
+        );
         self.clients.insert(config.name, client);
         Ok(())
     }
@@ -245,39 +305,67 @@ impl SdkMcpManager {
     pub async fn list_all_tools(&self) -> Result<HashMap<String, Vec<Tool>>> {
         let mut all_tools = HashMap::new();
 
-        crate::debug_log!("SdkMcpManager: Listing tools from {} connected servers", self.clients.len());
+        crate::debug_log!(
+            "SdkMcpManager: Listing tools from {} connected servers",
+            self.clients.len()
+        );
 
         for (server_name, client) in &self.clients {
-            crate::debug_log!("SdkMcpManager: Requesting tools from server '{}'", server_name);
+            crate::debug_log!(
+                "SdkMcpManager: Requesting tools from server '{}'",
+                server_name
+            );
             match client.list_tools(Default::default()).await {
                 Ok(tools_result) => {
-                    crate::debug_log!("SdkMcpManager: Server '{}' returned {} tools", server_name, tools_result.tools.len());
+                    crate::debug_log!(
+                        "SdkMcpManager: Server '{}' returned {} tools",
+                        server_name,
+                        tools_result.tools.len()
+                    );
                     all_tools.insert(server_name.clone(), tools_result.tools);
                 }
                 Err(e) => {
-                    crate::debug_log!("SdkMcpManager: Failed to list tools from server '{}': {}", server_name, e);
-                    eprintln!("Warning: Failed to list tools from server '{}': {}", server_name, e);
+                    crate::debug_log!(
+                        "SdkMcpManager: Failed to list tools from server '{}': {}",
+                        server_name,
+                        e
+                    );
+                    eprintln!(
+                        "Warning: Failed to list tools from server '{}': {}",
+                        server_name, e
+                    );
                 }
             }
         }
 
-        crate::debug_log!("SdkMcpManager: Total tools collected from {} servers", all_tools.len());
+        crate::debug_log!(
+            "SdkMcpManager: Total tools collected from {} servers",
+            all_tools.len()
+        );
         Ok(all_tools)
     }
 
-    pub async fn call_tool(&self, server_name: &str, tool_name: &str, arguments: serde_json::Value) -> Result<serde_json::Value> {
-        let client = self.clients.get(server_name)
+    pub async fn call_tool(
+        &self,
+        server_name: &str,
+        tool_name: &str,
+        arguments: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        let client = self
+            .clients
+            .get(server_name)
             .ok_or_else(|| anyhow!("Server '{}' not found", server_name))?;
 
-        let result = client.call_tool(CallToolRequestParam {
-            name: tool_name.to_string().into(),
-            arguments: arguments.as_object().cloned(),
-        }).await?;
+        let result = client
+            .call_tool(CallToolRequestParam {
+                name: tool_name.to_string().into(),
+                arguments: arguments.as_object().cloned(),
+            })
+            .await?;
 
         // Convert the result to a JSON value
         Ok(serde_json::to_value(result)?)
     }
-
 }
 
 // SDK configuration structures
@@ -346,11 +434,13 @@ mod tests {
     #[test]
     fn test_add_server() {
         let mut config = McpConfig::new();
-        config.add_server(
-            "test-server".to_string(),
-            "echo test".to_string(),
-            McpServerType::Stdio,
-        ).unwrap();
+        config
+            .add_server(
+                "test-server".to_string(),
+                "echo test".to_string(),
+                McpServerType::Stdio,
+            )
+            .unwrap();
 
         assert_eq!(config.servers.len(), 1);
         let server = config.get_server("test-server").unwrap();
@@ -385,10 +475,8 @@ mod tests {
 
     #[test]
     fn test_create_sse_config() {
-        let config = create_sse_server_config(
-            "test".to_string(),
-            "http://localhost:8080/sse".to_string(),
-        );
+        let config =
+            create_sse_server_config("test".to_string(), "http://localhost:8080/sse".to_string());
         assert_eq!(config.name, "test");
         match config.transport {
             SdkMcpTransport::Sse { url } => {

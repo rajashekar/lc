@@ -10,19 +10,19 @@ where
     Fut: std::future::Future<Output = Result<()>>,
 {
     let temp_home = TempDir::new()?;
-    
+
     // Store original env vars
     let original_home = std::env::var("HOME").ok();
     let original_xdg = std::env::var("XDG_CONFIG_HOME").ok();
-    
+
     // Set HOME so dirs::config_dir() points inside temp dir on macOS/Linux
     std::env::set_var("HOME", temp_home.path());
     // Also clear XDG_* to avoid interference
     std::env::remove_var("XDG_CONFIG_HOME");
-    
+
     // Run test body
     let res = f(&temp_home).await;
-    
+
     // Restore original env vars
     match original_home {
         Some(home) => std::env::set_var("HOME", home),
@@ -32,59 +32,70 @@ where
         Some(xdg) => std::env::set_var("XDG_CONFIG_HOME", xdg),
         None => std::env::remove_var("XDG_CONFIG_HOME"),
     }
-    
+
     res
 }
 
 // Mock the keys add command to avoid rpassword blocking
-async fn mock_keys_add_command(provider_name: String, api_key_input: Option<String>) -> anyhow::Result<()> {
+async fn mock_keys_add_command(
+    provider_name: String,
+    api_key_input: Option<String>,
+) -> anyhow::Result<()> {
     let mut config = Config::load()?;
     let provider_config = match config.get_provider(&provider_name) {
         Ok(config) => config,
         Err(_) => return Err(anyhow::anyhow!("Provider '{}' not found", provider_name)),
     };
-    
+
     // Simulate the Vertex AI detection and validation logic
-    if provider_config.endpoint.contains("aiplatform.googleapis.com") {
+    if provider_config
+        .endpoint
+        .contains("aiplatform.googleapis.com")
+    {
         if let Some(b64_input) = api_key_input {
             // Decode base64 (simulating the CLI logic)
-            use base64::{Engine as _, engine::general_purpose};
+            use base64::{engine::general_purpose, Engine as _};
             let json_input = match general_purpose::STANDARD.decode(&b64_input) {
-                Ok(decoded_bytes) => {
-                    match String::from_utf8(decoded_bytes) {
-                        Ok(json_str) => json_str,
-                        Err(_) => return Err(anyhow::anyhow!("Invalid UTF-8 in decoded base64 data")),
-                    }
-                }
+                Ok(decoded_bytes) => match String::from_utf8(decoded_bytes) {
+                    Ok(json_str) => json_str,
+                    Err(_) => return Err(anyhow::anyhow!("Invalid UTF-8 in decoded base64 data")),
+                },
                 Err(_) => return Err(anyhow::anyhow!("Invalid base64 format")),
             };
-            
+
             // Validate JSON
             let parsed: serde_json::Value = serde_json::from_str(&json_input)
                 .map_err(|_| anyhow::anyhow!("Invalid JSON format"))?;
-            
+
             // Check required fields
-            let obj = parsed.as_object()
+            let obj = parsed
+                .as_object()
                 .ok_or_else(|| anyhow::anyhow!("JSON must be an object"))?;
-            
+
             if obj.get("type").and_then(|v| v.as_str()) != Some("service_account") {
-                return Err(anyhow::anyhow!("Service Account JSON must have \"type\": \"service_account\""));
+                return Err(anyhow::anyhow!(
+                    "Service Account JSON must have \"type\": \"service_account\""
+                ));
             }
-            
+
             if !obj.contains_key("client_email") {
-                return Err(anyhow::anyhow!("Service Account JSON missing 'client_email' field"));
+                return Err(anyhow::anyhow!(
+                    "Service Account JSON missing 'client_email' field"
+                ));
             }
-            
+
             if !obj.contains_key("private_key") {
-                return Err(anyhow::anyhow!("Service Account JSON missing 'private_key' field"));
+                return Err(anyhow::anyhow!(
+                    "Service Account JSON missing 'private_key' field"
+                ));
             }
-            
+
             // Store the JSON as api_key
             config.set_api_key(provider_name.clone(), json_input)?;
             config.save()?;
         }
     }
-    
+
     Ok(())
 }
 

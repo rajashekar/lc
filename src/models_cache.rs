@@ -1,14 +1,14 @@
+use crate::{config::Config, provider::OpenAIClient};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use crate::{config::Config, provider::OpenAIClient};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ModelsCache {
-    pub last_updated: u64, // Unix timestamp
+    pub last_updated: u64,                    // Unix timestamp
     pub models: HashMap<String, Vec<String>>, // provider -> models
     // Cache the serialized JSON to avoid repeated serialization
     #[serde(skip)]
@@ -29,11 +29,11 @@ impl ModelsCache {
             cached_json: None,
         }
     }
-    
+
     fn invalidate_cache(&mut self) {
         self.cached_json = None;
     }
-    
+
     fn get_cached_json(&mut self) -> Result<&str> {
         if self.cached_json.is_none() {
             self.cached_json = Some(serde_json::to_string_pretty(self)?);
@@ -43,7 +43,7 @@ impl ModelsCache {
 
     pub fn load() -> Result<Self> {
         let cache_path = Self::cache_file_path()?;
-        
+
         if cache_path.exists() {
             let content = fs::read_to_string(&cache_path)?;
             let cache: ModelsCache = serde_json::from_str(&content)?;
@@ -55,12 +55,12 @@ impl ModelsCache {
 
     pub fn save(&mut self) -> Result<()> {
         let cache_path = Self::cache_file_path()?;
-        
+
         // Ensure cache directory exists
         if let Some(parent) = cache_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         // Use cached JSON if available to avoid re-serialization
         let content = self.get_cached_json()?;
         fs::write(&cache_path, content)?;
@@ -72,7 +72,7 @@ impl ModelsCache {
             .duration_since(UNIX_EPOCH)
             .unwrap_or(Duration::from_secs(0))
             .as_secs();
-        
+
         // Cache expires after 24 hours (86400 seconds)
         now - self.last_updated > 86400
     }
@@ -83,7 +83,7 @@ impl ModelsCache {
 
     pub async fn refresh(&mut self) -> Result<()> {
         println!("Refreshing models cache...");
-        
+
         let config = Config::load()?;
         let mut new_models = HashMap::new();
         let mut successful_providers = 0;
@@ -96,7 +96,7 @@ impl ModelsCache {
             }
 
             print!("Fetching models from {}... ", provider_name);
-            
+
             let client = OpenAIClient::new_with_headers(
                 provider_config.endpoint.clone(),
                 provider_config.api_key.clone().unwrap(),
@@ -125,18 +125,21 @@ impl ModelsCache {
             .duration_since(UNIX_EPOCH)
             .unwrap_or(Duration::from_secs(0))
             .as_secs();
-        
+
         // Invalidate cached JSON since data changed
         self.invalidate_cache();
         self.save()?;
-        
-        println!("\nCache updated: {} providers, {} total models", successful_providers, total_models);
+
+        println!(
+            "\nCache updated: {} providers, {} total models",
+            successful_providers, total_models
+        );
         Ok(())
     }
 
     pub fn get_all_models(&self) -> Vec<CachedModel> {
         let mut all_models = Vec::new();
-        
+
         for (provider, models) in &self.models {
             for model in models {
                 all_models.push(CachedModel {
@@ -145,20 +148,17 @@ impl ModelsCache {
                 });
             }
         }
-        
+
         // Sort by provider, then by model
-        all_models.sort_by(|a, b| {
-            a.provider.cmp(&b.provider).then(a.model.cmp(&b.model))
-        });
-        
+        all_models.sort_by(|a, b| a.provider.cmp(&b.provider).then(a.model.cmp(&b.model)));
+
         all_models
     }
 
-
     fn cache_file_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
-        
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+
         Ok(config_dir.join("lc").join("models_cache.json"))
     }
 }

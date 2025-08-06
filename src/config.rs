@@ -22,7 +22,8 @@ mod provider_config_tests {
         };
 
         pc.vars.insert("project".to_string(), "my-proj".to_string());
-        pc.vars.insert("location".to_string(), "us-central1".to_string());
+        pc.vars
+            .insert("location".to_string(), "us-central1".to_string());
 
         // Should replace {model} and interpolate vars
         let url = pc.get_chat_url("gemini-1.5-pro");
@@ -63,11 +64,11 @@ mod provider_config_tests {
     }
 }
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -118,25 +119,34 @@ impl ProviderConfig {
     pub fn is_chat_path_full_url(&self) -> bool {
         self.chat_path.starts_with("https://")
     }
-    
+
     /// Get the models endpoint URL
     pub fn get_models_url(&self) -> String {
-        format!("{}{}", self.endpoint.trim_end_matches('/'), self.models_path)
+        format!(
+            "{}{}",
+            self.endpoint.trim_end_matches('/'),
+            self.models_path
+        )
     }
-    
+
     /// Get the chat completions URL, replacing {model_name} and template variables
     pub fn get_chat_url(&self, model_name: &str) -> String {
-        crate::debug_log!("ProviderConfig::get_chat_url called with model: {}", model_name);
+        crate::debug_log!(
+            "ProviderConfig::get_chat_url called with model: {}",
+            model_name
+        );
         crate::debug_log!("  chat_path: {}", self.chat_path);
         crate::debug_log!("  is_full_url: {}", self.is_chat_path_full_url());
         crate::debug_log!("  vars: {:?}", self.vars);
-        
+
         if self.is_chat_path_full_url() {
             // Full URL path - process template variables directly
-            let mut url = self.chat_path.replace("{model}", model_name)
-                                        .replace("{model_name}", model_name);
+            let mut url = self
+                .chat_path
+                .replace("{model}", model_name)
+                .replace("{model_name}", model_name);
             crate::debug_log!("  after model replacement: {}", url);
-            
+
             // Interpolate known vars if present
             for (k, v) in &self.vars {
                 let old_url = url.clone();
@@ -147,17 +157,25 @@ impl ProviderConfig {
             url
         } else {
             // Relative path - first process template variables in the path, then combine with endpoint
-            let mut processed_path = self.chat_path.replace("{model}", model_name)
-                                                   .replace("{model_name}", model_name);
+            let mut processed_path = self
+                .chat_path
+                .replace("{model}", model_name)
+                .replace("{model_name}", model_name);
             crate::debug_log!("  after model replacement in path: {}", processed_path);
-            
+
             // Interpolate known vars in the path
             for (k, v) in &self.vars {
                 let old_path = processed_path.clone();
                 processed_path = processed_path.replace(&format!("{{{}}}", k), v);
-                crate::debug_log!("  replaced {{{}}} with '{}' in path: {} -> {}", k, v, old_path, processed_path);
+                crate::debug_log!(
+                    "  replaced {{{}}} with '{}' in path: {} -> {}",
+                    k,
+                    v,
+                    old_path,
+                    processed_path
+                );
             }
-            
+
             let url = format!("{}{}", self.endpoint.trim_end_matches('/'), processed_path);
             crate::debug_log!("  final URL: {}", url);
             url
@@ -190,7 +208,7 @@ pub struct ProviderPaths {
 impl Config {
     pub fn load() -> Result<Self> {
         let config_path = Self::config_file_path()?;
-        
+
         if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
             let config: Config = toml::from_str(&content)?;
@@ -208,29 +226,35 @@ impl Config {
                 temperature: None,
                 stream: None,
             };
-            
+
             // Ensure config directory exists
             if let Some(parent) = config_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            
+
             config.save()?;
             Ok(config)
         }
     }
-    
+
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_file_path()?;
         let content = toml::to_string_pretty(self)?;
         fs::write(&config_path, content)?;
         Ok(())
     }
-    
+
     pub fn add_provider(&mut self, name: String, endpoint: String) -> Result<()> {
         self.add_provider_with_paths(name, endpoint, None, None)
     }
-    
-    pub fn add_provider_with_paths(&mut self, name: String, endpoint: String, models_path: Option<String>, chat_path: Option<String>) -> Result<()> {
+
+    pub fn add_provider_with_paths(
+        &mut self,
+        name: String,
+        endpoint: String,
+        models_path: Option<String>,
+        chat_path: Option<String>,
+    ) -> Result<()> {
         let mut provider_config = ProviderConfig {
             endpoint: endpoint.clone(),
             api_key: None,
@@ -247,24 +271,27 @@ impl Config {
         };
 
         // Auto-detect Vertex AI host to mark google_sa_jwt
-        if provider_config.endpoint.contains("aiplatform.googleapis.com") {
+        if provider_config
+            .endpoint
+            .contains("aiplatform.googleapis.com")
+        {
             provider_config.auth_type = Some("google_sa_jwt".to_string());
             // Default token URL for SA JWT exchange if user later runs lc p t
             if provider_config.token_url.is_none() {
                 provider_config.token_url = Some("https://oauth2.googleapis.com/token".to_string());
             }
         }
-        
+
         self.providers.insert(name.clone(), provider_config);
-        
+
         // Set as default if it's the first provider
         if self.default_provider.is_none() {
             self.default_provider = Some(name);
         }
-        
+
         Ok(())
     }
-    
+
     pub fn set_api_key(&mut self, provider: String, api_key: String) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             provider_config.api_key = Some(api_key);
@@ -273,18 +300,23 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn has_provider(&self, name: &str) -> bool {
         self.providers.contains_key(name)
     }
-    
+
     pub fn get_provider(&self, name: &str) -> Result<&ProviderConfig> {
-        self.providers.get(name)
+        self.providers
+            .get(name)
             .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found", name))
     }
-    
-    
-    pub fn add_header(&mut self, provider: String, header_name: String, header_value: String) -> Result<()> {
+
+    pub fn add_header(
+        &mut self,
+        provider: String,
+        header_name: String,
+        header_value: String,
+    ) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             provider_config.headers.insert(header_name, header_value);
             Ok(())
@@ -292,19 +324,23 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn remove_header(&mut self, provider: String, header_name: String) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             if provider_config.headers.remove(&header_name).is_some() {
                 Ok(())
             } else {
-                anyhow::bail!("Header '{}' not found for provider '{}'", header_name, provider);
+                anyhow::bail!(
+                    "Header '{}' not found for provider '{}'",
+                    header_name,
+                    provider
+                );
             }
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn list_headers(&self, provider: &str) -> Result<&HashMap<String, String>> {
         if let Some(provider_config) = self.providers.get(provider) {
             Ok(&provider_config.headers)
@@ -312,25 +348,31 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn add_alias(&mut self, alias_name: String, provider_model: String) -> Result<()> {
         // Validate that the provider_model contains a colon
         if !provider_model.contains(':') {
-            anyhow::bail!("Alias target must be in format 'provider:model', got '{}'", provider_model);
+            anyhow::bail!(
+                "Alias target must be in format 'provider:model', got '{}'",
+                provider_model
+            );
         }
-        
+
         // Extract provider and validate it exists
         let parts: Vec<&str> = provider_model.splitn(2, ':').collect();
         let provider_name = parts[0];
-        
+
         if !self.has_provider(provider_name) {
-            anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", provider_name);
+            anyhow::bail!(
+                "Provider '{}' not found. Add it first with 'lc providers add'",
+                provider_name
+            );
         }
-        
+
         self.aliases.insert(alias_name, provider_model);
         Ok(())
     }
-    
+
     pub fn remove_alias(&mut self, alias_name: String) -> Result<()> {
         if self.aliases.remove(&alias_name).is_some() {
             Ok(())
@@ -338,20 +380,20 @@ impl Config {
             anyhow::bail!("Alias '{}' not found", alias_name);
         }
     }
-    
+
     pub fn get_alias(&self, alias_name: &str) -> Option<&String> {
         self.aliases.get(alias_name)
     }
-    
+
     pub fn list_aliases(&self) -> &HashMap<String, String> {
         &self.aliases
     }
-    
+
     pub fn add_template(&mut self, template_name: String, prompt_content: String) -> Result<()> {
         self.templates.insert(template_name, prompt_content);
         Ok(())
     }
-    
+
     pub fn remove_template(&mut self, template_name: String) -> Result<()> {
         if self.templates.remove(&template_name).is_some() {
             Ok(())
@@ -359,15 +401,15 @@ impl Config {
             anyhow::bail!("Template '{}' not found", template_name);
         }
     }
-    
+
     pub fn get_template(&self, template_name: &str) -> Option<&String> {
         self.templates.get(template_name)
     }
-    
+
     pub fn list_templates(&self) -> &HashMap<String, String> {
         &self.templates
     }
-    
+
     pub fn resolve_template_or_prompt(&self, input: &str) -> String {
         if let Some(template_name) = input.strip_prefix("t:") {
             if let Some(template_content) = self.get_template(template_name) {
@@ -380,40 +422,46 @@ impl Config {
             input.to_string()
         }
     }
-    
+
     pub fn parse_max_tokens(input: &str) -> Result<u32> {
         let input = input.to_lowercase();
         if let Some(num_str) = input.strip_suffix('k') {
-            let num: f32 = num_str.parse()
+            let num: f32 = num_str
+                .parse()
                 .map_err(|_| anyhow::anyhow!("Invalid max_tokens format: '{}'", input))?;
             Ok((num * 1000.0) as u32)
         } else {
-            input.parse()
+            input
+                .parse()
                 .map_err(|_| anyhow::anyhow!("Invalid max_tokens format: '{}'", input))
         }
     }
-    
+
     pub fn parse_temperature(input: &str) -> Result<f32> {
-        input.parse()
+        input
+            .parse()
             .map_err(|_| anyhow::anyhow!("Invalid temperature format: '{}'", input))
     }
-    
+
     fn config_file_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
-        
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+
         Ok(config_dir.join("lc").join("config.toml"))
     }
-    
+
     pub fn config_dir() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
-        
-        let lc_dir = config_dir.join("lc");
-        fs::create_dir_all(&lc_dir)?;
-        Ok(lc_dir)
+        // Use data_local_dir for cross-platform data storage to match database location
+        // On macOS: ~/Library/Application Support/lc
+        // On Linux: ~/.local/share/lc
+        // On Windows: %LOCALAPPDATA%/lc
+        let data_dir = dirs::data_local_dir()
+            .ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?
+            .join("lc");
+        fs::create_dir_all(&data_dir)?;
+        Ok(data_dir)
     }
-    
+
     pub fn set_token_url(&mut self, provider: String, token_url: String) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             provider_config.token_url = Some(token_url);
@@ -456,7 +504,7 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn set_provider_chat_path(&mut self, provider: &str, path: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.chat_path = path.to_string();
@@ -465,7 +513,7 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn set_provider_images_path(&mut self, provider: &str, path: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.images_path = Some(path.to_string());
@@ -474,7 +522,7 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn set_provider_embeddings_path(&mut self, provider: &str, path: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.embeddings_path = Some(path.to_string());
@@ -483,7 +531,7 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn reset_provider_models_path(&mut self, provider: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.models_path = default_models_path();
@@ -492,7 +540,7 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn reset_provider_chat_path(&mut self, provider: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.chat_path = default_chat_path();
@@ -501,7 +549,7 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn reset_provider_images_path(&mut self, provider: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.images_path = None;
@@ -510,7 +558,7 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn reset_provider_embeddings_path(&mut self, provider: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.embeddings_path = None;
@@ -519,7 +567,7 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn list_provider_paths(&self, provider: &str) -> Result<ProviderPaths> {
         if let Some(pc) = self.providers.get(provider) {
             Ok(ProviderPaths {
@@ -532,25 +580,26 @@ impl Config {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn get_token_url(&self, provider: &str) -> Option<&String> {
         self.providers.get(provider)?.token_url.as_ref()
     }
-    
-    pub fn set_cached_token(&mut self, provider: String, token: String, expires_at: DateTime<Utc>) -> Result<()> {
+
+    pub fn set_cached_token(
+        &mut self,
+        provider: String,
+        token: String,
+        expires_at: DateTime<Utc>,
+    ) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
-            provider_config.cached_token = Some(CachedToken {
-                token,
-                expires_at,
-            });
+            provider_config.cached_token = Some(CachedToken { token, expires_at });
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
         }
     }
-    
+
     pub fn get_cached_token(&self, provider: &str) -> Option<&CachedToken> {
         self.providers.get(provider)?.cached_token.as_ref()
     }
-    
 }

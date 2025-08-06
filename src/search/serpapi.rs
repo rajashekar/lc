@@ -110,53 +110,60 @@ impl SerpApiProvider {
 
     pub async fn search(&self, query: &str, count: Option<usize>) -> Result<SearchResults> {
         let client = reqwest::Client::new();
-        
+
         // Build query parameters
-        let mut params = vec![
-            ("engine", "google".to_string()),
-            ("q", query.to_string()),
-        ];
-        
+        let mut params = vec![("engine", "google".to_string()), ("q", query.to_string())];
+
         if let Some(num) = count {
             params.push(("num", num.to_string()));
         }
-        
+
         // Add API key from headers
         if let Some(api_key) = self.headers.get("api_key") {
             params.push(("api_key", api_key.clone()));
         }
-        
-        crate::debug_log!("SerpApi: Making GET request to {} with params: {:?}", self.url, params);
-        
-        let response = client
-            .get(&self.url)
-            .query(&params)
-            .send()
-            .await?;
-        
+
+        crate::debug_log!(
+            "SerpApi: Making GET request to {} with params: {:?}",
+            self.url,
+            params
+        );
+
+        let response = client.get(&self.url).query(&params).send().await?;
+
         let status = response.status();
         crate::debug_log!("SerpApi: Received response with status: {}", status);
-        
+
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
             crate::debug_log!("SerpApi: Error response: {}", error_text);
-            anyhow::bail!("SerpApi request failed with status {}: {}", status, error_text);
+            anyhow::bail!(
+                "SerpApi request failed with status {}: {}",
+                status,
+                error_text
+            );
         }
-        
+
         let response_text = response.text().await?;
-        crate::debug_log!("SerpApi: Response body length: {} bytes", response_text.len());
-        
+        crate::debug_log!(
+            "SerpApi: Response body length: {} bytes",
+            response_text.len()
+        );
+
         let serpapi_response: SerpApiResponse = serde_json::from_str(&response_text)
             .map_err(|e| anyhow::anyhow!("Failed to parse SerpApi response: {}", e))?;
-        
+
         crate::debug_log!("SerpApi: Successfully parsed response");
-        
+
         // Convert to our standard format
         let mut results = Vec::new();
-        
+
         if let Some(organic_results) = serpapi_response.organic_results {
-            crate::debug_log!("SerpApi: Processing {} organic results", organic_results.len());
-            
+            crate::debug_log!(
+                "SerpApi: Processing {} organic results",
+                organic_results.len()
+            );
+
             for result in organic_results {
                 if let (Some(title), Some(url)) = (result.title, result.link) {
                     let search_result = SearchResult {
@@ -171,16 +178,21 @@ impl SerpApiProvider {
                 }
             }
         }
-        
-        crate::debug_log!("SerpApi: Converted {} results to standard format", results.len());
-        
+
+        crate::debug_log!(
+            "SerpApi: Converted {} results to standard format",
+            results.len()
+        );
+
         // Extract total results and search time from metadata if available
-        let total_results = serpapi_response.search_information
+        let total_results = serpapi_response
+            .search_information
             .and_then(|info| info.total_results);
-        let search_time_ms = serpapi_response.search_metadata
+        let search_time_ms = serpapi_response
+            .search_metadata
             .and_then(|meta| meta.total_time_taken)
             .map(|time| (time * 1000.0) as u64);
-        
+
         Ok(SearchResults {
             query: query.to_string(),
             provider: "SerpApi".to_string(),
@@ -197,10 +209,8 @@ pub async fn search(
     query: &str,
     count: Option<usize>,
 ) -> anyhow::Result<super::SearchResults> {
-    let provider = SerpApiProvider::new(
-        provider_config.url.clone(),
-        provider_config.headers.clone(),
-    );
-    
+    let provider =
+        SerpApiProvider::new(provider_config.url.clone(), provider_config.headers.clone());
+
     provider.search(query, count).await
 }
