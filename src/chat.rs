@@ -678,16 +678,19 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
         ..provider_config
     };
 
-    // Check if this is a Vertex AI provider (should use Gemini format)
-    let is_vertex_ai = provider_config.endpoint.contains("aiplatform.googleapis.com") ||
-                      provider_config.auth_type.as_deref() == Some("google_sa_jwt");
+    // Check if this is a Vertex AI provider that should use Gemini format
+    // Vertex AI Llama endpoints (ending with /chat/completions) use OpenAI format
+    let is_vertex_ai_gemini = (provider_config.endpoint.contains("aiplatform.googleapis.com") ||
+                              provider_config.auth_type.as_deref() == Some("google_sa_jwt")) &&
+                              !provider_config.chat_path.ends_with("/chat/completions");
 
     // Gemini (generativelanguage) still uses API key header semantics
-    // Vertex AI also uses Gemini format but with OAuth tokens
-    if is_gemini_provider(&provider_config) || is_vertex_ai {
+    // Vertex AI Gemini endpoints use Gemini format but with OAuth tokens
+    // Vertex AI Llama endpoints (/chat/completions) use OpenAI format
+    if is_gemini_provider(&provider_config) || is_vertex_ai_gemini {
         crate::debug_log!("Detected Gemini/Vertex AI provider, creating GeminiClient");
         
-        if is_vertex_ai {
+        if is_vertex_ai_gemini {
             // For Vertex AI, we need to get an OAuth token
             let temp_client = OpenAIClient::new_with_headers(
                 provider_config.endpoint.clone(),
@@ -729,6 +732,40 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
     }
 
     // OpenAI-compatible flow
+    // Check if this is a Vertex AI Llama endpoint (needs OAuth but OpenAI format)
+    let is_vertex_ai_llama = (provider_config.endpoint.contains("aiplatform.googleapis.com") ||
+                             provider_config.auth_type.as_deref() == Some("google_sa_jwt")) &&
+                             provider_config.chat_path.ends_with("/chat/completions");
+
+    if is_vertex_ai_llama {
+        // Vertex AI Llama: OAuth authentication with OpenAI format
+        let temp_client = OpenAIClient::new_with_headers(
+            provider_config.endpoint.clone(),
+            provider_config.api_key.clone().unwrap_or_default(),
+            provider_config.models_path.clone(),
+            provider_config.chat_path.clone(),
+            provider_config.headers.clone(),
+        );
+        
+        let auth_token = get_or_refresh_token(config, provider_name, &temp_client).await?;
+        
+        // Create custom headers with Authorization for Vertex AI Llama
+        let mut vertex_headers = provider_config.headers.clone();
+        vertex_headers.insert("Authorization".to_string(), format!("Bearer {}", auth_token));
+        
+        let client = OpenAIClient::new_with_provider_config(
+            provider_config.endpoint.clone(),
+            auth_token,
+            provider_config.models_path.clone(),
+            provider_config.chat_path.clone(),
+            vertex_headers,
+            provider_config.clone(),
+        );
+        
+        return Ok(LLMClient::OpenAI(client));
+    }
+
+    // Regular OpenAI-compatible flow
     // Build temp client for token retrieval fallbacks that still use simple GET token_url
     let temp_client = OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),

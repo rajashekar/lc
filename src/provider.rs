@@ -17,6 +17,30 @@ pub struct ChatRequest {
     pub stream: Option<bool>,
 }
 
+// Chat request without model field for providers that specify model in URL
+#[derive(Debug, Serialize)]
+pub struct ChatRequestWithoutModel {
+    pub messages: Vec<Message>,
+    pub max_tokens: Option<u32>,
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+}
+
+impl From<&ChatRequest> for ChatRequestWithoutModel {
+    fn from(request: &ChatRequest) -> Self {
+        Self {
+            messages: request.messages.clone(),
+            max_tokens: request.max_tokens,
+            temperature: request.temperature,
+            tools: request.tools.clone(),
+            stream: request.stream,
+        }
+    }
+}
+
 // Bedrock-specific request structure
 #[derive(Debug, Serialize)]
 pub struct BedrockChatRequest {
@@ -333,6 +357,36 @@ pub struct CohereContentItem {
     pub text: String,
 }
 
+// Cloudflare-specific response structures
+#[derive(Debug, Deserialize)]
+pub struct CloudflareChatResponse {
+    pub result: CloudflareResult,
+    pub success: bool,
+    #[allow(dead_code)]
+    pub errors: Vec<serde_json::Value>,
+    #[allow(dead_code)]
+    pub messages: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CloudflareResult {
+    pub response: String,
+    #[allow(dead_code)]
+    pub tool_calls: Vec<serde_json::Value>,
+    #[allow(dead_code)]
+    pub usage: CloudflareUsage,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CloudflareUsage {
+    #[allow(dead_code)]
+    pub prompt_tokens: u32,
+    #[allow(dead_code)]
+    pub completion_tokens: u32,
+    #[allow(dead_code)]
+    pub total_tokens: u32,
+}
+
 // Bedrock-specific response structures
 #[derive(Debug, Deserialize)]
 pub struct BedrockChatResponse {
@@ -530,6 +584,11 @@ impl OpenAIClient {
         url.contains("bedrock") || url.contains("amazonaws.com")
     }
     
+    /// Check if the URL is for Cloudflare
+    fn is_cloudflare_url(&self, url: &str) -> bool {
+        url.contains("api.cloudflare.com")
+    }
+    
     pub async fn chat(&self, request: &ChatRequest) -> Result<String> {
         let url = self.get_chat_url(&request.model);
         
@@ -553,10 +612,21 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
         
+        // Check if we should exclude model from payload (when model is in URL path)
+        let should_exclude_model = if let Some(ref config) = self.provider_config {
+            config.chat_path.contains("{model}")
+        } else {
+            self.chat_path.contains("{model}")
+        };
+        
         // Use Bedrock-specific format if this is a Bedrock URL
         let response = if self.is_bedrock_url(&url) {
             let bedrock_request = BedrockChatRequest::from_chat_request(request);
             req.json(&bedrock_request).send().await?
+        } else if should_exclude_model {
+            // Use ChatRequestWithoutModel for providers like Cloudflare
+            let request_without_model = ChatRequestWithoutModel::from(request);
+            req.json(&request_without_model).send().await?
         } else {
             req.json(request).send().await?
         };
@@ -570,7 +640,16 @@ impl OpenAIClient {
         // Get the response text first to handle different formats
         let response_text = response.text().await?;
         
-        // Try to parse as standard OpenAI format first (with "choices" array)
+        // Try to parse as Cloudflare format first (with "result" wrapper)
+        if let Ok(cloudflare_response) = serde_json::from_str::<CloudflareChatResponse>(&response_text) {
+            if cloudflare_response.success {
+                return Ok(cloudflare_response.result.response);
+            } else {
+                anyhow::bail!("Cloudflare API request failed");
+            }
+        }
+        
+        // Try to parse as standard OpenAI format (with "choices" array)
         if let Ok(chat_response) = serde_json::from_str::<ChatResponse>(&response_text) {
             if let Some(choice) = chat_response.choices.first() {
                 // Handle tool calls - check if tool_calls exists AND is not empty
@@ -725,10 +804,21 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
         
+        // Check if we should exclude model from payload (when model is in URL path)
+        let should_exclude_model = if let Some(ref config) = self.provider_config {
+            config.chat_path.contains("{model}")
+        } else {
+            self.chat_path.contains("{model}")
+        };
+        
         // Use Bedrock-specific format if this is a Bedrock URL
         let response = if self.is_bedrock_url(&url) {
             let bedrock_request = BedrockChatRequest::from_chat_request(request);
             req.json(&bedrock_request).send().await?
+        } else if should_exclude_model {
+            // Use ChatRequestWithoutModel for providers like Cloudflare
+            let request_without_model = ChatRequestWithoutModel::from(request);
+            req.json(&request_without_model).send().await?
         } else {
             req.json(request).send().await?
         };
@@ -742,7 +832,26 @@ impl OpenAIClient {
         // Get the response text first to handle different formats
         let response_text = response.text().await?;
         
-        // Try to parse as standard OpenAI format first (with "choices" array)
+        // Try to parse as Cloudflare format first (with "result" wrapper)
+        if let Ok(cloudflare_response) = serde_json::from_str::<CloudflareChatResponse>(&response_text) {
+            if cloudflare_response.success {
+                // Convert Cloudflare response to standard ChatResponse format
+                let choice = Choice {
+                    message: ResponseMessage {
+                        role: "assistant".to_string(),
+                        content: Some(cloudflare_response.result.response),
+                        tool_calls: None,
+                    },
+                };
+                return Ok(ChatResponse {
+                    choices: vec![choice],
+                });
+            } else {
+                anyhow::bail!("Cloudflare API request failed");
+            }
+        }
+        
+        // Try to parse as standard OpenAI format (with "choices" array)
         if let Ok(chat_response) = serde_json::from_str::<ChatResponse>(&response_text) {
             return Ok(chat_response);
         }
@@ -865,10 +974,21 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
         
+        // Check if we should exclude model from payload (when model is in URL path)
+        let should_exclude_model = if let Some(ref config) = self.provider_config {
+            config.chat_path.contains("{model}")
+        } else {
+            self.chat_path.contains("{model}")
+        };
+        
         // Use Bedrock-specific format if this is a Bedrock URL
         let response = if self.is_bedrock_url(&url) {
             let bedrock_request = BedrockChatRequest::from_chat_request(request);
             req.json(&bedrock_request).send().await?
+        } else if should_exclude_model {
+            // Use ChatRequestWithoutModel for providers like Cloudflare
+            let request_without_model = ChatRequestWithoutModel::from(request);
+            req.json(&request_without_model).send().await?
         } else {
             req.json(request).send().await?
         };
@@ -911,7 +1031,17 @@ impl OpenAIClient {
                     }
                     
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(choices) = json.get("choices") {
+                        // Try Cloudflare streaming format first (direct "response" field)
+                        if let Some(response) = json.get("response") {
+                            if let Some(text) = response.as_str() {
+                                if !text.is_empty() {
+                                    handle.write_all(text.as_bytes())?;
+                                    handle.flush()?;
+                                }
+                            }
+                        }
+                        // Try standard OpenAI streaming format
+                        else if let Some(choices) = json.get("choices") {
                             if let Some(choice) = choices.get(0) {
                                 if let Some(delta) = choice.get("delta") {
                                     if let Some(content) = delta.get("content") {
@@ -931,7 +1061,17 @@ impl OpenAIClient {
                 } else {
                     // Handle non-SSE format (direct JSON stream)
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                        if let Some(choices) = json.get("choices") {
+                        // Try Cloudflare streaming format first (direct "response" field)
+                        if let Some(response) = json.get("response") {
+                            if let Some(text) = response.as_str() {
+                                if !text.is_empty() {
+                                    handle.write_all(text.as_bytes())?;
+                                    handle.flush()?;
+                                }
+                            }
+                        }
+                        // Try standard OpenAI streaming format
+                        else if let Some(choices) = json.get("choices") {
                             if let Some(choice) = choices.get(0) {
                                 if let Some(delta) = choice.get("delta") {
                                     if let Some(content) = delta.get("content") {
@@ -951,7 +1091,17 @@ impl OpenAIClient {
         // Process any remaining data in buffer
         if !buffer.trim().is_empty() {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&buffer) {
-                if let Some(choices) = json.get("choices") {
+                // Try Cloudflare streaming format first (direct "response" field)
+                if let Some(response) = json.get("response") {
+                    if let Some(text) = response.as_str() {
+                        if !text.is_empty() {
+                            handle.write_all(text.as_bytes())?;
+                            handle.flush()?;
+                        }
+                    }
+                }
+                // Try standard OpenAI streaming format
+                else if let Some(choices) = json.get("choices") {
                     if let Some(choice) = choices.get(0) {
                         if let Some(delta) = choice.get("delta") {
                             if let Some(content) = delta.get("content") {
