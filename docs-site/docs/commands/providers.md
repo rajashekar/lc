@@ -223,6 +223,57 @@ lc providers add ollama http://localhost:11434/v1
 lc providers add hf https://router.huggingface.co/v1
 lc keys add hf
 ```
+### Google Vertex AI (Service Account JWT)
+
+Vertex AI on Google Cloud uses OAuth 2.0 with a Service Account (SA). lc supports first-class auth using the JWT Bearer flow with automatic token mint/refresh and path templating for project/location/model.
+
+Quickstart
+
+```bash
+# 1) Add Vertex AI provider (endpoint auto-detects google_sa_jwt)
+lc providers add vertex_google https://aiplatform.googleapis.com \
+  -c /v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent
+
+# 2) Provide project/location via provider vars
+lc providers vars vertex_google set project <your-project-id>
+lc providers vars vertex_google set location <your-location>   # e.g., us-central1 or global
+
+# 3) Add Service Account JSON (paste as base64; stored encrypted)
+lc keys add vertex_google
+# When prompted, paste the base64 version: cat sa.json | base64
+
+# 4) (Optional) Override token URL (defaults to https://oauth2.googleapis.com/token)
+lc providers token-url vertex_google https://oauth2.googleapis.com/token
+
+# 5) Use a Vertex model
+lc -p vertex_google -m gemini-2.5-pro "Hello from Vertex"
+```
+
+Notes
+
+- Service Account JSON must minimally include:
+  - type=service_account
+  - client_email
+  - private_key
+- lc mints an RS256-signed JWT with claims:
+  - iss=sub=client_email, aud=token_url, scope=https://www.googleapis.com/auth/cloud-platform
+  - iat, exp (~1 hour)
+- lc exchanges the assertion at the token URL for an access_token, caches it with a safety skew, and automatically refreshes when needed.
+- The chat path templates:
+  - {project}, {location} from provider vars
+  - {model} from the runtime -m flag
+- For Gemini API (non-Vertex) providers using x-goog-api-key, continue to use standard API key flows. Vertex AI flows use Bearer tokens obtained via the SA JWT exchange.
+
+Troubleshooting
+
+- "Missing provider vars"
+  - Set vars: lc providers vars vertex_google set project <id>; lc providers vars vertex_google set location <loc>
+  - List vars: lc providers vars vertex_google list
+- "Invalid service account JSON" or "Invalid base64 format"
+  - Re-run: lc keys add vertex_google and paste the base64 version: cat sa.json | base64
+- "Authentication failed"
+  - Ensure the Service Account has Vertex AI permissions (e.g., Vertex AI User) and the project/location are correct
+  - If using a VPC-SC or restricted org policy, confirm token audience and scopes are permitted
 
 ## Provider Features
 

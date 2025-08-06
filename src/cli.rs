@@ -484,6 +484,14 @@ pub enum ProviderCommands {
         #[command(subcommand)]
         command: HeaderCommands,
     },
+    /// Manage provider variables for path templating (alias: v)
+    #[command(alias = "v")]
+    Vars {
+        /// Provider name
+        provider: String,
+        #[command(subcommand)]
+        command: ProviderVarsCommands,
+    },
     /// Set token URL for a provider (alias: t)
     #[command(alias = "t")]
     TokenUrl {
@@ -492,6 +500,74 @@ pub enum ProviderCommands {
         /// Token URL for dynamic token retrieval
         url: String,
     },
+    /// Manage provider API paths (alias: path)
+    #[command(alias = "path")]
+    Paths {
+        /// Provider name
+        provider: String,
+        #[command(subcommand)]
+        command: ProviderPathCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ProviderVarsCommands {
+    /// Set a provider variable (alias: s)
+    #[command(alias = "s")]
+    Set {
+        /// Variable key (e.g., project, location)
+        key: String,
+        /// Variable value
+        value: String,
+    },
+    /// Get a provider variable (alias: g)
+    #[command(alias = "g")]
+    Get {
+        /// Variable key
+        key: String,
+    },
+    /// List all provider variables (alias: l)
+    #[command(alias = "l")]
+    List,
+}
+
+#[derive(Subcommand)]
+pub enum ProviderPathCommands {
+    /// Add or update a provider path (alias: a)
+    #[command(alias = "a")]
+    Add {
+        /// Models path
+        #[arg(short = 'm', long = "models")]
+        models_path: Option<String>,
+        /// Chat completions path
+        #[arg(short = 'c', long = "chat")]
+        chat_path: Option<String>,
+        /// Image generations path
+        #[arg(short = 'i', long = "images")]
+        images_path: Option<String>,
+        /// Embeddings path
+        #[arg(short = 'e', long = "embeddings")]
+        embeddings_path: Option<String>,
+    },
+    /// Delete a provider path (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Delete models path
+        #[arg(short = 'm', long = "models")]
+        models: bool,
+        /// Delete chat completions path
+        #[arg(short = 'c', long = "chat")]
+        chat: bool,
+        /// Delete image generations path
+        #[arg(short = 'i', long = "images")]
+        images: bool,
+        /// Delete embeddings path
+        #[arg(short = 'e', long = "embeddings")]
+        embeddings: bool,
+    },
+    /// List all provider paths (alias: l)
+    #[command(alias = "l")]
+    List,
 }
 
 #[derive(Subcommand)]
@@ -1147,6 +1223,114 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
             config.save()?;
             println!("{} Token URL set for provider '{}'", "✓".green(), provider);
         }
+        ProviderCommands::Vars { provider, command } => {
+            let mut config = config::Config::load()?;
+            if !config.has_provider(&provider) {
+                anyhow::bail!("Provider '{}' not found", provider);
+            }
+            match command {
+                ProviderVarsCommands::Set { key, value } => {
+                    config.set_provider_var(&provider, &key, &value)?;
+                    config.save()?;
+                    println!("{} Set var '{}'='{}' for provider '{}'", "✓".green(), key, value, provider);
+                }
+                ProviderVarsCommands::Get { key } => {
+                    match config.get_provider_var(&provider, &key) {
+                        Some(val) => println!("{}", val),
+                        None => anyhow::bail!("Var '{}' not set for provider '{}'", key, provider),
+                    }
+                }
+                ProviderVarsCommands::List => {
+                    let vars = config.list_provider_vars(&provider)?;
+                    if vars.is_empty() {
+                        println!("No vars set for provider '{}'", provider);
+                    } else {
+                        println!("\n{} Vars for provider '{}':", "Vars:".bold().blue(), provider);
+                        for (k, v) in vars {
+                            println!("  {} {} = {}", "•".blue(), k.bold(), v);
+                        }
+                    }
+                }
+            }
+        }
+        ProviderCommands::Paths { provider, command } => {
+            let mut config = config::Config::load()?;
+            if !config.has_provider(&provider) {
+                anyhow::bail!("Provider '{}' not found", provider);
+            }
+            match command {
+                ProviderPathCommands::Add { models_path, chat_path, images_path, embeddings_path } => {
+                    let mut updated = false;
+                    if let Some(path) = models_path {
+                        config.set_provider_models_path(&provider, &path)?;
+                        println!("{} Models path set to '{}' for provider '{}'", "✓".green(), path, provider);
+                        updated = true;
+                    }
+                    if let Some(path) = chat_path {
+                        config.set_provider_chat_path(&provider, &path)?;
+                        println!("{} Chat path set to '{}' for provider '{}'", "✓".green(), path, provider);
+                        updated = true;
+                    }
+                    if let Some(path) = images_path {
+                        config.set_provider_images_path(&provider, &path)?;
+                        println!("{} Images path set to '{}' for provider '{}'", "✓".green(), path, provider);
+                        updated = true;
+                    }
+                    if let Some(path) = embeddings_path {
+                        config.set_provider_embeddings_path(&provider, &path)?;
+                        println!("{} Embeddings path set to '{}' for provider '{}'", "✓".green(), path, provider);
+                        updated = true;
+                    }
+                    if !updated {
+                        anyhow::bail!("No paths specified. Use -m, -c, -i, or -e to set paths.");
+                    }
+                    config.save()?;
+                }
+                ProviderPathCommands::Delete { models, chat, images, embeddings } => {
+                    let mut updated = false;
+                    if models {
+                        config.reset_provider_models_path(&provider)?;
+                        println!("{} Models path reset to default for provider '{}'", "✓".green(), provider);
+                        updated = true;
+                    }
+                    if chat {
+                        config.reset_provider_chat_path(&provider)?;
+                        println!("{} Chat path reset to default for provider '{}'", "✓".green(), provider);
+                        updated = true;
+                    }
+                    if images {
+                        config.reset_provider_images_path(&provider)?;
+                        println!("{} Images path reset to default for provider '{}'", "✓".green(), provider);
+                        updated = true;
+                    }
+                    if embeddings {
+                        config.reset_provider_embeddings_path(&provider)?;
+                        println!("{} Embeddings path reset to default for provider '{}'", "✓".green(), provider);
+                        updated = true;
+                    }
+                    if !updated {
+                        anyhow::bail!("No paths specified for deletion. Use -m, -c, -i, or -e to delete paths.");
+                    }
+                    config.save()?;
+                }
+                ProviderPathCommands::List => {
+                    let paths = config.list_provider_paths(&provider)?;
+                    println!("\n{} API paths for provider '{}':", "Paths:".bold().blue(), provider);
+                    println!("  {} Models: {}", "•".blue(), paths.models_path.bold());
+                    println!("  {} Chat: {}", "•".blue(), paths.chat_path.bold());
+                    if let Some(ref images_path) = paths.images_path {
+                        println!("  {} Images: {}", "•".blue(), images_path.bold());
+                    } else {
+                        println!("  {} Images: {}", "•".blue(), "not set".dimmed());
+                    }
+                    if let Some(ref embeddings_path) = paths.embeddings_path {
+                        println!("  {} Embeddings: {}", "•".blue(), embeddings_path.bold());
+                    } else {
+                        println!("  {} Embeddings: {}", "•".blue(), "not set".dimmed());
+                    }
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -1160,15 +1344,78 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
             if !config.has_provider(&name) {
                 anyhow::bail!("Provider '{}' not found. Add it first with 'lc providers add'", name);
             }
-            
-            print!("Enter API key for {}: ", name);
-            // Deliberately flush stdout to ensure prompt appears before password input
-            io::stdout().flush()?;
-            let key = read_password()?;
-            
-            config.set_api_key(name.clone(), key)?;
-            config.save()?;
-            println!("{} API key set for provider '{}'", "✓".green(), name);
+
+            // Detect Google SA JWT providers and prompt for Service Account JSON
+            let provider_cfg = config.get_provider(&name)?;
+            let is_google_sa = provider_cfg.auth_type.as_deref() == Some("google_sa_jwt")
+                || provider_cfg.endpoint.contains("aiplatform.googleapis.com");
+
+            if is_google_sa {
+                println!("Detected Google Vertex AI provider. Please provide the Service Account JSON.");
+                println!("Options:");
+                println!("  1. Paste the base64 version directly (ex: cat sa.json | base64)");
+                println!("  2. Provide the path to the JSON file (ex: /path/to/sa.json)");
+                print!("Base64 Service Account JSON or file path for {}: ", name);
+                io::stdout().flush()?;
+                
+                // Use regular stdin reading instead of rpassword for large inputs
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                let input = input.trim();
+                
+                let sa_json = if input.starts_with('/') || input.ends_with(".json") {
+                    // Treat as file path
+                    match std::fs::read_to_string(input) {
+                        Ok(file_content) => file_content,
+                        Err(e) => anyhow::bail!("Failed to read service account file '{}': {}", input, e),
+                    }
+                } else {
+                    // Treat as base64 input - clean whitespace and newlines
+                    let sa_json_b64 = input.trim().replace("\n", "").replace("\r", "").replace(" ", "");
+                    
+                    // Decode base64
+                    use base64::{Engine as _, engine::general_purpose};
+                    match general_purpose::STANDARD.decode(&sa_json_b64) {
+                        Ok(decoded_bytes) => {
+                            match String::from_utf8(decoded_bytes) {
+                                Ok(json_str) => json_str,
+                                Err(_) => anyhow::bail!("Invalid UTF-8 in decoded base64 data"),
+                            }
+                        }
+                        Err(_) => anyhow::bail!("Invalid base64 format"),
+                    }
+                };
+
+                // Minimal validation
+                let parsed: serde_json::Value = serde_json::from_str(&sa_json)
+                    .map_err(|e| anyhow::anyhow!("Invalid JSON: {}", e))?;
+                let sa_type = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                let client_email = parsed.get("client_email").and_then(|v| v.as_str()).unwrap_or("");
+                let private_key = parsed.get("private_key").and_then(|v| v.as_str()).unwrap_or("");
+
+                if sa_type != "service_account" {
+                    anyhow::bail!("Service Account JSON must have \"type\": \"service_account\"");
+                }
+                if client_email.is_empty() {
+                    anyhow::bail!("Service Account JSON missing 'client_email'");
+                }
+                if private_key.is_empty() {
+                    anyhow::bail!("Service Account JSON missing 'private_key'");
+                }
+
+                // Store full JSON string in api_key field (used by JWT mint flow)
+                config.set_api_key(name.clone(), sa_json)?;
+                config.save()?;
+                println!("{} Service Account stored for provider '{}'", "✓".green(), name);
+            } else {
+                print!("Enter API key for {}: ", name);
+                io::stdout().flush()?;
+                let key = read_password()?;
+                
+                config.set_api_key(name.clone(), key)?;
+                config.save()?;
+                println!("{} API key set for provider '{}'", "✓".green(), name);
+            }
         }
         KeyCommands::Get { name } => {
             let config = config::Config::load()?;

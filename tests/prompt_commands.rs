@@ -24,22 +24,30 @@ fn create_comprehensive_config() -> Config {
         endpoint: "https://api.openai.com".to_string(),
         models_path: "/v1/models".to_string(),
         chat_path: "/v1/chat/completions".to_string(),
+        images_path: Some("/images/generations".to_string()),
+        embeddings_path: Some("/embeddings".to_string()),
         api_key: Some("openai-key".to_string()),
         models: Vec::new(),
         headers: HashMap::new(),
         token_url: None,
         cached_token: None,
+        auth_type: None,
+        vars: std::collections::HashMap::new(),
     });
     
     config.providers.insert("anthropic".to_string(), ProviderConfig {
         endpoint: "https://api.anthropic.com".to_string(),
         models_path: "/v1/models".to_string(),
         chat_path: "/v1/messages".to_string(),
+        images_path: Some("/images/generations".to_string()),
+        embeddings_path: Some("/embeddings".to_string()),
         api_key: Some("anthropic-key".to_string()),
         models: Vec::new(),
         headers: HashMap::new(),
         token_url: None,
         cached_token: None,
+        auth_type: None,
+        vars: std::collections::HashMap::new(),
     });
     
     // Set configuration defaults
@@ -237,22 +245,30 @@ mod prompt_model_resolution_tests {
             endpoint: "https://api.openai.com".to_string(),
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             api_key: Some("test-key".to_string()),
             models: Vec::new(),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         
         config.providers.insert("anthropic".to_string(), ProviderConfig {
             endpoint: "https://api.anthropic.com".to_string(),
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/messages".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             api_key: Some("test-key".to_string()),
             models: Vec::new(),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         
         // Set defaults
@@ -658,11 +674,15 @@ mod prompt_error_handling_tests {
             endpoint: "https://test.com".to_string(),
             models_path: "/models".to_string(),
             chat_path: "/chat".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             api_key: Some("key".to_string()),
             models: Vec::new(),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         config.default_provider = Some("test".to_string());
         

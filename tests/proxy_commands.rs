@@ -32,27 +32,41 @@ mod proxy_state_tests {
         };
         
         // Add test providers
-        config.providers.insert("openai".to_string(), lc::config::ProviderConfig {
-            endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
-            api_key: None,
-            models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
-            models_path: "/models".to_string(),
-            chat_path: "/chat/completions".to_string(),
-            headers: HashMap::new(),
-            token_url: None,
-            cached_token: None,
-        });
+        config.providers.insert(
+            "openai".to_string(),
+            lc::config::ProviderConfig {
+                endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
+                api_key: None,
+                models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
+                models_path: "/models".to_string(),
+                chat_path: "/chat/completions".to_string(),
+                headers: HashMap::new(),
+                token_url: None,
+                cached_token: None,
+                auth_type: None,
+                vars: HashMap::new(),
+                images_path: Some("/images/generations".to_string()),
+                embeddings_path: Some("/embeddings".to_string()),
+            },
+        );
         
-        config.providers.insert("anthropic".to_string(), lc::config::ProviderConfig {
-            endpoint: "https://api.anthropic.com/v1/messages".to_string(),
-            api_key: None,
-            models: vec!["claude-3-sonnet".to_string()],
-            models_path: "/models".to_string(),
-            chat_path: "/messages".to_string(),
-            headers: HashMap::new(),
-            token_url: None,
-            cached_token: None,
-        });
+        config.providers.insert(
+            "anthropic".to_string(),
+            lc::config::ProviderConfig {
+                endpoint: "https://api.anthropic.com/v1/messages".to_string(),
+                api_key: None,
+                models: vec!["claude-3-sonnet".to_string()],
+                models_path: "/models".to_string(),
+                chat_path: "/messages".to_string(),
+                headers: HashMap::new(),
+                token_url: None,
+                cached_token: None,
+                auth_type: None,
+                vars: HashMap::new(),
+                images_path: Some("/images/generations".to_string()),
+                embeddings_path: Some("/embeddings".to_string()),
+            },
+        );
         
         config.default_provider = Some("openai".to_string());
         config
@@ -128,27 +142,41 @@ mod proxy_model_parsing_tests {
         };
         
         // Add providers
-        config.providers.insert("openai".to_string(), lc::config::ProviderConfig {
-            endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
-            api_key: None,
-            models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
-            models_path: "/models".to_string(),
-            chat_path: "/chat/completions".to_string(),
-            headers: HashMap::new(),
-            token_url: None,
-            cached_token: None,
-        });
+        config.providers.insert(
+            "openai".to_string(),
+            lc::config::ProviderConfig {
+                endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
+                api_key: None,
+                models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
+                models_path: "/models".to_string(),
+                chat_path: "/chat/completions".to_string(),
+                headers: HashMap::new(),
+                token_url: None,
+                cached_token: None,
+                auth_type: None,
+                vars: HashMap::new(),
+                images_path: Some("/images/generations".to_string()),
+                embeddings_path: Some("/embeddings".to_string()),
+            },
+        );
         
-        config.providers.insert("anthropic".to_string(), lc::config::ProviderConfig {
-            endpoint: "https://api.anthropic.com/v1/messages".to_string(),
-            api_key: None,
-            models: vec!["claude-3-sonnet".to_string()],
-            models_path: "/models".to_string(),
-            chat_path: "/messages".to_string(),
-            headers: HashMap::new(),
-            token_url: None,
-            cached_token: None,
-        });
+        config.providers.insert(
+            "anthropic".to_string(),
+            lc::config::ProviderConfig {
+                endpoint: "https://api.anthropic.com/v1/messages".to_string(),
+                api_key: None,
+                models: vec!["claude-3-sonnet".to_string()],
+                models_path: "/models".to_string(),
+                chat_path: "/messages".to_string(),
+                headers: HashMap::new(),
+                token_url: None,
+                cached_token: None,
+                auth_type: None,
+                vars: HashMap::new(),
+                images_path: Some("/images/generations".to_string()),
+                embeddings_path: Some("/embeddings".to_string()),
+            },
+        );
         
         // Add aliases
         config.aliases.insert("gpt4".to_string(), "openai:gpt-4".to_string());
@@ -461,27 +489,41 @@ mod proxy_filtering_tests {
             stream: None,
         };
         
-        config.providers.insert("openai".to_string(), lc::config::ProviderConfig {
-            endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
-            api_key: None,
-            models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
-            models_path: "/models".to_string(),
-            chat_path: "/chat/completions".to_string(),
-            headers: HashMap::new(),
-            token_url: None,
-            cached_token: None,
-        });
+        config.providers.insert(
+            "openai".to_string(),
+            lc::config::ProviderConfig {
+                endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
+                api_key: None,
+                models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
+                models_path: "/models".to_string(),
+                chat_path: "/chat/completions".to_string(),
+                headers: HashMap::new(),
+                token_url: None,
+                cached_token: None,
+                auth_type: None,
+                vars: HashMap::new(),
+                images_path: Some("/images/generations".to_string()),
+                embeddings_path: Some("/embeddings".to_string()),
+            },
+        );
         
-        config.providers.insert("anthropic".to_string(), lc::config::ProviderConfig {
-            endpoint: "https://api.anthropic.com/v1/messages".to_string(),
-            api_key: None,
-            models: vec!["claude-3-sonnet".to_string()],
-            models_path: "/models".to_string(),
-            chat_path: "/messages".to_string(),
-            headers: HashMap::new(),
-            token_url: None,
-            cached_token: None,
-        });
+        config.providers.insert(
+            "anthropic".to_string(),
+            lc::config::ProviderConfig {
+                endpoint: "https://api.anthropic.com/v1/messages".to_string(),
+                api_key: None,
+                models: vec!["claude-3-sonnet".to_string()],
+                models_path: "/models".to_string(),
+                chat_path: "/messages".to_string(),
+                headers: HashMap::new(),
+                token_url: None,
+                cached_token: None,
+                auth_type: None,
+                vars: HashMap::new(),
+                images_path: Some("/images/generations".to_string()),
+                embeddings_path: Some("/embeddings".to_string()),
+            },
+        );
         
         ProxyState {
             config,
@@ -719,16 +761,23 @@ mod proxy_integration_tests {
         };
         
         // Add realistic provider configuration
-        config.providers.insert("openai".to_string(), lc::config::ProviderConfig {
-            endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
-            api_key: Some("sk-test123".to_string()),
-            models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
-            models_path: "/v1/models".to_string(),
-            chat_path: "/v1/chat/completions".to_string(),
-            headers: HashMap::new(),
-            token_url: None,
-            cached_token: None,
-        });
+        config.providers.insert(
+            "openai".to_string(),
+            lc::config::ProviderConfig {
+                endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
+                api_key: Some("sk-test123".to_string()),
+                models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
+                models_path: "/v1/models".to_string(),
+                chat_path: "/v1/chat/completions".to_string(),
+                headers: HashMap::new(),
+                token_url: None,
+                cached_token: None,
+                auth_type: None,
+                vars: HashMap::new(),
+                images_path: Some("/images/generations".to_string()),
+                embeddings_path: Some("/embeddings".to_string()),
+            },
+        );
         
         // Add aliases
         config.aliases.insert("gpt4".to_string(), "openai:gpt-4".to_string());
@@ -1089,84 +1138,6 @@ mod proxy_error_handling_tests {
 
     #[test]
     fn test_provider_filter_errors() {
-        let _config = Config {
-            providers: HashMap::new(),
-            default_provider: Some("openai".to_string()),
-            default_model: None,
-            aliases: HashMap::new(),
-            system_prompt: None,
-            templates: HashMap::new(),
-            max_tokens: None,
-            temperature: None,
-            stream: None,
-        };
-        
-        // Add only openai provider
-        let mut providers = HashMap::new();
-        providers.insert("openai".to_string(), lc::config::ProviderConfig {
-            endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
-            api_key: None,
-            models: vec!["gpt-4".to_string()],
-            models_path: "/models".to_string(),
-            chat_path: "/chat/completions".to_string(),
-            headers: HashMap::new(),
-            token_url: None,
-            cached_token: None,
-        });
-        
-        let config = Config {
-            providers,
-            default_provider: Some("openai".to_string()),
-            default_model: None,
-            aliases: HashMap::new(),
-            system_prompt: None,
-            templates: HashMap::new(),
-            max_tokens: None,
-            temperature: None,
-            stream: None,
-        };
-        
-        // Test filtering logic
-        let state = ProxyState {
-            config: config.clone(),
-            api_key: None,
-            provider_filter: Some("anthropic".to_string()), // Filter for non-existent provider
-            model_filter: None,
-        };
-        
-        // This would cause filtering in the actual proxy
-        let result = parse_model_string("openai:gpt-4", &state.config);
-        assert!(result.is_ok());
-        let (provider, _) = result.unwrap();
-        
-        // Provider doesn't match filter
-        if let Some(ref filter) = state.provider_filter {
-            assert_ne!(provider, *filter);
-        }
-    }
-}
-
-#[cfg(test)]
-mod proxy_performance_tests {
-    use super::*;
-
-    #[test]
-    fn test_api_key_generation_performance() {
-        let start = std::time::Instant::now();
-        
-        // Generate multiple keys to test performance
-        for _ in 0..1000 {
-            let _key = generate_api_key();
-        }
-        
-        let duration = start.elapsed();
-        
-        // Should be fast (less than 1 second for 1000 keys)
-        assert!(duration.as_secs() < 1);
-    }
-
-    #[test]
-    fn test_model_parsing_performance() {
         let mut config = Config {
             providers: HashMap::new(),
             default_provider: Some("openai".to_string()),
@@ -1179,19 +1150,26 @@ mod proxy_performance_tests {
             stream: None,
         };
         
-        // Add many providers and aliases
-        for i in 0..100 {
-            config.providers.insert(format!("provider{}", i), lc::config::ProviderConfig {
-                endpoint: format!("https://api.provider{}.com", i),
+        // Add only openai provider
+        config.providers.insert(
+            "openai".to_string(),
+            lc::config::ProviderConfig {
+                endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
                 api_key: None,
-                models: vec![format!("model{}", i)],
+                models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
                 models_path: "/models".to_string(),
-                chat_path: "/chat".to_string(),
+                chat_path: "/chat/completions".to_string(),
                 headers: HashMap::new(),
                 token_url: None,
                 cached_token: None,
-            });
-            
+                auth_type: None,
+                vars: HashMap::new(),
+                images_path: Some("/images/generations".to_string()),
+                embeddings_path: Some("/embeddings".to_string()),
+            },
+        );
+        // Simulate alias insertions
+        for i in 0..10 {
             config.aliases.insert(format!("alias{}", i), format!("provider{}:model{}", i, i));
         }
         

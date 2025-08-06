@@ -153,9 +153,13 @@ mod embed_model_resolution_tests {
             ],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
 
         // Add Cohere provider with embedding models
@@ -168,9 +172,13 @@ mod embed_model_resolution_tests {
             ],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
 
         // Add embedding model aliases
@@ -358,9 +366,13 @@ mod embed_error_handling_tests {
             models: vec!["text-embedding-3-small".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
 
         // This would fail in actual usage when trying to create authenticated client
@@ -389,9 +401,13 @@ mod embed_error_handling_tests {
             models: vec!["text-embedding-3-small".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
 
         // Add invalid alias (missing provider:model format)
@@ -476,9 +492,13 @@ mod embed_integration_tests {
             models: vec!["text-embedding-3-small".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
 
         config.providers.insert("cohere".to_string(), lc::config::ProviderConfig {
@@ -487,9 +507,13 @@ mod embed_integration_tests {
             models: vec!["embed-english-v3.0".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
 
         // Test OpenAI

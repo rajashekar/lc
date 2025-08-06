@@ -35,6 +35,10 @@ mod alias_add_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         config.providers.insert("anthropic".to_string(), lc::config::ProviderConfig {
@@ -46,6 +50,10 @@ mod alias_add_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         config
@@ -196,6 +204,10 @@ mod alias_delete_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         // Add test aliases
@@ -489,6 +501,10 @@ mod alias_validation_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         // Target with multiple colons - should be valid (only first colon is separator)
@@ -523,6 +539,10 @@ mod alias_validation_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         // Various alias names
@@ -573,6 +593,10 @@ mod alias_resolution_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         config.providers.insert("anthropic".to_string(), lc::config::ProviderConfig {
@@ -584,6 +608,10 @@ mod alias_resolution_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         // Add aliases
@@ -661,6 +689,10 @@ mod alias_resolution_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         // Add aliases with special model names
@@ -715,6 +747,10 @@ mod alias_integration_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         // Start with empty aliases
@@ -779,6 +815,10 @@ mod alias_integration_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         // Add aliases
@@ -830,6 +870,10 @@ mod alias_integration_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
         
         config.add_alias("gpt4".to_string(), "openai:gpt-4".to_string()).unwrap();

@@ -265,6 +265,10 @@ mod rag_model_consistency_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
 
         // Add embedding provider (OpenAI)
@@ -277,6 +281,10 @@ mod rag_model_consistency_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
 
         // Test chat model resolution

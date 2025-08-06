@@ -441,6 +441,7 @@ pub struct OpenAIClient {
     models_path: String,
     chat_path: String,
     custom_headers: std::collections::HashMap<String, String>,
+    provider_config: Option<crate::config::ProviderConfig>,
 }
 
 impl OpenAIClient {
@@ -472,17 +473,55 @@ impl OpenAIClient {
             models_path,
             chat_path,
             custom_headers,
+            provider_config: None,
+        }
+    }
+    
+    pub fn new_with_provider_config(base_url: String, api_key: String, models_path: String, chat_path: String, custom_headers: std::collections::HashMap<String, String>, provider_config: crate::config::ProviderConfig) -> Self {
+        // Create optimized HTTP client with connection pooling and keep-alive settings
+        // This client keeps compression enabled for regular requests
+        let client = Client::builder()
+            .pool_max_idle_per_host(10) // Keep up to 10 idle connections per host
+            .pool_idle_timeout(Duration::from_secs(90)) // Keep connections alive for 90 seconds
+            .tcp_keepalive(Duration::from_secs(60)) // TCP keep-alive every 60 seconds
+            .timeout(Duration::from_secs(60)) // Total request timeout
+            .connect_timeout(Duration::from_secs(10)) // Connection establishment timeout
+            .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("Failed to create optimized HTTP client");
+
+        // Create a separate streaming-optimized client
+        let streaming_client = Client::builder()
+            .timeout(Duration::from_secs(300))  // Longer timeout for streaming
+            .build()
+            .expect("Failed to create streaming-optimized HTTP client");
+
+        Self {
+            client,
+            streaming_client,
+            base_url: base_url.trim_end_matches('/').to_string(),
+            api_key,
+            models_path,
+            chat_path,
+            custom_headers,
+            provider_config: Some(provider_config),
         }
     }
     
     /// Get the chat URL, handling both traditional paths and full URLs with model replacement
     fn get_chat_url(&self, model: &str) -> String {
-        if self.chat_path.starts_with("https://") {
-            // Full URL with model replacement
-            self.chat_path.replace("{model_name}", model)
+        if let Some(ref config) = self.provider_config {
+            // Use the provider config's URL generation method which handles template variables
+            config.get_chat_url(model)
         } else {
-            // Traditional path-based approach
-            format!("{}{}", self.base_url, self.chat_path)
+            // Fallback to original logic for backward compatibility
+            if self.chat_path.starts_with("https://") {
+                // Full URL with model replacement
+                self.chat_path.replace("{model_name}", model).replace("{model}", model)
+            } else {
+                // Traditional path-based approach
+                format!("{}{}", self.base_url, self.chat_path)
+            }
         }
     }
     
@@ -1079,6 +1118,7 @@ pub struct GeminiClient {
     models_path: String,
     chat_path_template: String, // Template with <model> placeholder
     custom_headers: std::collections::HashMap<String, String>,
+    provider_config: Option<crate::config::ProviderConfig>,
 }
 
 impl GeminiClient {
@@ -1101,9 +1141,11 @@ impl GeminiClient {
             models_path,
             chat_path_template,
             custom_headers: std::collections::HashMap::new(),
+            provider_config: None,
         }
     }
     
+    #[allow(dead_code)]
     pub fn new_with_headers(base_url: String, api_key: String, models_path: String, chat_path_template: String, custom_headers: std::collections::HashMap<String, String>) -> Self {
         let client = Client::builder()
             .pool_max_idle_per_host(10)
@@ -1122,13 +1164,45 @@ impl GeminiClient {
             models_path,
             chat_path_template,
             custom_headers,
+            provider_config: None,
+        }
+    }
+    
+    pub fn new_with_provider_config(base_url: String, api_key: String, models_path: String, chat_path_template: String, custom_headers: std::collections::HashMap<String, String>, provider_config: crate::config::ProviderConfig) -> Self {
+        let client = Client::builder()
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .tcp_keepalive(Duration::from_secs(60))
+            .timeout(Duration::from_secs(60))
+            .connect_timeout(Duration::from_secs(10))
+            .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("Failed to create optimized HTTP client");
+        
+        Self {
+            client,
+            base_url: base_url.trim_end_matches('/').to_string(),
+            api_key,
+            models_path,
+            chat_path_template,
+            custom_headers,
+            provider_config: Some(provider_config),
         }
     }
     
     pub async fn chat(&self, request: &GeminiChatRequest, model: &str) -> Result<String> {
-        // Replace <model> placeholder in chat path
-        let chat_path = self.chat_path_template.replace("<model>", model);
-        let url = format!("{}{}", self.base_url, chat_path);
+        // Use provider config for URL generation if available, otherwise fallback to template replacement
+        let url = if let Some(ref config) = self.provider_config {
+            let generated_url = config.get_chat_url(model);
+            crate::debug_log!("GeminiClient: Using provider config URL generation, generated URL: {}", generated_url);
+            generated_url
+        } else {
+            // Replace <model> placeholder in chat path
+            let chat_path = self.chat_path_template.replace("<model>", model);
+            let fallback_url = format!("{}{}", self.base_url, chat_path);
+            crate::debug_log!("GeminiClient: Using fallback URL generation, generated URL: {}", fallback_url);
+            fallback_url
+        };
         
         let mut req = self.client
             .post(&url)
@@ -1180,8 +1254,17 @@ impl GeminiClient {
     }
     
     pub async fn chat_with_tools(&self, request: &GeminiChatRequest, model: &str) -> Result<GeminiChatResponse> {
-        let chat_path = self.chat_path_template.replace("<model>", model);
-        let url = format!("{}{}", self.base_url, chat_path);
+        // Use provider config for URL generation if available, otherwise fallback to template replacement
+        let url = if let Some(ref config) = self.provider_config {
+            let generated_url = config.get_chat_url(model);
+            crate::debug_log!("GeminiClient: Using provider config URL generation for tools, generated URL: {}", generated_url);
+            generated_url
+        } else {
+            let chat_path = self.chat_path_template.replace("<model>", model);
+            let fallback_url = format!("{}{}", self.base_url, chat_path);
+            crate::debug_log!("GeminiClient: Using fallback URL generation for tools, generated URL: {}", fallback_url);
+            fallback_url
+        };
         
         let mut req = self.client
             .post(&url)

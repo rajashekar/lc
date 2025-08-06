@@ -206,6 +206,10 @@ mod similar_model_resolution_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
 
         // Add Cohere provider
@@ -218,6 +222,10 @@ mod similar_model_resolution_tests {
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: HashMap::new(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
         });
 
         config

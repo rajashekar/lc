@@ -36,9 +36,13 @@ mod chat_model_resolution_tests {
             models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         
         config.providers.insert("anthropic".to_string(), lc::config::ProviderConfig {
@@ -47,9 +51,13 @@ mod chat_model_resolution_tests {
             models: vec!["claude-3-sonnet".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/messages".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         
         // Add aliases
@@ -730,9 +738,13 @@ mod chat_error_handling_tests {
             models: vec!["gpt-4".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         
         // Add invalid alias (missing provider:model format)
@@ -763,9 +775,13 @@ mod chat_error_handling_tests {
             models: vec!["gpt-4".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         
         // This would fail in actual usage when trying to create authenticated client
@@ -881,9 +897,13 @@ mod chat_integration_tests {
             models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         
         // Add alias and template
@@ -994,9 +1014,13 @@ mod chat_integration_tests {
             models: vec!["gpt-4".to_string()],
             models_path: "/v1/models".to_string(),
             chat_path: "/v1/chat/completions".to_string(),
+            images_path: Some("/images/generations".to_string()),
+            embeddings_path: Some("/embeddings".to_string()),
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
+            auth_type: None,
+            vars: std::collections::HashMap::new(),
         });
         
         config.default_provider = Some("openai".to_string());

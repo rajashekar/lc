@@ -291,36 +291,104 @@ async fn get_model_metadata(provider_name: &str, model_name: &str) -> Option<cra
 }
 
 pub async fn get_or_refresh_token(config: &mut Config, provider_name: &str, client: &OpenAIClient) -> Result<String> {
-    // Check if provider has a token_url configured
+    // If provider is configured for Google SA JWT (Vertex AI), use JWT Bearer flow
+    let provider = config.get_provider(provider_name)?.clone();
+    let is_vertex = provider.endpoint.to_lowercase().contains("aiplatform.googleapis.com")
+        || provider.auth_type.as_deref() == Some("google_sa_jwt");
+
+    // If we have a valid cached token, use it (30s skew)
+    if let Some(cached_token) = config.get_cached_token(provider_name) {
+        if Utc::now() < cached_token.expires_at {
+            return Ok(cached_token.token.clone());
+        }
+    }
+
+    if is_vertex {
+        // Google OAuth 2.0 JWT Bearer flow
+        let token_url = provider
+            .token_url
+            .clone()
+            .unwrap_or_else(|| "https://oauth2.googleapis.com/token".to_string());
+
+        // Parse Service Account JSON from api_key
+        let api_key_raw = provider.api_key.clone()
+            .ok_or_else(|| anyhow::anyhow!("Service Account JSON not set for '{}'. Run lc k a {} and paste SA JSON.", provider_name, provider_name))?;
+        #[derive(serde::Deserialize)]
+        struct GoogleSA { #[serde(rename="type")] sa_type: String, client_email: String, private_key: String }
+        let sa: GoogleSA = serde_json::from_str(&api_key_raw)
+            .map_err(|e| anyhow::anyhow!("Invalid Service Account JSON: {}", e))?;
+        if sa.sa_type != "service_account" {
+            anyhow::bail!("Provided key is not a service_account");
+        }
+
+        // Build JWT
+        #[derive(serde::Serialize)]
+        struct Claims<'a> {
+            iss: &'a str,
+            scope: &'a str,
+            aud: &'a str,
+            exp: i64,
+            iat: i64,
+        }
+        let now = Utc::now().timestamp();
+        let claims = Claims {
+            iss: &sa.client_email,
+            scope: "https://www.googleapis.com/auth/cloud-platform",
+            aud: &token_url,
+            iat: now,
+            exp: now + 3600,
+        };
+        let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        let key = jsonwebtoken::EncodingKey::from_rsa_pem(sa.private_key.as_bytes())
+            .map_err(|e| anyhow::anyhow!("Failed to load RSA key: {}", e))?;
+        let assertion = jsonwebtoken::encode(&header, &claims, &key)
+            .map_err(|e| anyhow::anyhow!("JWT encode failed: {}", e))?;
+
+        // Exchange for access token
+        #[derive(serde::Deserialize)]
+        struct GoogleTokenResp {
+            access_token: String,
+            expires_in: i64,
+            #[allow(dead_code)]
+            token_type: String,
+        }
+        let http = reqwest::Client::new();
+        let resp = http.post(&token_url)
+            .form(&[
+                ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+                ("assertion", assertion.as_str()),
+            ])
+            .send().await
+            .map_err(|e| anyhow::anyhow!("Token exchange error: {}", e))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let txt = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Token exchange failed ({}): {}", status, txt);
+        }
+        let token_json: GoogleTokenResp = resp.json().await
+            .map_err(|e| anyhow::anyhow!("Failed to parse token response: {}", e))?;
+        let expires_at = DateTime::from_timestamp(now + token_json.expires_in - 60, 0)
+            .ok_or_else(|| anyhow::anyhow!("Invalid expires timestamp"))?;
+        config.set_cached_token(provider_name.to_string(), token_json.access_token.clone(), expires_at)?;
+        config.save()?;
+        return Ok(token_json.access_token);
+    }
+
+    // Fallback: GitHub-style token endpoint using existing client helper
     let token_url = match config.get_token_url(provider_name) {
         Some(url) => url.clone(),
         None => {
-            // No token_url, use regular API key
             let provider_config = config.get_provider(provider_name)?;
             return provider_config.api_key.clone()
                 .ok_or_else(|| anyhow::anyhow!("No API key or token URL configured for provider '{}'", provider_name));
         }
     };
-    
-    // Check if we have a valid cached token
-    if let Some(cached_token) = config.get_cached_token(provider_name) {
-        if Utc::now() < cached_token.expires_at {
-            // Token is still valid
-            return Ok(cached_token.token.clone());
-        }
-    }
-    
-    // Token is expired or doesn't exist, fetch a new one
+
     let token_response = client.get_token_from_url(&token_url).await?;
-    
-    // Convert Unix timestamp to DateTime<Utc>
     let expires_at = DateTime::from_timestamp(token_response.expires_at, 0)
         .ok_or_else(|| anyhow::anyhow!("Invalid expires_at timestamp: {}", token_response.expires_at))?;
-    
-    // Cache the new token
     config.set_cached_token(provider_name.to_string(), token_response.token.clone(), expires_at)?;
     config.save()?;
-    
     Ok(token_response.token)
 }
 
@@ -591,39 +659,77 @@ fn convert_from_gemini_response(gemini_response: GeminiChatResponse) -> Result<c
 
 pub async fn create_authenticated_client(config: &mut Config, provider_name: &str) -> Result<LLMClient> {
     crate::debug_log!("Creating authenticated client for provider '{}'", provider_name);
-    
-    // Clone the provider config to avoid borrowing issues
     let provider_config = config.get_provider(provider_name)?.clone();
-    
-    crate::debug_log!("Provider '{}' config - endpoint: {}, models_path: {}, chat_path: {}",
-                      provider_name, provider_config.endpoint, provider_config.models_path, provider_config.chat_path);
-    crate::debug_log!("Provider '{}' has {} custom headers", provider_name, provider_config.headers.len());
-    
-    if provider_config.is_chat_path_full_url() {
-        crate::debug_log!("Provider '{}' uses full URL chat path: {}", provider_name, provider_config.chat_path);
+
+    crate::debug_log!(
+        "Provider '{}' config - endpoint: {}, models_path: {}, chat_path: {}",
+        provider_name,
+        provider_config.endpoint,
+        provider_config.models_path,
+        provider_config.chat_path
+    );
+
+    // Normalize chat_path placeholders: support both {model} and legacy {model_name}
+    let normalized_chat_path = provider_config
+        .chat_path
+        .replace("{model_name}", "{model}");
+    let provider_config = crate::config::ProviderConfig {
+        chat_path: normalized_chat_path,
+        ..provider_config
+    };
+
+    // Check if this is a Vertex AI provider (should use Gemini format)
+    let is_vertex_ai = provider_config.endpoint.contains("aiplatform.googleapis.com") ||
+                      provider_config.auth_type.as_deref() == Some("google_sa_jwt");
+
+    // Gemini (generativelanguage) still uses API key header semantics
+    // Vertex AI also uses Gemini format but with OAuth tokens
+    if is_gemini_provider(&provider_config) || is_vertex_ai {
+        crate::debug_log!("Detected Gemini/Vertex AI provider, creating GeminiClient");
+        
+        if is_vertex_ai {
+            // For Vertex AI, we need to get an OAuth token
+            let temp_client = OpenAIClient::new_with_headers(
+                provider_config.endpoint.clone(),
+                provider_config.api_key.clone().unwrap_or_default(),
+                provider_config.models_path.clone(),
+                provider_config.chat_path.clone(),
+                provider_config.headers.clone(),
+            );
+            
+            let auth_token = get_or_refresh_token(config, provider_name, &temp_client).await?;
+            
+            // Create custom headers with Authorization for Vertex AI
+            let mut vertex_headers = provider_config.headers.clone();
+            vertex_headers.insert("Authorization".to_string(), format!("Bearer {}", auth_token));
+            
+            let client = GeminiClient::new_with_provider_config(
+                provider_config.endpoint.clone(),
+                auth_token, // Pass token as api_key for compatibility
+                provider_config.models_path.clone(),
+                provider_config.chat_path.clone(),
+                vertex_headers,
+                provider_config.clone(),
+            );
+            return Ok(LLMClient::Gemini(client));
+        } else {
+            // Regular Gemini with API key
+            let api_key = provider_config.api_key.clone()
+                .ok_or_else(|| anyhow::anyhow!("No API key configured for Gemini provider '{}'", provider_name))?;
+            let client = GeminiClient::new_with_provider_config(
+                provider_config.endpoint.clone(),
+                api_key,
+                provider_config.models_path.clone(),
+                provider_config.chat_path.clone(),
+                provider_config.headers.clone(),
+                provider_config.clone(),
+            );
+            return Ok(LLMClient::Gemini(client));
+        }
     }
-    
-    // Check if this is a Gemini provider
-    if is_gemini_provider(&provider_config) {
-        crate::debug_log!("Detected Gemini provider, creating GeminiClient");
-        
-        let api_key = provider_config.api_key
-            .ok_or_else(|| anyhow::anyhow!("No API key configured for Gemini provider '{}'", provider_name))?;
-        
-        let client = GeminiClient::new_with_headers(
-            provider_config.endpoint,
-            api_key,
-            provider_config.models_path,
-            provider_config.chat_path,
-            provider_config.headers,
-        );
-        
-        crate::debug_log!("Successfully created Gemini client for provider '{}'", provider_name);
-        return Ok(LLMClient::Gemini(client));
-    }
-    
-    // Create a temporary client with the API key for token retrieval
-    crate::debug_log!("Creating temporary OpenAI-compatible client for token retrieval");
+
+    // OpenAI-compatible flow
+    // Build temp client for token retrieval fallbacks that still use simple GET token_url
     let temp_client = OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap_or_default(),
@@ -631,24 +737,18 @@ pub async fn create_authenticated_client(config: &mut Config, provider_name: &st
         provider_config.chat_path.clone(),
         provider_config.headers.clone(),
     );
-    
-    // Get the appropriate authentication token
-    crate::debug_log!("Getting authentication token for provider '{}'", provider_name);
+
     let auth_token = get_or_refresh_token(config, provider_name, &temp_client).await?;
-    
-    crate::debug_log!("Successfully obtained auth token for provider '{}' (length: {})", provider_name, auth_token.len());
-    
-    // Create the final client with the authentication token
-    crate::debug_log!("Creating final authenticated OpenAI-compatible client for provider '{}'", provider_name);
-    let client = OpenAIClient::new_with_headers(
-        provider_config.endpoint,
+
+    let client = OpenAIClient::new_with_provider_config(
+        provider_config.endpoint.clone(),
         auth_token,
-        provider_config.models_path,
-        provider_config.chat_path,
-        provider_config.headers,
+        provider_config.models_path.clone(),
+        provider_config.chat_path.clone(),
+        provider_config.headers.clone(),
+        provider_config.clone(),
     );
-    
-    crate::debug_log!("Successfully created OpenAI-compatible client for provider '{}'", provider_name);
+
     Ok(LLMClient::OpenAI(client))
 }
 

@@ -36,9 +36,13 @@ pub fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
         models: vec!["test-model-1".to_string(), "test-model-2".to_string()],
         models_path: "/models".to_string(),
         chat_path: "/chat/completions".to_string(),
+        images_path: Some("/images/generations".to_string()),
+        embeddings_path: Some("/embeddings".to_string()),
         headers: HashMap::new(),
         token_url: None,
         cached_token: None,
+        auth_type: None,
+        vars: std::collections::HashMap::new(),
     }
 }
 
