@@ -205,6 +205,12 @@ The sync feature automatically discovers and syncs all configuration files and d
   - `sync.toml` - Sync provider configurations
   - Any other `.toml` files in the config directory
 
+- **Provider Configuration Files (providers/*.toml)**:
+  - `providers/openai.toml` - OpenAI provider configuration
+  - `providers/bedrock.toml` - Amazon Bedrock provider configuration
+  - `providers/gemini.toml` - Google Gemini provider configuration
+  - All other provider-specific configuration files
+
 - **Database Files**:
   - `logs.db` - Chat logs and session history database
 
@@ -233,6 +239,10 @@ your-bucket/
     ├── config.toml (or config.toml.enc if encrypted)
     ├── mcp.toml (or mcp.toml.enc if encrypted)
     ├── sync.toml (or sync.toml.enc if encrypted)
+    ├── providers/openai.toml (or providers/openai.toml.enc if encrypted)
+    ├── providers/bedrock.toml (or providers/bedrock.toml.enc if encrypted)
+    ├── providers/gemini.toml (or providers/gemini.toml.enc if encrypted)
+    ├── [other provider files...]
     └── logs.db (or logs.db.enc if encrypted)
 ```
 

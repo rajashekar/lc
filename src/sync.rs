@@ -66,7 +66,7 @@ impl ConfigResolver {
         crate::config::Config::config_dir()
     }
 
-    /// Get all .toml configuration files and logs.db from the lc directory
+    /// Get all .toml configuration files and logs.db from the lc directory and providers subdirectory
     pub fn get_config_files() -> Result<Vec<ConfigFile>> {
         let config_dir = Self::get_config_dir()?;
         let mut config_files = Vec::new();
@@ -106,6 +106,46 @@ impl ConfigResolver {
                         content,
                     });
                 }
+            } else if path.is_dir() {
+                let dir_name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown");
+
+                // Include providers directory
+                if dir_name == "providers" {
+                    crate::debug_log!("Found providers directory, scanning for .toml files");
+                    
+                    for provider_entry in fs::read_dir(&path)? {
+                        let provider_entry = provider_entry?;
+                        let provider_path = provider_entry.path();
+
+                        if provider_path.is_file() {
+                            let provider_name = provider_path
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("unknown");
+                            let provider_extension = provider_path.extension().and_then(|e| e.to_str());
+
+                            crate::debug_log!("Found provider file: {} (extension: {:?})", provider_name, provider_extension);
+
+                            if provider_extension.map(|e| e == "toml").unwrap_or(false) {
+                                let content = fs::read(&provider_path)?;
+                                
+                                // Store with relative path to preserve directory structure
+                                let relative_name = format!("providers/{}", provider_name);
+                                
+                                config_files.push(ConfigFile {
+                                    name: relative_name,
+                                    path: provider_path.clone(),
+                                    content,
+                                });
+                                
+                                crate::debug_log!("Added provider file: {}", provider_name);
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -113,13 +153,19 @@ impl ConfigResolver {
         Ok(config_files)
     }
 
-    /// Write configuration files back to the lc directory
+    /// Write configuration files back to the lc directory, preserving directory structure
     pub fn write_config_files(files: &[ConfigFile]) -> Result<()> {
         let config_dir = Self::get_config_dir()?;
         fs::create_dir_all(&config_dir)?;
 
         for file in files {
             let target_path = config_dir.join(&file.name);
+            
+            // Create parent directories if needed (e.g., for providers/bedrock.toml)
+            if let Some(parent) = target_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            
             fs::write(&target_path, &file.content)?;
             println!("{} Restored: {}", "✓".green(), file.name);
         }
@@ -156,6 +202,7 @@ pub async fn handle_sync_providers() -> Result<()> {
 
     println!("\n{}", "What gets synced:".bold().blue());
     println!("  {} Configuration files (*.toml)", "•".blue());
+    println!("  {} Provider configurations (providers/*.toml)", "•".blue());
     println!("  {} Chat logs database (logs.db)", "•".blue());
 
     println!("\n{}", "Configuration:".bold().blue());
@@ -237,7 +284,9 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
         config_files.len()
     );
     for file in &config_files {
-        let file_type = if file.name.ends_with(".toml") {
+        let file_type = if file.name.starts_with("providers/") && file.name.ends_with(".toml") {
+            "provider"
+        } else if file.name.ends_with(".toml") {
             "config"
         } else if file.name == "logs.db" {
             "database"
@@ -358,7 +407,9 @@ pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -
         downloaded_files.len()
     );
     for file in &downloaded_files {
-        let file_type = if file.name.ends_with(".toml") {
+        let file_type = if file.name.starts_with("providers/") && file.name.ends_with(".toml") {
+            "provider"
+        } else if file.name.ends_with(".toml") {
             "config"
         } else if file.name == "logs.db" {
             "database"
