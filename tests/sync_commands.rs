@@ -34,7 +34,10 @@ fn test_cloud_provider_parsing() {
 fn test_cloud_provider_properties() {
     let s3 = CloudProvider::S3;
     assert_eq!(s3.name(), "s3");
-    assert_eq!(s3.display_name(), "Amazon S3");
+    assert_eq!(CloudProvider::display_name_for_provider("s3"), "Amazon S3");
+    assert_eq!(CloudProvider::display_name_for_provider("cloudflare"), "Cloudflare R2");
+    assert_eq!(CloudProvider::display_name_for_provider("backblaze"), "Backblaze B2");
+    assert_eq!(CloudProvider::display_name_for_provider("unknown"), "S3-Compatible Storage");
 }
 
 #[test]
@@ -191,7 +194,7 @@ mod integration_tests {
 
         // This would test actual S3 operations
         // For now, just ensure the S3Provider can be created
-        let result = lc::sync::S3Provider::new().await;
+        let result = lc::sync::S3Provider::new_with_provider("s3").await;
 
         match result {
             Ok(_) => {

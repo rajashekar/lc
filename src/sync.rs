@@ -28,7 +28,7 @@ pub enum CloudProvider {
 impl CloudProvider {
     pub fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
-            "s3" | "amazon-s3" | "aws-s3" => Ok(CloudProvider::S3),
+            "s3" | "amazon-s3" | "aws-s3" | "cloudflare" | "backblaze" => Ok(CloudProvider::S3),
             _ => anyhow::bail!(
                 "Unsupported cloud provider: '{}'. Supported providers: s3",
                 s
@@ -42,9 +42,13 @@ impl CloudProvider {
         }
     }
 
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            CloudProvider::S3 => "Amazon S3",
+
+    pub fn display_name_for_provider(provider_name: &str) -> &'static str {
+        match provider_name.to_lowercase().as_str() {
+            "s3" | "amazon-s3" | "aws-s3" => "Amazon S3",
+            "cloudflare" => "Cloudflare R2",
+            "backblaze" => "Backblaze B2",
+            _ => "S3-Compatible Storage",
         }
     }
 }
@@ -182,22 +186,49 @@ pub async fn handle_sync_providers() -> Result<()> {
         "•".blue(),
         "s3".bold()
     );
+    println!(
+        "  {} {} - Cloudflare R2 (S3-compatible)",
+        "•".blue(),
+        "cloudflare".bold()
+    );
+    println!(
+        "  {} {} - Backblaze B2 (S3-compatible)",
+        "•".blue(),
+        "backblaze".bold()
+    );
 
     println!("\n{}", "Usage:".bold().blue());
     println!(
         "  {} Sync to cloud: {}",
         "•".blue(),
-        "lc sync to s3".dimmed()
+        "lc sync to <provider>".dimmed()
     );
     println!(
         "  {} Sync from cloud: {}",
         "•".blue(),
-        "lc sync from s3".dimmed()
+        "lc sync from <provider>".dimmed()
     );
     println!(
         "  {} With encryption: {}",
         "•".blue(),
-        "lc sync to s3 --encrypted".dimmed()
+        "lc sync to <provider> --encrypted".dimmed()
+    );
+
+    println!("\n{}", "Examples:".bold().blue());
+    println!(
+        "  {} {}",
+        "•".blue(),
+        "lc sync to s3".dimmed()
+    );
+    println!(
+        "  {} {}",
+        "•".blue(),
+        "lc sync to cloudflare".dimmed()
+    );
+    println!(
+        "  {} {}",
+        "•".blue(),
+        "lc sync from backblaze --encrypted".dimmed()
     );
 
     println!("\n{}", "What gets synced:".bold().blue());
@@ -206,8 +237,25 @@ pub async fn handle_sync_providers() -> Result<()> {
     println!("  {} Chat logs database (logs.db)", "•".blue());
 
     println!("\n{}", "Configuration:".bold().blue());
-    println!("  {} S3 credentials can be provided via:", "•".blue());
-    println!("    - Environment variables (recommended):");
+    println!("  {} Configure each provider separately:", "•".blue());
+    println!(
+        "    {} {}",
+        "•".blue(),
+        "lc sync configure s3 setup".dimmed()
+    );
+    println!(
+        "    {} {}",
+        "•".blue(),
+        "lc sync configure cloudflare setup".dimmed()
+    );
+    println!(
+        "    {} {}",
+        "•".blue(),
+        "lc sync configure backblaze setup".dimmed()
+    );
+
+    println!("\n{}", "Alternative: Environment Variables:".bold().blue());
+    println!("  {} S3 credentials can also be provided via:", "•".blue());
     println!("      {} LC_S3_BUCKET=your-bucket-name", "export".dimmed());
     println!("      {} LC_S3_REGION=us-east-1", "export".dimmed());
     println!(
@@ -222,20 +270,21 @@ pub async fn handle_sync_providers() -> Result<()> {
         "      {} LC_S3_ENDPOINT=https://s3.amazonaws.com  # Optional",
         "export".dimmed()
     );
-    println!("    - Interactive prompts during sync (if env vars not set)");
 
-    println!("\n{}", "S3-Compatible Services:".bold().blue());
+    println!("\n{}", "S3-Compatible Service Endpoints:".bold().blue());
     println!(
-        "  {} Supports AWS S3, Backblaze B2, Cloudflare R2, and other S3-compatible services",
-        "•".blue()
+        "  {} AWS S3: {} (default)",
+        "•".blue(),
+        "https://s3.amazonaws.com".dimmed()
     );
-    println!("  {} Set LC_S3_ENDPOINT for non-AWS services:", "•".blue());
     println!(
-        "    - Backblaze B2: {}",
+        "  {} Backblaze B2: {}",
+        "•".blue(),
         "https://s3.us-west-004.backblazeb2.com".dimmed()
     );
     println!(
-        "    - Cloudflare R2: {}",
+        "  {} Cloudflare R2: {}",
+        "•".blue(),
         "https://your-account-id.r2.cloudflarestorage.com".dimmed()
     );
 
@@ -266,7 +315,7 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
     println!(
         "{} Starting sync to {} ({})",
         "🔄".blue(),
-        provider.display_name(),
+        CloudProvider::display_name_for_provider(provider_name),
         provider.name()
     );
 
@@ -309,7 +358,7 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
         print!(
             "Are you sure you want to sync {} files to {} cloud storage? (y/N): ",
             config_files.len(),
-            provider.display_name()
+            CloudProvider::display_name_for_provider(provider_name)
         );
         io::stdout().flush()?;
         
@@ -354,7 +403,7 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
     // Upload to cloud provider
     match provider {
         CloudProvider::S3 => {
-            let s3_client = S3Provider::new().await?;
+            let s3_client = S3Provider::new_with_provider(provider_name).await?;
             s3_client
                 .upload_configs(&files_to_upload, encrypted)
                 .await?;
@@ -364,7 +413,7 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
     println!(
         "\n{} Sync to {} completed successfully!",
         "🎉".green(),
-        provider.display_name()
+        CloudProvider::display_name_for_provider(provider_name)
     );
 
     if encrypted {
@@ -381,14 +430,14 @@ pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -
     println!(
         "{} Starting sync from {} ({})",
         "🔄".blue(),
-        provider.display_name(),
+        CloudProvider::display_name_for_provider(provider_name),
         provider.name()
     );
 
     // Download from cloud provider
     let downloaded_files = match provider {
         CloudProvider::S3 => {
-            let s3_client = S3Provider::new().await?;
+            let s3_client = S3Provider::new_with_provider(provider_name).await?;
             s3_client.download_configs(encrypted).await?
         }
     };
@@ -432,7 +481,7 @@ pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -
         print!(
             "Are you sure you want to overwrite your local configuration with {} files from {} cloud storage? (y/N): ",
             downloaded_files.len(),
-            provider.display_name()
+            CloudProvider::display_name_for_provider(provider_name)
         );
         io::stdout().flush()?;
         
@@ -494,7 +543,7 @@ pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -
     println!(
         "\n{} Sync from {} completed successfully!",
         "🎉".green(),
-        provider.display_name()
+        CloudProvider::display_name_for_provider(provider_name)
     );
 
     if encrypted {
@@ -537,7 +586,10 @@ mod tests {
     fn test_cloud_provider_names() {
         let s3 = CloudProvider::S3;
         assert_eq!(s3.name(), "s3");
-        assert_eq!(s3.display_name(), "Amazon S3");
+        assert_eq!(CloudProvider::display_name_for_provider("s3"), "Amazon S3");
+        assert_eq!(CloudProvider::display_name_for_provider("cloudflare"), "Cloudflare R2");
+        assert_eq!(CloudProvider::display_name_for_provider("backblaze"), "Backblaze B2");
+        assert_eq!(CloudProvider::display_name_for_provider("unknown"), "S3-Compatible Storage");
     }
 
     /// Helper function to test get_config_files with a custom directory

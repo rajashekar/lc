@@ -26,9 +26,9 @@ pub struct S3Provider {
 }
 
 impl S3Provider {
-    /// Create a new S3 provider instance
-    pub async fn new() -> Result<Self> {
-        let s3_config = Self::get_s3_config().await?;
+    /// Create a new S3 provider instance with a specific provider name
+    pub async fn new_with_provider(provider_name: &str) -> Result<Self> {
+        let s3_config = Self::get_s3_config(provider_name).await?;
 
         // Build AWS config with custom settings
         let mut config_builder = aws_config::defaults(BehaviorVersion::latest())
@@ -59,7 +59,7 @@ impl S3Provider {
     }
 
     /// Get S3 configuration from stored config, environment variables, or user input
-    async fn get_s3_config() -> Result<S3Config> {
+    async fn get_s3_config(provider_name: &str) -> Result<S3Config> {
         use crate::sync::config::{ProviderConfig, SyncConfig};
         use std::io::{self, Write};
 
@@ -71,9 +71,9 @@ impl S3Provider {
                 access_key_id,
                 secret_access_key,
                 endpoint_url,
-            }) = sync_config.get_provider("s3")
+            }) = sync_config.get_provider(provider_name)
             {
-                println!("{} Using stored S3 configuration", "✓".green());
+                println!("{} Using stored S3 configuration for '{}'", "✓".green(), provider_name);
                 return Ok(S3Config {
                     bucket_name: bucket_name.clone(),
                     region: region.clone(),
@@ -84,11 +84,11 @@ impl S3Provider {
             }
         }
 
-        println!("{} S3 Configuration Setup", "🔧".blue());
+        println!("{} S3 Configuration Setup for '{}'", "🔧".blue(), provider_name);
         println!("{} No stored configuration found. You can:", "💡".yellow());
         println!(
             "  - Set up configuration: {}",
-            "lc sync configure s3 setup".dimmed()
+            format!("lc sync configure {} setup", provider_name).dimmed()
         );
         println!("  - Use environment variables:");
         println!("    LC_S3_BUCKET, LC_S3_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, LC_S3_ENDPOINT");
