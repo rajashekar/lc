@@ -7,6 +7,15 @@ use lc::config::{Config, ProviderConfig};
 use std::collections::HashMap;
 use tempfile::TempDir;
 
+/// Prefix for test providers to avoid conflicts with real configurations
+const TEST_PROVIDER_PREFIX: &str = "test-";
+
+/// Get test provider name with prefix
+#[allow(dead_code)]
+pub fn get_test_provider_name(base_name: &str) -> String {
+    format!("{}{}", TEST_PROVIDER_PREFIX, base_name)
+}
+
 /// Helper function to create a temporary config for testing
 #[allow(dead_code)]
 pub fn create_test_config() -> (Config, TempDir) {
@@ -50,7 +59,7 @@ pub fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
     }
 }
 
-/// Helper function to create a config with test providers
+/// Helper function to create a config with test providers using test- prefix
 #[allow(dead_code)]
 pub fn create_config_with_providers() -> Config {
     let mut config = Config {
@@ -65,18 +74,21 @@ pub fn create_config_with_providers() -> Config {
         stream: None,
     };
 
-    // Add test providers
+    // Add test providers with test- prefix
+    let openai_name = get_test_provider_name("openai");
+    let anthropic_name = get_test_provider_name("anthropic");
+    
     config.providers.insert(
-        "openai".to_string(),
+        openai_name.clone(),
         create_test_provider_config("https://api.openai.com"),
     );
 
     config.providers.insert(
-        "anthropic".to_string(),
+        anthropic_name.clone(),
         create_test_provider_config("https://api.anthropic.com"),
     );
 
-    config.default_provider = Some("openai".to_string());
+    config.default_provider = Some(openai_name);
 
     config
 }
@@ -85,10 +97,10 @@ pub fn create_config_with_providers() -> Config {
 pub mod test_data {
     #[allow(dead_code)]
     pub const TEST_PROVIDERS: &[(&str, &str)] = &[
-        ("openai", "https://api.openai.com"),
-        ("anthropic", "https://api.anthropic.com"),
-        ("cohere", "https://api.cohere.ai"),
-        ("huggingface", "https://api-inference.huggingface.co"),
+        ("test-openai", "https://api.openai.com"),
+        ("test-anthropic", "https://api.anthropic.com"),
+        ("test-cohere", "https://api.cohere.ai"),
+        ("test-huggingface", "https://api-inference.huggingface.co"),
     ];
 
     #[allow(dead_code)]

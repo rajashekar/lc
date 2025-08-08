@@ -25,9 +25,9 @@ mod alias_add_tests {
             stream: None,
         };
 
-        // Add some test providers
+        // Add some test providers with test- prefix
         config.providers.insert(
-            "openai".to_string(),
+            "test-openai".to_string(),
             lc::config::ProviderConfig {
                 endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
                 api_key: None,
@@ -50,7 +50,7 @@ mod alias_add_tests {
         );
 
         config.providers.insert(
-            "anthropic".to_string(),
+            "test-anthropic".to_string(),
             lc::config::ProviderConfig {
                 endpoint: "https://api.anthropic.com/v1/messages".to_string(),
                 api_key: None,
@@ -80,17 +80,20 @@ mod alias_add_tests {
         let mut config = create_config_with_providers();
 
         // Add a basic alias
-        let result = config.add_alias("gpt4".to_string(), "openai:gpt-4".to_string());
+        let result = config.add_alias("gpt4".to_string(), "test-openai:gpt-4".to_string());
+        if let Err(e) = &result {
+            println!("Error: {}", e);
+        }
         assert!(result.is_ok());
 
         // Verify alias was added
         let alias = config.get_alias("gpt4");
-        assert_eq!(alias, Some(&"openai:gpt-4".to_string()));
+        assert_eq!(alias, Some(&"test-openai:gpt-4".to_string()));
 
         // Verify it appears in the aliases list
         let aliases = config.list_aliases();
         assert_eq!(aliases.len(), 1);
-        assert_eq!(aliases.get("gpt4"), Some(&"openai:gpt-4".to_string()));
+        assert_eq!(aliases.get("gpt4"), Some(&"test-openai:gpt-4".to_string()));
     }
 
     #[test]
@@ -98,26 +101,26 @@ mod alias_add_tests {
         let mut config = create_config_with_providers();
 
         // Add multiple aliases
-        let result1 = config.add_alias("gpt4".to_string(), "openai:gpt-4".to_string());
+        let result1 = config.add_alias("gpt4".to_string(), "test-openai:gpt-4".to_string());
         let result2 = config.add_alias(
             "claude".to_string(),
-            "anthropic:claude-3-sonnet".to_string(),
+            "test-anthropic:claude-3-sonnet".to_string(),
         );
-        let result3 = config.add_alias("gpt35".to_string(), "openai:gpt-3.5-turbo".to_string());
+        let result3 = config.add_alias("gpt35".to_string(), "test-openai:gpt-3.5-turbo".to_string());
 
         assert!(result1.is_ok());
         assert!(result2.is_ok());
         assert!(result3.is_ok());
 
         // Verify all aliases exist
-        assert_eq!(config.get_alias("gpt4"), Some(&"openai:gpt-4".to_string()));
+        assert_eq!(config.get_alias("gpt4"), Some(&"test-openai:gpt-4".to_string()));
         assert_eq!(
             config.get_alias("claude"),
-            Some(&"anthropic:claude-3-sonnet".to_string())
+            Some(&"test-anthropic:claude-3-sonnet".to_string())
         );
         assert_eq!(
             config.get_alias("gpt35"),
-            Some(&"openai:gpt-3.5-turbo".to_string())
+            Some(&"test-openai:gpt-3.5-turbo".to_string())
         );
 
         // Verify aliases list contains all
@@ -130,16 +133,16 @@ mod alias_add_tests {
         let mut config = create_config_with_providers();
 
         // Add initial alias
-        let result1 = config.add_alias("gpt".to_string(), "openai:gpt-4".to_string());
+        let result1 = config.add_alias("gpt".to_string(), "test-openai:gpt-4".to_string());
         assert!(result1.is_ok());
-        assert_eq!(config.get_alias("gpt"), Some(&"openai:gpt-4".to_string()));
+        assert_eq!(config.get_alias("gpt"), Some(&"test-openai:gpt-4".to_string()));
 
         // Overwrite with new target
-        let result2 = config.add_alias("gpt".to_string(), "openai:gpt-3.5-turbo".to_string());
+        let result2 = config.add_alias("gpt".to_string(), "test-openai:gpt-3.5-turbo".to_string());
         assert!(result2.is_ok());
         assert_eq!(
             config.get_alias("gpt"),
-            Some(&"openai:gpt-3.5-turbo".to_string())
+            Some(&"test-openai:gpt-3.5-turbo".to_string())
         );
 
         // Verify only one alias exists
@@ -178,11 +181,11 @@ mod alias_add_tests {
         let mut config = create_config_with_providers();
 
         // Try to add alias with empty name
-        let result = config.add_alias("".to_string(), "openai:gpt-4".to_string());
+        let result = config.add_alias("".to_string(), "test-openai:gpt-4".to_string());
         assert!(result.is_ok()); // Empty names are technically allowed
 
         // Verify alias was added
-        assert_eq!(config.get_alias(""), Some(&"openai:gpt-4".to_string()));
+        assert_eq!(config.get_alias(""), Some(&"test-openai:gpt-4".to_string()));
     }
 
     #[test]
@@ -190,24 +193,24 @@ mod alias_add_tests {
         let mut config = create_config_with_providers();
 
         // Add aliases with special characters
-        let result1 = config.add_alias("gpt-4".to_string(), "openai:gpt-4".to_string());
+        let result1 = config.add_alias("gpt-4".to_string(), "test-openai:gpt-4".to_string());
         let result2 = config.add_alias(
             "claude_3".to_string(),
-            "anthropic:claude-3-sonnet".to_string(),
+            "test-anthropic:claude-3-sonnet".to_string(),
         );
-        let result3 = config.add_alias("gpt.4".to_string(), "openai:gpt-4".to_string());
+        let result3 = config.add_alias("gpt.4".to_string(), "test-openai:gpt-4".to_string());
 
         assert!(result1.is_ok());
         assert!(result2.is_ok());
         assert!(result3.is_ok());
 
         // Verify all aliases exist
-        assert_eq!(config.get_alias("gpt-4"), Some(&"openai:gpt-4".to_string()));
+        assert_eq!(config.get_alias("gpt-4"), Some(&"test-openai:gpt-4".to_string()));
         assert_eq!(
             config.get_alias("claude_3"),
-            Some(&"anthropic:claude-3-sonnet".to_string())
+            Some(&"test-anthropic:claude-3-sonnet".to_string())
         );
-        assert_eq!(config.get_alias("gpt.4"), Some(&"openai:gpt-4".to_string()));
+        assert_eq!(config.get_alias("gpt.4"), Some(&"test-openai:gpt-4".to_string()));
     }
 }
 
@@ -441,21 +444,21 @@ mod alias_list_tests {
         // Add aliases in specific order
         config
             .aliases
-            .insert("zebra".to_string(), "provider:zebra-model".to_string());
+            .insert("test-zebra".to_string(), "provider:zebra-model".to_string());
         config
             .aliases
-            .insert("alpha".to_string(), "provider:alpha-model".to_string());
+            .insert("test-alpha".to_string(), "provider:alpha-model".to_string());
         config
             .aliases
-            .insert("beta".to_string(), "provider:beta-model".to_string());
+            .insert("test-beta".to_string(), "provider:beta-model".to_string());
 
         let aliases = config.list_aliases();
         assert_eq!(aliases.len(), 3);
 
         // HashMap doesn't guarantee order, but all should be present
-        assert!(aliases.contains_key("zebra"));
-        assert!(aliases.contains_key("alpha"));
-        assert!(aliases.contains_key("beta"));
+        assert!(aliases.contains_key("test-zebra"));
+        assert!(aliases.contains_key("test-alpha"));
+        assert!(aliases.contains_key("test-beta"));
     }
 
     #[test]
