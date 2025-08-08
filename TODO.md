@@ -1,5 +1,4 @@
 - Make sure documentation works
-- Add support to multi line chat
 - Check images
 - Check audio
 - Support other web proxy chats

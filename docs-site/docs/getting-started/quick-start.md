@@ -58,7 +58,11 @@ lc k a openai
 Send your first prompt:
 
 ```bash
-lc "Hello! Can you tell me a joke?"
+lc -p openai -m gpt-3.5-turbo "tell me a joke about AI"
+
+# Or using the alias
+
+lc -m openai:gpt-3.5-turbo "tell me a joke about AI"
 ```
 
 ## Step 4: Explore Models
@@ -67,12 +71,16 @@ List available models from your provider:
 
 ```bash
 lc providers models openai
+or
+lc p m openai
 ```
 
 Or use the models command for a richer view:
 
 ```bash
 lc models
+or 
+lc m
 ```
 
 ## Step 5: Start Chatting
@@ -83,7 +91,7 @@ Send one-off prompts with specific models:
 
 ```bash
 # Use a specific model
-lc -m gpt-4 "Explain quantum computing in simple terms"
+lc -m openai:gpt-4 "Explain quantum computing in simple terms"
 
 # Use a different provider and model
 lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Write a haiku about coding"
@@ -94,7 +102,7 @@ lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Write a haiku about coding"
 Start an interactive chat session:
 
 ```bash
-lc chat -m gpt-4
+lc chat -m openai:gpt-4
 ```
 
 In chat mode, you can:
@@ -186,8 +194,7 @@ lc p m openai            # List models from provider
 
 # Direct chat
 lc "prompt"              # Use defaults
-lc -m gpt-4 "prompt"     # Specify model
-lc -p openai "prompt"    # Specify provider
+lc -m openai:gpt-4 "prompt"     # Specify model
 
 # Interactive
 lc chat -m gpt-4         # Start chat session

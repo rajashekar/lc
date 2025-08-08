@@ -43,6 +43,10 @@ pub fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
         cached_token: None,
         auth_type: None,
         vars: std::collections::HashMap::new(),
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
     }
 }
 

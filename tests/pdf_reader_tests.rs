@@ -432,7 +432,6 @@ mod tests {
 
 #[cfg(test)]
 mod integration_tests {
-    use super::*;
     use lc::readers::get_reader_for_extension;
 
     #[test]

@@ -247,7 +247,12 @@ mod similar_model_resolution_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add Cohere provider
@@ -266,7 +271,12 @@ mod similar_model_resolution_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config

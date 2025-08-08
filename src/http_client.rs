@@ -4,6 +4,7 @@ use std::time::Duration;
 
 /// Create an optimized HTTP client with connection pooling, keep-alive settings,
 /// and appropriate timeouts for better performance and connection reuse.
+#[allow(dead_code)]
 pub fn create_optimized_client() -> Result<Client> {
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 

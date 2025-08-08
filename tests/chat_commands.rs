@@ -45,7 +45,12 @@ mod chat_model_resolution_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config.providers.insert(
@@ -63,7 +68,12 @@ mod chat_model_resolution_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add aliases
@@ -806,7 +816,12 @@ mod chat_error_handling_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add invalid alias (missing provider:model format)
@@ -849,7 +864,12 @@ mod chat_error_handling_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // This would fail in actual usage when trying to create authenticated client
@@ -976,7 +996,12 @@ mod chat_integration_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add alias and template
@@ -1111,7 +1136,12 @@ mod chat_integration_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config.default_provider = Some("openai".to_string());

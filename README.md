@@ -45,6 +45,7 @@ lc "What is the capital of France?"
 - � **PDF Support** - Read and process PDF files with optional dependency
 - 🔐 **Secure** - Encrypted configuration sync
 - 💬 **Intuitive** - Simple commands with short aliases
+- 🎨 **Flexible Templates** - Configure request/response formats for any LLM API
 
 ## Documentation
 
@@ -58,6 +59,7 @@ For comprehensive documentation, visit **[lc.viwq.dev](https://lc.viwq.dev)**
 - [Provider Setup](https://lc.viwq.dev/features/providers)
 - [Vector Database & RAG](https://lc.viwq.dev/advanced/vector-database)
 - [Model Context Protocol (MCP)](https://lc.viwq.dev/advanced/mcp)
+- [Template System](docs/TEMPLATE_SYSTEM.md) - Configure custom request/response formats
 
 ## Supported Providers
 Any OpenAI-compatible API can be used with `lc`. Here are some popular providers:
@@ -314,6 +316,42 @@ To explicitly enable PDF support:
 ```bash
 cargo build --release --features pdf
 ```
+
+### Template System
+
+`lc` supports configurable request/response templates, allowing you to work with any LLM API format without code changes:
+
+```toml
+# Fix GPT-5's max_completion_tokens requirement
+[providers.openai.model_templates."gpt-5-nano"]
+request = '''
+{
+  "model": "{{ model }}",
+  "messages": {{ messages | json }},
+  {% if max_tokens %}"max_completion_tokens": {{ max_tokens }}{% endif %}
+}
+'''
+
+# Configure custom provider formats
+[providers.custom.templates]
+request = '''
+{
+  "model_id": "{{ model }}",
+  "conversation": {
+    "history": [
+      {% for msg in messages %}
+      {
+        "speaker": "{{ msg.role | upper }}",
+        "text": "{{ msg.content }}"
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }
+}
+'''
+```
+
+See [Template System Documentation](docs/TEMPLATE_SYSTEM.md) and [config_samples/templates_sample.toml](config_samples/templates_sample.toml) for more examples.
 
 ## Contributing
 

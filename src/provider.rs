@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
 use std::time::Duration;
 
+use super::template_processor::TemplateProcessor;
+
 #[derive(Debug, Serialize)]
 pub struct ChatRequest {
     pub model: String,
@@ -41,70 +43,6 @@ impl From<&ChatRequest> for ChatRequestWithoutModel {
     }
 }
 
-// Bedrock-specific request structure
-#[derive(Debug, Serialize)]
-pub struct BedrockChatRequest {
-    pub messages: Vec<BedrockMessage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<Tool>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct BedrockMessage {
-    pub role: String,
-    pub content: Vec<BedrockContentPart>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct BedrockContentPart {
-    pub text: String,
-}
-
-impl BedrockMessage {
-    pub fn from_message(message: &Message) -> Self {
-        let text_content = match &message.content_type {
-            MessageContent::Text { content } => content.as_ref().unwrap_or(&String::new()).clone(),
-            MessageContent::Multimodal { content } => {
-                // Extract text from multimodal content
-                content
-                    .iter()
-                    .filter_map(|part| match part {
-                        ContentPart::Text { text } => Some(text.clone()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            }
-        };
-
-        Self {
-            role: message.role.clone(),
-            content: vec![BedrockContentPart { text: text_content }],
-        }
-    }
-}
-
-impl BedrockChatRequest {
-    pub fn from_chat_request(request: &ChatRequest) -> Self {
-        Self {
-            messages: request
-                .messages
-                .iter()
-                .map(BedrockMessage::from_message)
-                .collect(),
-            max_tokens: request.max_tokens,
-            temperature: request.temperature,
-            tools: request.tools.clone(),
-            stream: request.stream,
-        }
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub struct EmbeddingRequest {
@@ -362,85 +300,7 @@ pub struct CohereContentItem {
     pub text: String,
 }
 
-// Cloudflare-specific response structures
-#[derive(Debug, Deserialize)]
-pub struct CloudflareChatResponse {
-    pub result: CloudflareResult,
-    pub success: bool,
-    #[allow(dead_code)]
-    pub errors: Vec<serde_json::Value>,
-    #[allow(dead_code)]
-    pub messages: Vec<serde_json::Value>,
-}
 
-#[derive(Debug, Deserialize)]
-pub struct CloudflareResult {
-    pub response: String,
-    #[allow(dead_code)]
-    pub tool_calls: Vec<serde_json::Value>,
-    #[allow(dead_code)]
-    pub usage: CloudflareUsage,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CloudflareUsage {
-    #[allow(dead_code)]
-    pub prompt_tokens: u32,
-    #[allow(dead_code)]
-    pub completion_tokens: u32,
-    #[allow(dead_code)]
-    pub total_tokens: u32,
-}
-
-// Bedrock-specific response structures
-#[derive(Debug, Deserialize)]
-pub struct BedrockChatResponse {
-    pub output: BedrockOutput,
-    #[serde(rename = "stopReason")]
-    #[allow(dead_code)]
-    pub stop_reason: String,
-    #[allow(dead_code)]
-    pub usage: BedrockUsage,
-    #[allow(dead_code)]
-    pub metrics: BedrockMetrics,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BedrockOutput {
-    pub message: BedrockResponseMessage,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BedrockResponseMessage {
-    pub content: Vec<BedrockResponseContentPart>,
-    #[allow(dead_code)]
-    pub role: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BedrockResponseContentPart {
-    pub text: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BedrockUsage {
-    #[serde(rename = "inputTokens")]
-    #[allow(dead_code)]
-    pub input_tokens: u32,
-    #[serde(rename = "outputTokens")]
-    #[allow(dead_code)]
-    pub output_tokens: u32,
-    #[serde(rename = "totalTokens")]
-    #[allow(dead_code)]
-    pub total_tokens: u32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BedrockMetrics {
-    #[serde(rename = "latencyMs")]
-    #[allow(dead_code)]
-    pub latency_ms: u32,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct ModelsResponse {
@@ -501,6 +361,7 @@ pub struct OpenAIClient {
     chat_path: String,
     custom_headers: std::collections::HashMap<String, String>,
     provider_config: Option<crate::config::ProviderConfig>,
+    template_processor: Option<TemplateProcessor>,
 }
 
 impl OpenAIClient {
@@ -557,6 +418,7 @@ impl OpenAIClient {
             chat_path,
             custom_headers,
             provider_config: None,
+            template_processor: None,
         }
     }
 
@@ -605,6 +467,22 @@ impl OpenAIClient {
             .build()
             .expect("Failed to create streaming-optimized HTTP client");
 
+        // Create template processor if any endpoint templates are configured
+        let template_processor = if provider_config.chat_templates.is_some()
+            || provider_config.images_templates.is_some()
+            || provider_config.embeddings_templates.is_some()
+            || provider_config.models_templates.is_some() {
+            match TemplateProcessor::new() {
+                Ok(processor) => Some(processor),
+                Err(e) => {
+                    eprintln!("Warning: Failed to create template processor: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Self {
             client,
             streaming_client,
@@ -614,6 +492,7 @@ impl OpenAIClient {
             chat_path,
             custom_headers,
             provider_config: Some(provider_config),
+            template_processor,
         }
     }
 
@@ -636,10 +515,6 @@ impl OpenAIClient {
         }
     }
 
-    /// Check if the URL is for Amazon Bedrock
-    fn is_bedrock_url(&self, url: &str) -> bool {
-        url.contains("bedrock") || url.contains("amazonaws.com")
-    }
 
 
     pub async fn chat(&self, request: &ChatRequest) -> Result<String> {
@@ -666,23 +541,52 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
 
-        // Check if we should exclude model from payload (when model is in URL path)
-        let should_exclude_model = if let Some(ref config) = self.provider_config {
-            config.chat_path.contains("{model}")
+        // Check if we have a template for this provider/model/endpoint
+        let request_body = if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get template for chat endpoint
+                let template = config.get_endpoint_template("chat", &request.model);
+
+                if let Some(template_str) = template {
+                    // Clone the processor to avoid mutable borrow issues
+                    let mut processor_clone = processor.clone();
+                    // Use template to transform request
+                    match processor_clone.process_request(request, &template_str, &config.vars) {
+                        Ok(json_value) => Some(json_value),
+                        Err(e) => {
+                            eprintln!("Warning: Failed to process request template: {}. Falling back to default.", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         } else {
-            self.chat_path.contains("{model}")
+            None
         };
 
-        // Use Bedrock-specific format if this is a Bedrock URL
-        let response = if self.is_bedrock_url(&url) {
-            let bedrock_request = BedrockChatRequest::from_chat_request(request);
-            req.json(&bedrock_request).send().await?
-        } else if should_exclude_model {
-            // Use ChatRequestWithoutModel for providers like Cloudflare
-            let request_without_model = ChatRequestWithoutModel::from(request);
-            req.json(&request_without_model).send().await?
+        // Send request with template-processed body or fall back to default logic
+        let response = if let Some(json_body) = request_body {
+            req.json(&json_body).send().await?
         } else {
-            req.json(request).send().await?
+            // Fall back to existing logic
+            // Check if we should exclude model from payload (when model is in URL path)
+            let should_exclude_model = if let Some(ref config) = self.provider_config {
+                config.chat_path.contains("{model}")
+            } else {
+                self.chat_path.contains("{model}")
+            };
+
+            if should_exclude_model {
+                // Use ChatRequestWithoutModel for providers that specify model in URL
+                let request_without_model = ChatRequestWithoutModel::from(request);
+                req.json(&request_without_model).send().await?
+            } else {
+                req.json(request).send().await?
+            }
         };
 
         if !response.status().is_success() {
@@ -694,17 +598,43 @@ impl OpenAIClient {
         // Get the response text first to handle different formats
         let response_text = response.text().await?;
 
-        // Try to parse as Cloudflare format first (with "result" wrapper)
-        if let Ok(cloudflare_response) =
-            serde_json::from_str::<CloudflareChatResponse>(&response_text)
-        {
-            if cloudflare_response.success {
-                return Ok(cloudflare_response.result.response);
-            } else {
-                anyhow::bail!("Cloudflare API request failed");
+        // Check if we have a response template for this provider/model/endpoint
+        if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get response template for chat endpoint
+                let template = config.get_endpoint_response_template("chat", &request.model);
+
+                if let Some(template_str) = template {
+                    // Parse response as JSON
+                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                        // Clone the processor to avoid mutable borrow issues
+                        let mut processor_clone = processor.clone();
+                        // Use template to extract content
+                        match processor_clone.process_response(&response_json, &template_str) {
+                            Ok(extracted) => {
+                                // Extract content from the template result
+                                if let Some(content) = extracted.get("content").and_then(|v| v.as_str()) {
+                                    return Ok(content.to_string());
+                                } else if let Some(tool_calls) = extracted.get("tool_calls").and_then(|v| v.as_array()) {
+                                    if !tool_calls.is_empty() {
+                                        let mut response = String::new();
+                                        response.push_str("🔧 **Tool Calls Made:**\n\n");
+                                        response.push_str(&format!("Tool calls: {:?}\n\n", tool_calls));
+                                        response.push_str("*Tool calls detected - execution handled by chat module*\n\n");
+                                        return Ok(response);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Warning: Failed to process response template: {}. Falling back to default parsing.", e);
+                            }
+                        }
+                    }
+                }
             }
         }
 
+        // Fall back to existing parsing logic
         // Try to parse as standard OpenAI format (with "choices" array)
         if let Ok(chat_response) = serde_json::from_str::<ChatResponse>(&response_text) {
             if let Some(choice) = chat_response.choices.first() {
@@ -760,14 +690,6 @@ impl OpenAIClient {
             }
         }
 
-        // Try to parse as Bedrock format (with "output" and nested message structure)
-        if let Ok(bedrock_response) = serde_json::from_str::<BedrockChatResponse>(&response_text) {
-            if let Some(content_part) = bedrock_response.output.message.content.first() {
-                return Ok(content_part.text.clone());
-            } else {
-                anyhow::bail!("No content in Bedrock response");
-            }
-        }
 
         // If all fail, return an error with the response text for debugging
         anyhow::bail!("Failed to parse chat response. Response: {}", response_text);
@@ -884,12 +806,8 @@ impl OpenAIClient {
             self.chat_path.contains("{model}")
         };
 
-        // Use Bedrock-specific format if this is a Bedrock URL
-        let response = if self.is_bedrock_url(&url) {
-            let bedrock_request = BedrockChatRequest::from_chat_request(request);
-            req.json(&bedrock_request).send().await?
-        } else if should_exclude_model {
-            // Use ChatRequestWithoutModel for providers like Cloudflare
+        let response = if should_exclude_model {
+            // Use ChatRequestWithoutModel for providers that specify model in URL
             let request_without_model = ChatRequestWithoutModel::from(request);
             req.json(&request_without_model).send().await?
         } else {
@@ -904,27 +822,6 @@ impl OpenAIClient {
 
         // Get the response text first to handle different formats
         let response_text = response.text().await?;
-
-        // Try to parse as Cloudflare format first (with "result" wrapper)
-        if let Ok(cloudflare_response) =
-            serde_json::from_str::<CloudflareChatResponse>(&response_text)
-        {
-            if cloudflare_response.success {
-                // Convert Cloudflare response to standard ChatResponse format
-                let choice = Choice {
-                    message: ResponseMessage {
-                        role: "assistant".to_string(),
-                        content: Some(cloudflare_response.result.response),
-                        tool_calls: None,
-                    },
-                };
-                return Ok(ChatResponse {
-                    choices: vec![choice],
-                });
-            } else {
-                anyhow::bail!("Cloudflare API request failed");
-            }
-        }
 
         // Try to parse as standard OpenAI format (with "choices" array)
         if let Ok(chat_response) = serde_json::from_str::<ChatResponse>(&response_text) {
@@ -1065,12 +962,8 @@ impl OpenAIClient {
             self.chat_path.contains("{model}")
         };
 
-        // Use Bedrock-specific format if this is a Bedrock URL
-        let response = if self.is_bedrock_url(&url) {
-            let bedrock_request = BedrockChatRequest::from_chat_request(request);
-            req.json(&bedrock_request).send().await?
-        } else if should_exclude_model {
-            // Use ChatRequestWithoutModel for providers like Cloudflare
+        let response = if should_exclude_model {
+            // Use ChatRequestWithoutModel for providers that specify model in URL
             let request_without_model = ChatRequestWithoutModel::from(request);
             req.json(&request_without_model).send().await?
         } else {
@@ -1115,7 +1008,7 @@ impl OpenAIClient {
                     }
 
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                        // Try Cloudflare streaming format first (direct "response" field)
+                        // Try direct "response" field format first
                         if let Some(response) = json.get("response") {
                             if let Some(text) = response.as_str() {
                                 if !text.is_empty() {
@@ -1145,7 +1038,7 @@ impl OpenAIClient {
                 } else {
                     // Handle non-SSE format (direct JSON stream)
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                        // Try Cloudflare streaming format first (direct "response" field)
+                        // Try direct "response" field format first
                         if let Some(response) = json.get("response") {
                             if let Some(text) = response.as_str() {
                                 if !text.is_empty() {
@@ -1175,7 +1068,7 @@ impl OpenAIClient {
         // Process any remaining data in buffer
         if !buffer.trim().is_empty() {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&buffer) {
-                // Try Cloudflare streaming format first (direct "response" field)
+                // Try direct "response" field format first
                 if let Some(response) = json.get("response") {
                     if let Some(text) = response.as_str() {
                         if !text.is_empty() {

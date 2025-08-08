@@ -41,7 +41,12 @@ mod alias_add_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config.providers.insert(
@@ -59,7 +64,12 @@ mod alias_add_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config
@@ -234,7 +244,12 @@ mod alias_delete_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add test aliases
@@ -570,7 +585,12 @@ mod alias_validation_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Target with multiple colons - should be valid (only first colon is separator)
@@ -611,7 +631,12 @@ mod alias_validation_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Various alias names
@@ -668,7 +693,12 @@ mod alias_resolution_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config.providers.insert(
@@ -686,7 +716,12 @@ mod alias_resolution_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add aliases
@@ -785,7 +820,12 @@ mod alias_resolution_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add aliases with special model names
@@ -846,7 +886,12 @@ mod alias_integration_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Start with empty aliases
@@ -926,7 +971,12 @@ mod alias_integration_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add aliases
@@ -991,7 +1041,12 @@ mod alias_integration_tests {
                 vars: std::collections::HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config

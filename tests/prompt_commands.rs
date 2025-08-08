@@ -35,6 +35,11 @@ fn create_comprehensive_config() -> Config {
             cached_token: None,
             auth_type: None,
             vars: std::collections::HashMap::new(),
+        
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
         },
     );
 
@@ -53,6 +58,11 @@ fn create_comprehensive_config() -> Config {
             cached_token: None,
             auth_type: None,
             vars: std::collections::HashMap::new(),
+        
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
         },
     );
 
@@ -289,7 +299,12 @@ mod prompt_model_resolution_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config.providers.insert(
@@ -307,7 +322,12 @@ mod prompt_model_resolution_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Set defaults
@@ -724,7 +744,12 @@ mod prompt_error_handling_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
         config.default_provider = Some("test".to_string());
 

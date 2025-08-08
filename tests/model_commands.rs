@@ -617,7 +617,6 @@ mod models_display_tests {
 
 #[cfg(test)]
 mod model_metadata_config_tests {
-    use super::*;
     use lc::model_metadata::{
         add_model_path, add_tag, initialize_model_metadata_config, remove_model_path,
     };
@@ -648,6 +647,7 @@ mod model_metadata_config_tests {
         (temp_dir, config_path, _guard)
     }
 
+    #[allow(dead_code)]
     fn get_test_config_dir() -> std::path::PathBuf {
         if let Ok(xdg_config) = std::env::var("XDG_CONFIG_HOME") {
             std::path::PathBuf::from(xdg_config).join("lc")

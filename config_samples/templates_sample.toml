@@ -1,0 +1,321 @@
+# Template System Configuration Examples
+# This file demonstrates how to use the template system for request/response transformations
+
+# Default provider settings
+default_provider = "openai"
+default_model = "gpt-4"
+
+# OpenAI provider with endpoint-specific templates
+[providers.openai]
+endpoint = "https://api.openai.com/v1"
+api_key = "your-api-key-here"
+models_path = "/models"
+chat_path = "/chat/completions"
+images_path = "/images/generations"
+embeddings_path = "/embeddings"
+
+# Chat endpoint templates for OpenAI
+[providers.openai.chat]
+# Default template for all models (if no specific match)
+[providers.openai.chat.template]
+request = '''
+{
+  "model": "{{ model }}",
+  "messages": {{ messages | json }},
+  {% if max_tokens %}"max_tokens": {{ max_tokens }},{% endif %}
+  {% if temperature %}"temperature": {{ temperature }},{% endif %}
+  {% if tools %}"tools": {{ tools | json }},{% endif %}
+  {% if stream %}"stream": {{ stream }}{% endif %}
+}
+'''
+
+# Model-specific templates (exact match)
+[providers.openai.chat.model_templates."gpt-5-nano"]
+request = '''
+{
+  "model": "{{ model }}",
+  "messages": {{ messages | json }},
+  {% if max_tokens %}"nano_completion_tokens": {{ max_tokens }}{% endif %}
+}
+'''
+
+# Pattern-based templates (regex match)
+[providers.openai.chat.model_template_patterns."gpt-5.*"]
+request = '''
+{
+  "model": "{{ model }}",
+  "messages": {{ messages | json }},
+  {% if max_tokens %}"max_completion_tokens": {{ max_tokens }},{% endif %}
+  {% if temperature %}"temperature": {{ temperature }},{% endif %}
+  {% if tools %}"tools": {{ tools | json }},{% endif %}
+  {% if stream %}"stream": {{ stream }}{% endif %}
+}
+'''
+
+# Images endpoint templates
+[providers.openai.images]
+[providers.openai.images.template]
+request = '''
+{
+  "prompt": "{{ prompt }}",
+  {% if model %}"model": "{{ model }}",{% endif %}
+  {% if n %}"n": {{ n }},{% endif %}
+  {% if size %}"size": "{{ size }}",{% endif %}
+  {% if quality %}"quality": "{{ quality }}",{% endif %}
+  {% if style %}"style": "{{ style }}",{% endif %}
+  {% if response_format %}"response_format": "{{ response_format }}"{% endif %}
+}
+'''
+
+# Embeddings endpoint templates
+[providers.openai.embeddings]
+[providers.openai.embeddings.template]
+request = '''
+{
+  "model": "{{ model }}",
+  "input": {{ input | json }},
+  {% if encoding_format %}"encoding_format": "{{ encoding_format }}"{% endif %}
+}
+'''
+
+# Gemini provider with chat templates
+[providers.gemini]
+endpoint = "https://generativelanguage.googleapis.com"
+api_key = "your-api-key-here"
+models_path = "/v1beta/models/"
+chat_path = "/v1beta/models/{model}:generateContent"
+
+[providers.gemini.headers]
+x-goog-api-key = "your-api-key-here"
+
+# Gemini chat templates
+[providers.gemini.chat]
+[providers.gemini.chat.template]
+request = '''
+{
+  {% if system_prompt %}
+  "systemInstruction": {
+    "parts": {
+      "text": "{{ system_prompt }}"
+    }
+  },
+  {% endif %}
+  "contents": [
+    {% for msg in messages %}
+    {
+      "role": "{{ msg.role | gemini_role }}",
+      "parts": [
+        {% if msg.content %}
+        {
+          "text": "{{ msg.content }}"
+        }
+        {% endif %}
+        {% if msg.images %}
+        {% for img in msg.images %}
+        {% if loop.index0 > 0 %},{% endif %}
+        {
+          "inlineData": {
+            "mimeType": "{{ img.mime_type }}",
+            "data": "{{ img.data }}"
+          }
+        }
+        {% endfor %}
+        {% endif %}
+      ]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+  {% if temperature or max_tokens %},
+  "generationConfig": {
+    {% if temperature %}"temperature": {{ temperature }}{% endif %}
+    {% if temperature and max_tokens %},{% endif %}
+    {% if max_tokens %}"maxOutputTokens": {{ max_tokens }}{% endif %}
+  }
+  {% endif %}
+}
+'''
+
+response = '''
+{
+  "content": "{{ candidates[0].content.parts[0].text }}"
+}
+'''
+
+# Bedrock provider with chat templates
+[providers.bedrock]
+endpoint = "https://bedrock-runtime.us-east-1.amazonaws.com"
+api_key = "your-aws-credentials"
+chat_path = "/model/{model}/converse"
+
+# Bedrock chat templates
+[providers.bedrock.chat]
+[providers.bedrock.chat.template]
+request = '''
+{
+  "messages": [
+    {% for msg in messages %}
+    {
+      "role": "{{ msg.role | bedrock_role }}",
+      "content": [
+        {
+          "text": "{{ msg.content | default(value='') }}"
+        }
+      ]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ],
+  {% if max_tokens %}"maxTokens": {{ max_tokens }},{% endif %}
+  {% if temperature %}"temperature": {{ temperature }}{% endif %}
+}
+'''
+
+response = '''
+{
+  "content": "{{ output.message.content[0].text }}"
+}
+'''
+
+# Cloudflare provider with model-specific templates
+[providers.cloudflare]
+endpoint = "https://api.cloudflare.com/client/v4"
+api_key = "your-api-key"
+chat_path = "/accounts/{account_id}/ai/run/@cf/{model}"
+
+[providers.cloudflare.vars]
+account_id = "your-account-id"
+
+# Cloudflare chat templates
+[providers.cloudflare.chat]
+# Default template that excludes model from request body
+[providers.cloudflare.chat.template]
+request = '''
+{
+  "messages": {{ messages | json }}
+  {% if max_tokens %},
+  "max_tokens": {{ max_tokens }}
+  {% endif %}
+  {% if temperature %},
+  "temperature": {{ temperature }}
+  {% endif %}
+}
+'''
+
+# Vertex AI with different templates for different model families
+[providers.vertex]
+endpoint = "https://us-central1-aiplatform.googleapis.com"
+api_key = "service-account-json-here"
+auth_type = "google_sa_jwt"
+
+[providers.vertex.vars]
+project = "your-project"
+location = "us-central1"
+
+# Vertex chat templates with model patterns
+[providers.vertex.chat]
+# Gemini models on Vertex
+[providers.vertex.chat.model_template_patterns."gemini-.*"]
+request = '''
+{
+  "contents": [
+    {% for msg in messages %}
+    {
+      "role": "{{ msg.role | gemini_role }}",
+      "parts": [{"text": "{{ msg.content }}"}]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ],
+  {% if temperature or max_tokens %}
+  "generationConfig": {
+    {% if temperature %}"temperature": {{ temperature }}{% endif %}
+    {% if temperature and max_tokens %},{% endif %}
+    {% if max_tokens %}"maxOutputTokens": {{ max_tokens }}{% endif %}
+  }
+  {% endif %}
+}
+'''
+
+# Llama models on Vertex (OpenAI-compatible)
+[providers.vertex.chat.model_template_patterns."llama-.*"]
+request = '''
+{
+  "model": "{{ model }}",
+  "messages": {{ messages | json }},
+  {% if max_tokens %}"max_tokens": {{ max_tokens }},{% endif %}
+  {% if temperature %}"temperature": {{ temperature }}{% endif %}
+}
+'''
+
+# Example: Provider with response transformation
+[providers.custom]
+endpoint = "https://api.custom-llm.com"
+api_key = "your-api-key"
+chat_path = "/v1/chat"
+
+[providers.custom.chat]
+[providers.custom.chat.template]
+# Custom request format
+request = '''
+{
+  "prompt": {% for msg in messages %}{% if msg.role == "user" %}"{{ msg.content }}"{% endif %}{% endfor %},
+  "history": [
+    {% set ns = namespace(found=false) %}
+    {% for msg in messages %}
+    {% if msg.role != "system" and not (msg.role == "user" and loop.last) %}
+    {% if ns.found %},{% endif %}
+    {
+      "role": "{{ msg.role }}",
+      "text": "{{ msg.content }}"
+    }
+    {% set ns.found = true %}
+    {% endif %}
+    {% endfor %}
+  ],
+  "params": {
+    {% if max_tokens %}"max_length": {{ max_tokens }},{% endif %}
+    {% if temperature %}"temp": {{ temperature }}{% endif %}
+  }
+}
+'''
+
+# Custom response parsing
+response = '''
+{
+  "content": "{{ result.generated_text }}",
+  {% if result.metadata %}
+  "usage": {
+    "input_tokens": {{ result.metadata.input_tokens | default(value=0) }},
+    "output_tokens": {{ result.metadata.output_tokens | default(value=0) }}
+  }
+  {% endif %}
+}
+'''
+
+# Example: Using templates with tool calls
+[providers.openai_tools]
+endpoint = "https://api.openai.com/v1"
+api_key = "your-api-key"
+chat_path = "/chat/completions"
+
+[providers.openai_tools.chat]
+[providers.openai_tools.chat.template]
+# Response template that extracts tool calls
+response = '''
+{
+  {% if choices[0].message.tool_calls %}
+  "tool_calls": {{ choices[0].message.tool_calls | json }},
+  {% else %}
+  "content": "{{ choices[0].message.content }}"
+  {% endif %}
+}
+'''
+
+# Streaming response template
+stream_response = '''
+{
+  {% if choices[0].delta.content %}
+  "content": "{{ choices[0].delta.content }}"
+  {% elif choices[0].delta.tool_calls %}
+  "tool_calls": {{ choices[0].delta.tool_calls | json }}
+  {% endif %}
+}
+'''

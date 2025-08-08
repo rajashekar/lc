@@ -158,7 +158,12 @@ mod embed_model_resolution_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add Cohere provider with embedding models
@@ -180,7 +185,12 @@ mod embed_model_resolution_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add embedding model aliases
@@ -402,7 +412,12 @@ mod embed_error_handling_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // This would fail in actual usage when trying to create authenticated client
@@ -440,7 +455,12 @@ mod embed_error_handling_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Add invalid alias (missing provider:model format)
@@ -535,7 +555,12 @@ mod embed_integration_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         config.providers.insert(
@@ -553,7 +578,12 @@ mod embed_integration_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            },
+            
+        chat_templates: None,
+        images_templates: None,
+        embeddings_templates: None,
+        models_templates: None,
+        },
         );
 
         // Test OpenAI

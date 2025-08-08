@@ -1,0 +1,68 @@
+# Test configuration for Bedrock templates
+[providers.bedrock]
+base_url = "https://bedrock-runtime.us-east-1.amazonaws.com"
+api_key = "test-key"
+models_path = "/foundation-models"
+chat_path = "/model/{model}/converse"
+
+[providers.bedrock.chat_templates.""]
+# Default Bedrock request template - transforms standard ChatRequest to Bedrock format
+request = '''
+{
+  "messages": [
+    {% for message in messages %}
+    {
+      "role": "{{ message.role | bedrock_role }}",
+      "content": [
+        {
+          "text": "{{ message.content | default(value="") }}"
+        }
+      ]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]{% if max_tokens %},
+  "max_tokens": {{ max_tokens }}{% endif %}{% if temperature %},
+  "temperature": {{ temperature }}{% endif %}{% if tools %},
+  "tools": {{ tools | json }}{% endif %}{% if stream %},
+  "stream": {{ stream }}{% endif %}
+}
+'''
+
+# Bedrock response template - extracts content from nested structure
+response = '''
+{
+  "content": "{{ output.message.content[0].text }}"
+}
+'''
+
+# Example Bedrock model-specific template for Claude models
+[providers.bedrock.chat_templates."anthropic.claude.*"]
+request = '''
+{
+  "messages": [
+    {% for message in messages %}
+    {
+      "role": "{{ message.role | bedrock_role }}",
+      "content": [
+        {
+          "text": "{{ message.content | default(value="") }}"
+        }
+      ]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ],
+  "inferenceConfig": {
+    {% if max_tokens %}"maxTokens": {{ max_tokens }}{% if temperature %},{% endif %}{% endif %}
+    {% if temperature %}"temperature": {{ temperature }}{% endif %}
+  }{% if tools %},
+  "toolConfig": {
+    "tools": {{ tools | json }}
+  }{% endif %}
+}
+'''
+
+response = '''
+{
+  "content": "{{ output.message.content[0].text }}"
+}
+'''

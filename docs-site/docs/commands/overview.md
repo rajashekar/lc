@@ -51,11 +51,8 @@ The simplest way to use lc:
 # Using defaults
 lc "What is the capital of France?"
 
-# Specify provider
-lc --provider openai "Explain recursion"
-
 # Specify model
-lc -m gpt-4 "Write a Python function"
+lc -m openai:gpt-4 "Write a Python function"
 
 # Specify both
 lc --provider openrouter -m "claude-3.5-sonnet" "Explain quantum computing"

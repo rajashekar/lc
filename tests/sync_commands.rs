@@ -160,7 +160,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_sync_to_invalid_provider() {
-        let result = lc::sync::handle_sync_to("invalid_provider", false).await;
+        let result = lc::sync::handle_sync_to("invalid_provider", false, false).await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -170,7 +170,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_sync_from_invalid_provider() {
-        let result = lc::sync::handle_sync_from("invalid_provider", false).await;
+        let result = lc::sync::handle_sync_from("invalid_provider", false, false).await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()

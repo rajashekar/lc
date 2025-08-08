@@ -19,6 +19,10 @@ mod provider_config_tests {
             cached_token: None,
             auth_type: Some("google_sa_jwt".to_string()),
             vars: HashMap::new(),
+            chat_templates: None,
+            images_templates: None,
+            embeddings_templates: None,
+            models_templates: None,
         };
 
         pc.vars.insert("project".to_string(), "my-proj".to_string());
@@ -56,6 +60,10 @@ mod provider_config_tests {
             cached_token: None,
             auth_type: None,
             vars: HashMap::new(),
+            chat_templates: None,
+            images_templates: None,
+            embeddings_templates: None,
+            models_templates: None,
         };
 
         // For non-full URLs, no interpolation or model replacement occurs here
@@ -69,6 +77,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+
+use super::template_processor::TemplateConfig;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -112,6 +122,14 @@ pub struct ProviderConfig {
     pub auth_type: Option<String>, // e.g., "google_sa_jwt"
     #[serde(default)]
     pub vars: HashMap<String, String>, // arbitrary provider vars like project, location
+    #[serde(default)]
+    pub chat_templates: Option<HashMap<String, TemplateConfig>>, // Chat endpoint templates
+    #[serde(default)]
+    pub images_templates: Option<HashMap<String, TemplateConfig>>, // Images endpoint templates
+    #[serde(default)]
+    pub embeddings_templates: Option<HashMap<String, TemplateConfig>>, // Embeddings endpoint templates
+    #[serde(default)]
+    pub models_templates: Option<HashMap<String, TemplateConfig>>, // Models endpoint templates
 }
 
 impl ProviderConfig {
@@ -181,6 +199,73 @@ impl ProviderConfig {
             url
         }
     }
+
+    /// Get template for a specific endpoint and model
+    pub fn get_endpoint_template(&self, endpoint: &str, model_name: &str) -> Option<String> {
+        let endpoint_templates = match endpoint {
+            "chat" => self.chat_templates.as_ref()?,
+            "images" => self.images_templates.as_ref()?,
+            "embeddings" => self.embeddings_templates.as_ref()?,
+            "models" => self.models_templates.as_ref()?,
+            _ => return None,
+        };
+
+        self.get_template_for_model(endpoint_templates, model_name, "request")
+    }
+
+    /// Get response template for a specific endpoint and model
+    pub fn get_endpoint_response_template(&self, endpoint: &str, model_name: &str) -> Option<String> {
+        let endpoint_templates = match endpoint {
+            "chat" => self.chat_templates.as_ref()?,
+            "images" => self.images_templates.as_ref()?,
+            "embeddings" => self.embeddings_templates.as_ref()?,
+            "models" => self.models_templates.as_ref()?,
+            _ => return None,
+        };
+
+        self.get_template_for_model(endpoint_templates, model_name, "response")
+    }
+
+    /// Get template for a specific model from endpoint templates
+    fn get_template_for_model(&self, templates: &HashMap<String, TemplateConfig>, model_name: &str, template_type: &str) -> Option<String> {
+        // First check exact match
+        if let Some(template) = templates.get(model_name) {
+            return match template_type {
+                "request" => template.request.clone(),
+                "response" => template.response.clone(),
+                "stream_response" => template.stream_response.clone(),
+                _ => None,
+            };
+        }
+        
+        // Then check regex patterns (skip empty string which is the default)
+        for (pattern, template) in templates {
+            if !pattern.is_empty() {
+                if let Ok(re) = regex::Regex::new(pattern) {
+                    if re.is_match(model_name) {
+                        return match template_type {
+                            "request" => template.request.clone(),
+                            "response" => template.response.clone(),
+                            "stream_response" => template.stream_response.clone(),
+                            _ => None,
+                        };
+                    }
+                }
+            }
+        }
+        
+        // Finally check for default template (empty key)
+        if let Some(template) = templates.get("") {
+            return match template_type {
+                "request" => template.request.clone(),
+                "response" => template.response.clone(),
+                "stream_response" => template.stream_response.clone(),
+                _ => None,
+            };
+        }
+        
+        None
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -208,14 +293,21 @@ pub struct ProviderPaths {
 impl Config {
     pub fn load() -> Result<Self> {
         let config_path = Self::config_file_path()?;
+        let providers_dir = Self::providers_dir()?;
 
-        if config_path.exists() {
+        let mut config = if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
-            let config: Config = toml::from_str(&content)?;
-            Ok(config)
+            let mut config: Config = toml::from_str(&content)?;
+            
+            // If providers exist in main config, migrate them to separate files
+            if !config.providers.is_empty() {
+                Self::migrate_providers_to_separate_files(&mut config)?;
+            }
+            
+            config
         } else {
             // Create default config
-            let config = Config {
+            Config {
                 providers: HashMap::new(),
                 default_provider: None,
                 default_model: None,
@@ -225,22 +317,126 @@ impl Config {
                 max_tokens: None,
                 temperature: None,
                 stream: None,
-            };
-
-            // Ensure config directory exists
-            if let Some(parent) = config_path.parent() {
-                fs::create_dir_all(parent)?;
             }
+        };
 
-            config.save()?;
-            Ok(config)
+        // Load providers from separate files
+        config.providers = Self::load_providers_from_files(&providers_dir)?;
+
+        // Ensure config directory exists
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)?;
         }
+
+        // Ensure providers directory exists
+        fs::create_dir_all(&providers_dir)?;
+
+        // Save the main config (without providers)
+        config.save_main_config()?;
+        
+        Ok(config)
     }
 
     pub fn save(&self) -> Result<()> {
+        // Save main config without providers
+        self.save_main_config()?;
+        
+        // Save each provider to its own file
+        self.save_providers_to_files()?;
+        
+        Ok(())
+    }
+
+    fn save_main_config(&self) -> Result<()> {
         let config_path = Self::config_file_path()?;
-        let content = toml::to_string_pretty(self)?;
+        
+        // Create a config without providers for the main file
+        let main_config = Config {
+            providers: HashMap::new(), // Empty - providers are in separate files
+            default_provider: self.default_provider.clone(),
+            default_model: self.default_model.clone(),
+            aliases: self.aliases.clone(),
+            system_prompt: self.system_prompt.clone(),
+            templates: self.templates.clone(),
+            max_tokens: self.max_tokens,
+            temperature: self.temperature,
+            stream: self.stream,
+        };
+        
+        let content = toml::to_string_pretty(&main_config)?;
         fs::write(&config_path, content)?;
+        Ok(())
+    }
+
+    fn save_providers_to_files(&self) -> Result<()> {
+        let providers_dir = Self::providers_dir()?;
+        fs::create_dir_all(&providers_dir)?;
+
+        for (provider_name, provider_config) in &self.providers {
+            self.save_single_provider_flat(provider_name, provider_config)?;
+        }
+        
+        Ok(())
+    }
+
+    fn load_providers_from_files(providers_dir: &PathBuf) -> Result<HashMap<String, ProviderConfig>> {
+        let mut providers = HashMap::new();
+        
+        if !providers_dir.exists() {
+            return Ok(providers);
+        }
+
+        for entry in fs::read_dir(providers_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            
+            if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                if let Some(provider_name) = path.file_stem().and_then(|s| s.to_str()) {
+                    let content = fs::read_to_string(&path)?;
+                    
+                    // Try to parse as new flatter format first
+                    if let Ok(config) = Self::parse_flat_provider_config(&content) {
+                        providers.insert(provider_name.to_string(), config);
+                    } else {
+                        // Fall back to old nested format for backward compatibility
+                        let provider_data: HashMap<String, HashMap<String, ProviderConfig>> = toml::from_str(&content)?;
+                        
+                        if let Some(providers_section) = provider_data.get("providers") {
+                            for (name, config) in providers_section {
+                                providers.insert(name.clone(), config.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(providers)
+    }
+
+    fn parse_flat_provider_config(content: &str) -> Result<ProviderConfig> {
+        #[derive(Deserialize)]
+        struct FlatProviderConfig {
+            #[serde(flatten)]
+            config: ProviderConfig,
+        }
+
+        let flat_config: FlatProviderConfig = toml::from_str(content)?;
+        Ok(flat_config.config)
+    }
+
+    fn migrate_providers_to_separate_files(config: &mut Config) -> Result<()> {
+        let providers_dir = Self::providers_dir()?;
+        fs::create_dir_all(&providers_dir)?;
+
+        // Save each provider to its own file using the new flat format
+        for (provider_name, provider_config) in &config.providers {
+            Self::save_single_provider_flat_static(&providers_dir, provider_name, provider_config)?;
+        }
+
+        // Clear providers from main config since they're now in separate files
+        config.providers.clear();
+        
         Ok(())
     }
 
@@ -268,6 +464,10 @@ impl Config {
             cached_token: None,
             auth_type: None,
             vars: HashMap::new(),
+            chat_templates: None,
+            images_templates: None,
+            embeddings_templates: None,
+            models_templates: None,
         };
 
         // Auto-detect Vertex AI host to mark google_sa_jwt
@@ -282,12 +482,15 @@ impl Config {
             }
         }
 
-        self.providers.insert(name.clone(), provider_config);
+        self.providers.insert(name.clone(), provider_config.clone());
 
         // Set as default if it's the first provider
         if self.default_provider.is_none() {
-            self.default_provider = Some(name);
+            self.default_provider = Some(name.clone());
         }
+
+        // Save the provider to its own file
+        self.save_single_provider(&name, &provider_config)?;
 
         Ok(())
     }
@@ -295,6 +498,8 @@ impl Config {
     pub fn set_api_key(&mut self, provider: String, api_key: String) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             provider_config.api_key = Some(api_key);
+            let config_clone = provider_config.clone();
+            self.save_single_provider(&provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -319,6 +524,8 @@ impl Config {
     ) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             provider_config.headers.insert(header_name, header_value);
+            let config_clone = provider_config.clone();
+            self.save_single_provider(&provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -328,6 +535,8 @@ impl Config {
     pub fn remove_header(&mut self, provider: String, header_name: String) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             if provider_config.headers.remove(&header_name).is_some() {
+                let config_clone = provider_config.clone();
+                self.save_single_provider(&provider, &config_clone)?;
                 Ok(())
             } else {
                 anyhow::bail!(
@@ -444,10 +653,13 @@ impl Config {
     }
 
     fn config_file_path() -> Result<PathBuf> {
-        let config_dir =
-            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+        let config_dir = Self::config_dir()?;
+        Ok(config_dir.join("config.toml"))
+    }
 
-        Ok(config_dir.join("lc").join("config.toml"))
+    fn providers_dir() -> Result<PathBuf> {
+        let config_dir = Self::config_dir()?;
+        Ok(config_dir.join("providers"))
     }
 
     pub fn config_dir() -> Result<PathBuf> {
@@ -462,11 +674,34 @@ impl Config {
         Ok(data_dir)
     }
 
+    fn save_single_provider(&self, provider_name: &str, provider_config: &ProviderConfig) -> Result<()> {
+        self.save_single_provider_flat(provider_name, provider_config)
+    }
+
+    fn save_single_provider_flat(&self, provider_name: &str, provider_config: &ProviderConfig) -> Result<()> {
+        let providers_dir = Self::providers_dir()?;
+        Self::save_single_provider_flat_static(&providers_dir, provider_name, provider_config)
+    }
+
+    fn save_single_provider_flat_static(providers_dir: &PathBuf, provider_name: &str, provider_config: &ProviderConfig) -> Result<()> {
+        fs::create_dir_all(providers_dir)?;
+
+        let provider_file = providers_dir.join(format!("{}.toml", provider_name));
+        
+        // Use the new flat format - serialize the ProviderConfig directly
+        let content = toml::to_string_pretty(provider_config)?;
+        fs::write(&provider_file, content)?;
+        
+        Ok(())
+    }
+
     pub fn set_token_url(&mut self, provider: String, token_url: String) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             provider_config.token_url = Some(token_url);
             // Clear cached token when token_url changes
             provider_config.cached_token = None;
+            let config_clone = provider_config.clone();
+            self.save_single_provider(&provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -477,6 +712,8 @@ impl Config {
     pub fn set_provider_var(&mut self, provider: &str, key: &str, value: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.vars.insert(key.to_string(), value.to_string());
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -499,6 +736,8 @@ impl Config {
     pub fn set_provider_models_path(&mut self, provider: &str, path: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.models_path = path.to_string();
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -508,6 +747,8 @@ impl Config {
     pub fn set_provider_chat_path(&mut self, provider: &str, path: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.chat_path = path.to_string();
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -517,6 +758,8 @@ impl Config {
     pub fn set_provider_images_path(&mut self, provider: &str, path: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.images_path = Some(path.to_string());
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -526,6 +769,8 @@ impl Config {
     pub fn set_provider_embeddings_path(&mut self, provider: &str, path: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.embeddings_path = Some(path.to_string());
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -535,6 +780,8 @@ impl Config {
     pub fn reset_provider_models_path(&mut self, provider: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.models_path = default_models_path();
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -544,6 +791,8 @@ impl Config {
     pub fn reset_provider_chat_path(&mut self, provider: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.chat_path = default_chat_path();
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -553,6 +802,8 @@ impl Config {
     pub fn reset_provider_images_path(&mut self, provider: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.images_path = None;
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -562,6 +813,8 @@ impl Config {
     pub fn reset_provider_embeddings_path(&mut self, provider: &str) -> Result<()> {
         if let Some(pc) = self.providers.get_mut(provider) {
             pc.embeddings_path = None;
+            let config_clone = pc.clone();
+            self.save_single_provider(provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);
@@ -593,6 +846,8 @@ impl Config {
     ) -> Result<()> {
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             provider_config.cached_token = Some(CachedToken { token, expires_at });
+            let config_clone = provider_config.clone();
+            self.save_single_provider(&provider, &config_clone)?;
             Ok(())
         } else {
             anyhow::bail!("Provider '{}' not found", provider);

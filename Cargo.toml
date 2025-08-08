@@ -45,6 +45,7 @@ crossterm = "0.27"
 rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk.git", features = ["client", "transport-child-process", "transport-sse-client", "reqwest"] }
 scraper = "0.18"
 urlencoding = "2.1"
+tera = "1.19"
 # Performance optimization dependencies
 lru = "0.12"
 rayon = "1.8"

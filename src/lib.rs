@@ -21,6 +21,7 @@ pub mod proxy;
 pub mod readers;
 pub mod search;
 pub mod sync;
+pub mod template_processor;
 pub mod token_utils;
 pub mod unified_cache;
 pub mod vector_db;
