@@ -37,7 +37,7 @@ fn test_bedrock_request_template() {
   "messages": [
     {% for message in messages %}
     {
-      "role": "{{ message.role | bedrock_role }}",
+      "role": "{{ message.role | system_to_user_role }}",
       "content": [
         {
           "text": "{{ message.content | default(value="") }}"
@@ -123,8 +123,8 @@ fn test_bedrock_response_template() {
 }
 
 #[test]
-fn test_bedrock_role_filter() {
-    // Test the bedrock_role filter through a complete request template
+fn test_system_to_user_role_filter() {
+    // Test the system_to_user_role filter through a complete request template
     let request = ChatRequest {
         model: "test-model".to_string(),
         messages: vec![
@@ -164,7 +164,7 @@ fn test_bedrock_role_filter() {
   "messages": [
     {% for message in messages %}
     {
-      "role": "{{ message.role | bedrock_role }}",
+      "role": "{{ message.role | system_to_user_role }}",
       "content": [
         {
           "text": "{% if message.content_type.Text %}{{ message.content_type.Text.content | default(value="") }}{% endif %}"
@@ -219,7 +219,7 @@ fn test_bedrock_claude_specific_template() {
   "messages": [
     {% for message in messages %}
     {
-      "role": "{{ message.role | bedrock_role }}",
+      "role": "{{ message.role | system_to_user_role }}",
       "content": [
         {
           "text": "{% if message.content_type.Text %}{{ message.content_type.Text.content | default(value="") }}{% elif message.content_type.Multimodal %}{% for part in message.content_type.Multimodal.content %}{% if part.Text %}{{ part.Text.text }}{% if not loop.last %} {% endif %}{% endif %}{% endfor %}{% endif %}"
@@ -289,7 +289,7 @@ fn test_bedrock_template_with_system_message() {
   "messages": [
     {% for message in messages %}
     {
-      "role": "{{ message.role | bedrock_role }}",
+      "role": "{{ message.role | system_to_user_role }}",
       "content": [
         {
           "text": "{% if message.content_type.Text %}{{ message.content_type.Text.content | default(value="") }}{% elif message.content_type.Multimodal %}{% for part in message.content_type.Multimodal.content %}{% if part.Text %}{{ part.Text.text }}{% if not loop.last %} {% endif %}{% endif %}{% endfor %}{% endif %}"

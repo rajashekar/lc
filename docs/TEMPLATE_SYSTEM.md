@@ -106,9 +106,12 @@ Converts OpenAI roles to Gemini format:
 - `assistant` → `model`
 - `system` → `user`
 
-### `bedrock_role`
-Converts OpenAI roles to Bedrock format:
+### `system_to_user_role`
+Converts system roles to user roles (for providers that don't support system roles):
 - `system` → `user`
+- Other roles remain unchanged
+
+This filter is useful for providers like Bedrock that don't support system messages directly.
 
 ### `default`
 Provides a default value if the variable is null or empty:

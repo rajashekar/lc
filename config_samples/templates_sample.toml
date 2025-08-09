@@ -155,7 +155,7 @@ request = '''
   "messages": [
     {% for msg in messages %}
     {
-      "role": "{{ msg.role | bedrock_role }}",
+      "role": "{{ msg.role | system_to_user_role }}",
       "content": [
         {
           "text": "{{ msg.content | default(value='') }}"

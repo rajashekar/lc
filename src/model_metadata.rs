@@ -98,6 +98,34 @@ impl Default for ModelMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelPaths {
     pub paths: Vec<String>,
+    #[serde(default)]
+    pub field_mappings: FieldMappings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldMappings {
+    /// Fields to check for model ID (in priority order)
+    pub id_fields: Vec<String>,
+    /// Fields to check for model name/display name (in priority order)
+    pub name_fields: Vec<String>,
+}
+
+impl Default for FieldMappings {
+    fn default() -> Self {
+        Self {
+            id_fields: vec![
+                "id".to_string(),
+                "modelId".to_string(),
+                "name".to_string(),
+                "modelName".to_string(),
+            ],
+            name_fields: vec![
+                "display_name".to_string(),
+                "name".to_string(),
+                "modelName".to_string(),
+            ],
+        }
+    }
 }
 
 impl Default for ModelPaths {
@@ -108,6 +136,7 @@ impl Default for ModelPaths {
                 ".models[]".to_string(),
                 ".".to_string(),
             ],
+            field_mappings: FieldMappings::default(),
         }
     }
 }
@@ -418,13 +447,12 @@ impl ModelMetadataExtractor {
                 match &extracted {
                     Value::Array(arr) => models.extend(arr.clone()),
                     Value::Object(obj) => {
-                        // Only add objects that look like models (have id, name, model, modelId, or modelName field)
-                        if obj.contains_key("id")
-                            || obj.contains_key("name")
-                            || obj.contains_key("model")
-                            || obj.contains_key("modelId")
-                            || obj.contains_key("modelName")
-                        {
+                        // Check if object looks like a model using configured field mappings
+                        let has_model_field = self.model_paths.field_mappings.id_fields.iter()
+                            .any(|field| obj.contains_key(field))
+                            || obj.contains_key("model"); // Keep "model" as a generic field
+                        
+                        if has_model_field {
                             models.push(extracted);
                         }
                     }
@@ -570,18 +598,14 @@ impl ModelMetadataExtractor {
     pub fn extract_metadata(&self, provider: &Provider, model: &Value) -> Result<ModelMetadata> {
         let mut metadata = ModelMetadata::default();
 
-        // Extract ID - try 'id' first, then 'modelId', then fall back to 'name' or 'modelName'
-        let base_id = if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
-            id.to_string()
-        } else if let Some(model_id) = model.get("modelId").and_then(|v| v.as_str()) {
-            model_id.to_string()
-        } else if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
-            name.to_string()
-        } else if let Some(model_name) = model.get("modelName").and_then(|v| v.as_str()) {
-            model_name.to_string()
-        } else {
-            anyhow::bail!("Model missing required 'id', 'modelId', 'name', or 'modelName' field");
-        };
+        // Extract ID using configured field mappings (in priority order)
+        let base_id = self.model_paths.field_mappings.id_fields.iter()
+            .find_map(|field| model.get(field).and_then(|v| v.as_str()))
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                let fields = self.model_paths.field_mappings.id_fields.join(", ");
+                anyhow::anyhow!("Model missing required ID field. Checked fields: {}", fields)
+            })?;
 
         // For HuggingFace models, append the provider suffix from the expanded provider object
         if (provider.provider == "hf" || provider.provider == "huggingface")
@@ -603,12 +627,9 @@ impl ModelMetadataExtractor {
         metadata.provider = provider.provider.clone();
         metadata.raw_data = model.clone();
 
-        // Extract basic fields
-        if let Some(name) = model
-            .get("display_name")
-            .or_else(|| model.get("name"))
-            .or_else(|| model.get("modelName"))
-            .and_then(|v| v.as_str())
+        // Extract basic fields using configured field mappings
+        if let Some(name) = self.model_paths.field_mappings.name_fields.iter()
+            .find_map(|field| model.get(field).and_then(|v| v.as_str()))
         {
             metadata.display_name = Some(name.to_string());
         }
@@ -851,38 +872,21 @@ impl ModelMetadataExtractor {
     fn check_name_contains(&self, model: &Value, pattern: &str) -> Option<bool> {
         let pattern_lower = pattern.to_lowercase();
 
-        // Check model ID
-        if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
-            if id.to_lowercase().contains(&pattern_lower) {
-                return Some(true);
+        // Check all configured ID fields
+        for field in &self.model_paths.field_mappings.id_fields {
+            if let Some(value) = model.get(field).and_then(|v| v.as_str()) {
+                if value.to_lowercase().contains(&pattern_lower) {
+                    return Some(true);
+                }
             }
         }
 
-        // Check Bedrock modelId
-        if let Some(model_id) = model.get("modelId").and_then(|v| v.as_str()) {
-            if model_id.to_lowercase().contains(&pattern_lower) {
-                return Some(true);
-            }
-        }
-
-        // Check model name
-        if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
-            if name.to_lowercase().contains(&pattern_lower) {
-                return Some(true);
-            }
-        }
-
-        // Check Bedrock modelName
-        if let Some(model_name) = model.get("modelName").and_then(|v| v.as_str()) {
-            if model_name.to_lowercase().contains(&pattern_lower) {
-                return Some(true);
-            }
-        }
-
-        // Check display_name
-        if let Some(display_name) = model.get("display_name").and_then(|v| v.as_str()) {
-            if display_name.to_lowercase().contains(&pattern_lower) {
-                return Some(true);
+        // Check all configured name fields
+        for field in &self.model_paths.field_mappings.name_fields {
+            if let Some(value) = model.get(field).and_then(|v| v.as_str()) {
+                if value.to_lowercase().contains(&pattern_lower) {
+                    return Some(true);
+                }
             }
         }
 
@@ -899,38 +903,21 @@ impl ModelMetadataExtractor {
             Err(_) => return Some(false), // Invalid regex pattern
         };
 
-        // Check model ID
-        if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
-            if regex.is_match(id) {
-                return Some(true);
+        // Check all configured ID fields
+        for field in &self.model_paths.field_mappings.id_fields {
+            if let Some(value) = model.get(field).and_then(|v| v.as_str()) {
+                if regex.is_match(value) {
+                    return Some(true);
+                }
             }
         }
 
-        // Check Bedrock modelId
-        if let Some(model_id) = model.get("modelId").and_then(|v| v.as_str()) {
-            if regex.is_match(model_id) {
-                return Some(true);
-            }
-        }
-
-        // Check model name
-        if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
-            if regex.is_match(name) {
-                return Some(true);
-            }
-        }
-
-        // Check Bedrock modelName
-        if let Some(model_name) = model.get("modelName").and_then(|v| v.as_str()) {
-            if regex.is_match(model_name) {
-                return Some(true);
-            }
-        }
-
-        // Check display_name
-        if let Some(display_name) = model.get("display_name").and_then(|v| v.as_str()) {
-            if regex.is_match(display_name) {
-                return Some(true);
+        // Check all configured name fields
+        for field in &self.model_paths.field_mappings.name_fields {
+            if let Some(value) = model.get(field).and_then(|v| v.as_str()) {
+                if regex.is_match(value) {
+                    return Some(true);
+                }
             }
         }
 

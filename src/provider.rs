@@ -281,43 +281,9 @@ pub struct LlamaContent {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CohereChatResponse {
-    pub message: CohereMessage,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CohereMessage {
-    #[allow(dead_code)]
-    pub role: String,
-    pub content: Vec<CohereContentItem>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CohereContentItem {
-    #[serde(rename = "type")]
-    #[allow(dead_code)]
-    pub content_type: String,
-    pub text: String,
-}
-
-
-
-#[derive(Debug, Deserialize)]
 pub struct ModelsResponse {
     #[serde(alias = "models")]
     pub data: Vec<Model>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CohereModelsResponse {
-    pub models: Vec<CohereModel>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CohereModel {
-    pub name: String,
-    #[serde(default = "default_object_type")]
-    pub object: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -681,14 +647,6 @@ impl OpenAIClient {
             return Ok(llama_response.completion_message.content.text);
         }
 
-        // Try to parse as Cohere format (with "message" and content array)
-        if let Ok(cohere_response) = serde_json::from_str::<CohereChatResponse>(&response_text) {
-            if let Some(content_item) = cohere_response.message.content.first() {
-                return Ok(content_item.text.clone());
-            } else {
-                anyhow::bail!("No content in Cohere response");
-            }
-        }
 
 
         // If all fail, return an error with the response text for debugging
@@ -728,19 +686,6 @@ impl OpenAIClient {
         let models =
             if let Ok(models_response) = serde_json::from_str::<ModelsResponse>(&response_text) {
                 models_response.data
-            } else if let Ok(cohere_response) =
-                serde_json::from_str::<CohereModelsResponse>(&response_text)
-            {
-                // Try to parse as CohereModelsResponse (with "models" field and "name" instead of "id")
-                cohere_response
-                    .models
-                    .into_iter()
-                    .map(|cohere_model| Model {
-                        id: cohere_model.name,
-                        object: cohere_model.object,
-                        providers: vec![],
-                    })
-                    .collect()
             } else if let Ok(parsed_models) = serde_json::from_str::<Vec<Model>>(&response_text) {
                 // If that fails, try to parse as direct array of models
                 parsed_models
