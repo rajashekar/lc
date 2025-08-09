@@ -55,7 +55,7 @@ project = "gen-lang-client-0931965430"
 
 [chat_templates]
 
-[chat_templates.]
+[chat_templates.""]
 request = """
 {
   "contents": [

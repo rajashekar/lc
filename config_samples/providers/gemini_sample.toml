@@ -28,7 +28,7 @@ x-goog-api-key = "<your-api-key>"
 
 [chat_templates]
 
-[chat_templates.]
+[chat_templates.""]
 request = """
 {
   "contents": [

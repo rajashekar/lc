@@ -258,9 +258,17 @@ def write_toml(data, file_handle, indent=0, parent_key=""):
                 file_handle.write(f'{indent_str}{section_comment}\n')
             
             if parent_key:
-                file_handle.write(f'\n{indent_str}[{parent_key}.{key}]\n')
+                # Handle empty string keys properly for TOML syntax
+                if key == "":
+                    file_handle.write(f'\n{indent_str}[{parent_key}.""]\n')
+                else:
+                    file_handle.write(f'\n{indent_str}[{parent_key}.{key}]\n')
             else:
-                file_handle.write(f'\n{indent_str}[{key}]\n')
+                # Handle empty string keys properly for TOML syntax
+                if key == "":
+                    file_handle.write(f'\n{indent_str}[""]\n')
+                else:
+                    file_handle.write(f'\n{indent_str}[{key}]\n')
             write_toml(value, file_handle, indent, key)
 
 def process_toml_file(input_path, output_path):

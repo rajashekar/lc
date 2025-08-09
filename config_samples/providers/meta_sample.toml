@@ -25,7 +25,7 @@ chat_path = "/chat/completions"
 
 [chat_templates]
 
-[chat_templates.]
+[chat_templates.""]
 response = """
 {
   "id": "chatcmpl-{{ random_id() }}",

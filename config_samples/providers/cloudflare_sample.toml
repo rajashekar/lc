@@ -26,7 +26,7 @@ account_id = "<your-account-id>"
 
 [chat_templates]
 
-[chat_templates.]
+[chat_templates.""]
 response = """
 {% if success %}
 {

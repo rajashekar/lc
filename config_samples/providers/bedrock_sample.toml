@@ -34,7 +34,7 @@ request = """
       "role": "{{ message.role | system_to_user_role }}",
       "content": [
         {
-          "text": "{{ message.content | default(value="") }}"
+          "text": "{% if message.content %}{{ message.content | replace(from='"', to='\"') }}{% else %}{% endif %}"
         }
       ]
     }{% if not loop.last %},{% endif %}
@@ -57,7 +57,7 @@ response = """
 
 """
 
-[chat_templates.]
+[chat_templates.""]
 request = """
 {
   "messages": [
@@ -66,7 +66,7 @@ request = """
       "role": "{{ message.role | system_to_user_role }}",
       "content": [
         {
-          "text": "{{ message.content | default(value="") }}"
+          "text": "{% if message.content %}{{ message.content | replace(from='"', to='\"') }}{% else %}{% endif %}"
         }
       ]
     }{% if not loop.last %},{% endif %}

@@ -1,13 +1,13 @@
-# Sample configuration file for cohere.toml
+# Sample configuration file for wmt.toml
 # This is a sanitized version with sensitive values masked
 # Replace <your-*> placeholders with your actual values
 # Comments below explain what each setting does
 
 # API endpoint URL for this provider
-endpoint = "https://api.cohere.com/v2"
+endpoint = "https://api.business.githubcopilot.com"
 
 # API key for authentication - replace with your actual key
-api_key = "<your-api-key>"
+api_key = "<your-github-token>"
 
 # List of available models (auto-populated by the tool)
 models = []
@@ -16,19 +16,9 @@ models = []
 models_path = "/models"
 
 # API path for chat completions
-chat_path = "/chat"
+chat_path = "/chat/completions"
 
 
 [headers]
 
 [vars]
-
-[chat_templates]
-
-[chat_templates.""]
-response = """
-{
-  "content": {{ message.content[0].text | json }}
-}
-
-"""
