@@ -100,7 +100,7 @@ impl TemplateProcessor {
         // Register custom filters
         tera.register_filter("json", JsonFilter);
         tera.register_filter("gemini_role", GeminiRoleFilter);
-        tera.register_filter("bedrock_role", BedrockRoleFilter);
+        tera.register_filter("system_to_user_role", SystemToUserRoleFilter);
         tera.register_filter("default", DefaultFilter);
         tera.register_filter("select_tool_calls", SelectToolCallsFilter);
         
@@ -298,13 +298,13 @@ impl Filter for GeminiRoleFilter {
     }
 }
 
-/// Filter to convert OpenAI roles to Bedrock roles
-struct BedrockRoleFilter;
+/// Filter to convert system roles to user roles (for providers that don't support system roles)
+struct SystemToUserRoleFilter;
 
-impl Filter for BedrockRoleFilter {
+impl Filter for SystemToUserRoleFilter {
     fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
         match value.as_str() {
-            Some("system") => Ok(Value::String("user".to_string())), // Bedrock handles system as user
+            Some("system") => Ok(Value::String("user".to_string())), // Convert system to user
             Some(other) => Ok(Value::String(other.to_string())),
             None => Ok(value.clone()),
         }
