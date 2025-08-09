@@ -2,9 +2,7 @@ use crate::config::Config;
 use crate::database::ChatEntry;
 use crate::model_metadata::MetadataExtractor;
 use crate::provider::{
-    ChatRequest, ContentPart, GeminiChatRequest, GeminiChatResponse, GeminiClient, GeminiContent,
-    GeminiFunctionDeclaration, GeminiGenerationConfig, GeminiInlineData, GeminiPart,
-    GeminiResponsePart, GeminiSystemInstruction, GeminiTool, Message, MessageContent, OpenAIClient,
+    ChatRequest, Message, MessageContent, OpenAIClient,
 };
 use crate::token_utils::TokenCounter;
 use anyhow::Result;
@@ -167,7 +165,7 @@ pub async fn send_chat_request_with_validation(
 
     // Send the request
     crate::debug_log!("Making API call to chat endpoint...");
-    let response = client.chat(&request, model).await?;
+    let response = client.chat(&request).await?;
 
     crate::debug_log!(
         "Received response from chat API ({} characters)",
@@ -354,7 +352,7 @@ pub async fn send_chat_request_with_streaming(
 
     // Send the streaming request
     crate::debug_log!("Making streaming API call to chat endpoint...");
-    client.chat_stream(&request, model).await?;
+    client.chat_stream(&request).await?;
 
     Ok(())
 }
@@ -521,299 +519,11 @@ pub async fn get_or_refresh_token(
     Ok(token_response.token)
 }
 
-// Helper function to detect if a provider is Gemini-based
-fn is_gemini_provider(provider_config: &crate::config::ProviderConfig) -> bool {
-    provider_config
-        .endpoint
-        .contains("generativelanguage.googleapis.com")
-        || provider_config.chat_path.contains(":generateContent")
-}
 
-// Enum to represent different client types
-pub enum LLMClient {
-    OpenAI(OpenAIClient),
-    Gemini(GeminiClient),
-}
+// All providers now use OpenAIClient with template-based transformations
+pub type LLMClient = OpenAIClient;
 
-impl LLMClient {
-    pub async fn chat(&self, request: &ChatRequest, model: &str) -> Result<String> {
-        match self {
-            LLMClient::OpenAI(client) => client.chat(request).await,
-            LLMClient::Gemini(client) => {
-                // Convert OpenAI format to Gemini format
-                let gemini_request = convert_to_gemini_request(request)?;
-                client.chat(&gemini_request, model).await
-            }
-        }
-    }
-
-    pub async fn chat_with_tools(
-        &self,
-        request: &ChatRequest,
-        model: &str,
-    ) -> Result<crate::provider::ChatResponse> {
-        match self {
-            LLMClient::OpenAI(client) => client.chat_with_tools(request).await,
-            LLMClient::Gemini(client) => {
-                let gemini_request = convert_to_gemini_request(request)?;
-                let gemini_response = client.chat_with_tools(&gemini_request, model).await?;
-                convert_from_gemini_response(gemini_response)
-            }
-        }
-    }
-
-    pub async fn list_models(&self) -> Result<Vec<crate::provider::Model>> {
-        match self {
-            LLMClient::OpenAI(client) => client.list_models().await,
-            LLMClient::Gemini(client) => client.list_models().await,
-        }
-    }
-
-    pub async fn embeddings(
-        &self,
-        request: &crate::provider::EmbeddingRequest,
-    ) -> Result<crate::provider::EmbeddingResponse> {
-        match self {
-            LLMClient::OpenAI(client) => client.embeddings(request).await,
-            LLMClient::Gemini(_client) => {
-                // Gemini doesn't support embeddings through the same API
-                // For now, return an error - this could be extended later
-                anyhow::bail!("Embeddings not supported for Gemini provider. Use a dedicated embedding model.")
-            }
-        }
-    }
-
-    pub async fn generate_images(
-        &self,
-        request: &crate::provider::ImageGenerationRequest,
-    ) -> Result<crate::provider::ImageGenerationResponse> {
-        match self {
-            LLMClient::OpenAI(client) => client.generate_images(request).await,
-            LLMClient::Gemini(_client) => {
-                // Gemini doesn't support image generation through the same API
-                // For now, return an error - this could be extended later
-                anyhow::bail!("Image generation not supported for Gemini provider. Use a dedicated image generation model.")
-            }
-        }
-    }
-
-    pub async fn chat_stream(&self, request: &ChatRequest, model: &str) -> Result<()> {
-        match self {
-            LLMClient::OpenAI(client) => client.chat_stream(request).await,
-            LLMClient::Gemini(client) => {
-                // Convert OpenAI format to Gemini format
-                let gemini_request = convert_to_gemini_request(request)?;
-                client.chat_stream(&gemini_request, model).await
-            }
-        }
-    }
-}
-
-// Convert OpenAI ChatRequest to Gemini format
-fn convert_to_gemini_request(request: &ChatRequest) -> Result<GeminiChatRequest> {
-    let mut contents = Vec::new();
-    let mut system_instruction = None;
-
-    for message in &request.messages {
-        match message.role.as_str() {
-            "system" => {
-                if let Some(content) = message.get_text_content() {
-                    system_instruction = Some(GeminiSystemInstruction {
-                        parts: GeminiPart::Text {
-                            text: content.clone(),
-                        },
-                    });
-                }
-            }
-            "user" => {
-                match &message.content_type {
-                    MessageContent::Text { content } => {
-                        if let Some(text) = content {
-                            contents.push(GeminiContent {
-                                role: "user".to_string(),
-                                parts: vec![GeminiPart::Text { text: text.clone() }],
-                            });
-                        }
-                    }
-                    MessageContent::Multimodal { content } => {
-                        let mut parts = Vec::new();
-                        for part in content {
-                            match part {
-                                ContentPart::Text { text } => {
-                                    parts.push(GeminiPart::Text { text: text.clone() });
-                                }
-                                ContentPart::ImageUrl { image_url } => {
-                                    // Convert image URL to Gemini inline data format
-                                    if image_url.url.starts_with("data:") {
-                                        // Extract mime type and base64 data from data URL
-                                        if let Some(comma_pos) = image_url.url.find(',') {
-                                            let header = &image_url.url[5..comma_pos]; // Skip "data:"
-                                            let data = &image_url.url[comma_pos + 1..];
-
-                                            let mime_type = if let Some(semi_pos) = header.find(';')
-                                            {
-                                                header[..semi_pos].to_string()
-                                            } else {
-                                                header.to_string()
-                                            };
-
-                                            parts.push(GeminiPart::InlineData {
-                                                inline_data: GeminiInlineData {
-                                                    mime_type,
-                                                    data: data.to_string(),
-                                                },
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if !parts.is_empty() {
-                            contents.push(GeminiContent {
-                                role: "user".to_string(),
-                                parts,
-                            });
-                        }
-                    }
-                }
-            }
-            "assistant" => {
-                let mut parts = Vec::new();
-
-                if let Some(content) = message.get_text_content() {
-                    parts.push(GeminiPart::Text {
-                        text: content.clone(),
-                    });
-                }
-
-                if let Some(tool_calls) = &message.tool_calls {
-                    for tool_call in tool_calls {
-                        let args: serde_json::Value =
-                            serde_json::from_str(&tool_call.function.arguments)?;
-                        parts.push(GeminiPart::FunctionCall {
-                            function_call: crate::provider::GeminiFunctionCall {
-                                name: tool_call.function.name.clone(),
-                                args,
-                            },
-                        });
-                    }
-                }
-
-                if !parts.is_empty() {
-                    contents.push(GeminiContent {
-                        role: "model".to_string(),
-                        parts,
-                    });
-                }
-            }
-            "tool" => {
-                if let (Some(content), Some(tool_call_id)) =
-                    (message.get_text_content(), &message.tool_call_id)
-                {
-                    // For Gemini, we need to find the function name from the tool_call_id
-                    // This is a simplified approach - in practice, you might need to track this
-                    let response_value: serde_json::Value = serde_json::from_str(content)
-                        .unwrap_or_else(|_| serde_json::json!({"result": content}));
-
-                    contents.push(GeminiContent {
-                        role: "user".to_string(),
-                        parts: vec![GeminiPart::FunctionResponse {
-                            function_response: crate::provider::GeminiFunctionResponse {
-                                name: tool_call_id.clone(), // Simplified - should be function name
-                                response: response_value,
-                            },
-                        }],
-                    });
-                }
-            }
-            _ => {} // Ignore unknown roles
-        }
-    }
-
-    // Convert tools if present
-    let gemini_tools = if let Some(tools) = &request.tools {
-        let function_declarations: Vec<GeminiFunctionDeclaration> = tools
-            .iter()
-            .map(|tool| GeminiFunctionDeclaration {
-                name: tool.function.name.clone(),
-                description: tool.function.description.clone(),
-                parameters: tool.function.parameters.clone(),
-            })
-            .collect();
-
-        if !function_declarations.is_empty() {
-            Some(vec![GeminiTool {
-                function_declarations,
-            }])
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let generation_config = if request.temperature.is_some() || request.max_tokens.is_some() {
-        Some(GeminiGenerationConfig {
-            temperature: request.temperature,
-            max_output_tokens: request.max_tokens,
-        })
-    } else {
-        None
-    };
-
-    Ok(GeminiChatRequest {
-        system_instruction,
-        contents,
-        tools: gemini_tools,
-        generation_config,
-    })
-}
-
-// Convert Gemini response to OpenAI format
-fn convert_from_gemini_response(
-    gemini_response: GeminiChatResponse,
-) -> Result<crate::provider::ChatResponse> {
-    let mut choices = Vec::new();
-
-    for candidate in gemini_response.candidates {
-        let mut content = None;
-        let mut tool_calls = Vec::new();
-
-        for part in candidate.content.parts {
-            match part {
-                GeminiResponsePart::Text { text } => {
-                    content = Some(text);
-                }
-                GeminiResponsePart::FunctionCall { function_call } => {
-                    tool_calls.push(crate::provider::ToolCall {
-                        id: format!("call_{}", uuid::Uuid::new_v4().to_string()[..8].to_string()),
-                        call_type: "function".to_string(),
-                        function: crate::provider::FunctionCall {
-                            name: function_call.name,
-                            arguments: serde_json::to_string(&function_call.args)?,
-                        },
-                    });
-                }
-            }
-        }
-
-        let choice = crate::provider::Choice {
-            message: crate::provider::ResponseMessage {
-                role: candidate.content.role,
-                content,
-                tool_calls: if tool_calls.is_empty() {
-                    None
-                } else {
-                    Some(tool_calls)
-                },
-            },
-        };
-
-        choices.push(choice);
-    }
-
-    Ok(crate::provider::ChatResponse { choices })
-}
+// Hardcoded conversion functions removed - now using template-based transformations
 
 pub async fn create_authenticated_client(
     config: &mut Config,
@@ -840,78 +550,15 @@ pub async fn create_authenticated_client(
         ..provider_config
     };
 
-    // Check if this is a Vertex AI provider that should use Gemini format
-    // Vertex AI Llama endpoints (ending with /chat/completions) use OpenAI format
-    let is_vertex_ai_gemini = (provider_config
+    // All providers now use OpenAIClient with template-based transformations
+    // Check if this needs OAuth authentication (Vertex AI)
+    let needs_oauth = provider_config
         .endpoint
         .contains("aiplatform.googleapis.com")
-        || provider_config.auth_type.as_deref() == Some("google_sa_jwt"))
-        && !provider_config.chat_path.ends_with("/chat/completions");
+        || provider_config.auth_type.as_deref() == Some("google_sa_jwt");
 
-    // Gemini (generativelanguage) still uses API key header semantics
-    // Vertex AI Gemini endpoints use Gemini format but with OAuth tokens
-    // Vertex AI Llama endpoints (/chat/completions) use OpenAI format
-    if is_gemini_provider(&provider_config) || is_vertex_ai_gemini {
-        crate::debug_log!("Detected Gemini/Vertex AI provider, creating GeminiClient");
-
-        if is_vertex_ai_gemini {
-            // For Vertex AI, we need to get an OAuth token
-            let temp_client = OpenAIClient::new_with_headers(
-                provider_config.endpoint.clone(),
-                provider_config.api_key.clone().unwrap_or_default(),
-                provider_config.models_path.clone(),
-                provider_config.chat_path.clone(),
-                provider_config.headers.clone(),
-            );
-
-            let auth_token = get_or_refresh_token(config, provider_name, &temp_client).await?;
-
-            // Create custom headers with Authorization for Vertex AI
-            let mut vertex_headers = provider_config.headers.clone();
-            vertex_headers.insert(
-                "Authorization".to_string(),
-                format!("Bearer {}", auth_token),
-            );
-
-            let client = GeminiClient::new_with_provider_config(
-                provider_config.endpoint.clone(),
-                auth_token, // Pass token as api_key for compatibility
-                provider_config.models_path.clone(),
-                provider_config.chat_path.clone(),
-                vertex_headers,
-                provider_config.clone(),
-            );
-            return Ok(LLMClient::Gemini(client));
-        } else {
-            // Regular Gemini with API key
-            let api_key = provider_config.api_key.clone().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "No API key configured for Gemini provider '{}'",
-                    provider_name
-                )
-            })?;
-            let client = GeminiClient::new_with_provider_config(
-                provider_config.endpoint.clone(),
-                api_key,
-                provider_config.models_path.clone(),
-                provider_config.chat_path.clone(),
-                provider_config.headers.clone(),
-                provider_config.clone(),
-            );
-            return Ok(LLMClient::Gemini(client));
-        }
-    }
-
-    // OpenAI-compatible flow
-    // Check if this is a Vertex AI Llama endpoint (needs OAuth but OpenAI format)
-    let is_vertex_ai_llama = (provider_config
-        .endpoint
-        .contains("aiplatform.googleapis.com")
-        || provider_config.auth_type.as_deref() == Some("google_sa_jwt"))
-        && provider_config.chat_path.ends_with("/chat/completions");
-
-    if is_vertex_ai_llama {
-        // Vertex AI Llama: OAuth authentication with OpenAI format
+    if needs_oauth {
+        // OAuth authentication flow (Vertex AI)
         let temp_client = OpenAIClient::new_with_headers(
             provider_config.endpoint.clone(),
             provider_config.api_key.clone().unwrap_or_default(),
@@ -922,9 +569,9 @@ pub async fn create_authenticated_client(
 
         let auth_token = get_or_refresh_token(config, provider_name, &temp_client).await?;
 
-        // Create custom headers with Authorization for Vertex AI Llama
-        let mut vertex_headers = provider_config.headers.clone();
-        vertex_headers.insert(
+        // Create custom headers with Authorization
+        let mut oauth_headers = provider_config.headers.clone();
+        oauth_headers.insert(
             "Authorization".to_string(),
             format!("Bearer {}", auth_token),
         );
@@ -934,15 +581,14 @@ pub async fn create_authenticated_client(
             auth_token,
             provider_config.models_path.clone(),
             provider_config.chat_path.clone(),
-            vertex_headers,
+            oauth_headers,
             provider_config.clone(),
         );
 
-        return Ok(LLMClient::OpenAI(client));
+        return Ok(client);
     }
 
-    // Regular OpenAI-compatible flow
-    // Build temp client for token retrieval fallbacks that still use simple GET token_url
+    // Regular authentication flow (API key or token URL)
     let temp_client = OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap_or_default(),
@@ -962,7 +608,7 @@ pub async fn create_authenticated_client(
         provider_config.clone(),
     );
 
-    Ok(LLMClient::OpenAI(client))
+    Ok(client)
 }
 
 // New function to handle tool execution loop
@@ -1032,7 +678,7 @@ pub async fn send_chat_request_with_tool_execution(
         };
 
         // Make the API call
-        let response = client.chat_with_tools(&request, model).await?;
+        let response = client.chat_with_tools(&request).await?;
 
         // Track token usage if we have a counter
         if let Some(ref counter) = token_counter {
@@ -1265,7 +911,7 @@ pub async fn send_chat_request_with_validation_messages(
         stream: None,
     };
 
-    let response = client.chat(&request, model).await?;
+    let response = client.chat(&request).await?;
 
     // For now, return None for token counts as we'd need to implement multimodal token counting
     Ok((response, None, None))
@@ -1318,7 +964,7 @@ pub async fn send_chat_request_with_streaming_messages(
         stream: Some(true),
     };
 
-    client.chat_stream(&request, model).await?;
+    client.chat_stream(&request).await?;
 
     Ok(())
 }
@@ -1378,7 +1024,7 @@ pub async fn send_chat_request_with_tool_execution_messages(
             stream: None,
         };
 
-        let response = client.chat_with_tools(&request, model).await?;
+        let response = client.chat_with_tools(&request).await?;
 
         if let Some(choice) = response.choices.first() {
             if let Some(tool_calls) = &choice.message.tool_calls {

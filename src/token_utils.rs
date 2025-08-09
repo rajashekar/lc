@@ -207,28 +207,21 @@ impl TokenCounter {
 }
 
 /// Map model names to tiktoken-compatible model names
+/// This is a simplified fallback approach - ideally tokenizer mappings should be
+/// configured per provider in configuration files for accuracy
 fn map_model_to_tiktoken(model_name: &str) -> String {
-    // Handle common model name patterns
     let lower_name = model_name.to_lowercase();
 
+    // Only handle actual OpenAI models with their correct tokenizers
     if lower_name.contains("gpt-4") {
         "gpt-4".to_string()
     } else if lower_name.contains("gpt-3.5") {
         "gpt-3.5-turbo".to_string()
-    } else if lower_name.contains("claude") {
-        // Claude uses a similar tokenizer to GPT-4
-        "gpt-4".to_string()
-    } else if lower_name.contains("llama") {
-        // Llama models use a different tokenizer, but GPT-4 is a reasonable approximation
-        "gpt-4".to_string()
-    } else if lower_name.contains("gemini") {
-        // Gemini uses a different tokenizer, but GPT-4 is a reasonable approximation
-        "gpt-4".to_string()
-    } else if lower_name.contains("mistral") {
-        // Mistral uses a different tokenizer, but GPT-4 is a reasonable approximation
-        "gpt-4".to_string()
     } else {
-        // Default to GPT-4 tokenizer for unknown models
+        // For all non-OpenAI models, use GPT-4 as a rough approximation
+        // NOTE: This is inaccurate but necessary since tiktoken only supports OpenAI models
+        // TODO: Move to provider-specific tokenizer configuration or disable token counting
+        // for non-OpenAI models to avoid misleading estimates
         "gpt-4".to_string()
     }
 }

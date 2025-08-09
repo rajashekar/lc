@@ -298,32 +298,53 @@ def main():
     """
     # Define paths
     lc_config_dir = Path.home() / "Library" / "Application Support" / "lc"
+    providers_dir = lc_config_dir / "providers"
     # Create config_samples in the git repo directory
     git_repo_dir = Path("/Users/rchint1/Documents/workspace/lc")
     config_samples_dir = git_repo_dir / "config_samples"
+    providers_samples_dir = config_samples_dir / "providers"
     
-    # Ensure config_samples directory exists
+    # Ensure directories exist
     config_samples_dir.mkdir(exist_ok=True)
+    providers_samples_dir.mkdir(exist_ok=True)
     
     print(f"Processing TOML files from: {lc_config_dir}")
+    print(f"Processing provider TOML files from: {providers_dir}")
     print(f"Output directory: {config_samples_dir}")
     print("-" * 50)
     
-    # Find all TOML files
-    toml_files = list(lc_config_dir.glob("*.toml"))
+    # Find all TOML files in main directory
+    main_toml_files = list(lc_config_dir.glob("*.toml"))
     
-    if not toml_files:
+    # Find all TOML files in providers directory
+    provider_toml_files = []
+    if providers_dir.exists():
+        provider_toml_files = list(providers_dir.glob("*.toml"))
+    
+    all_files_count = len(main_toml_files) + len(provider_toml_files)
+    
+    if all_files_count == 0:
         print("No TOML files found!")
         return
     
-    # Process each TOML file
-    for toml_file in toml_files:
+    # Process main TOML files
+    print("Processing main configuration files:")
+    for toml_file in main_toml_files:
         output_file = config_samples_dir / f"{toml_file.stem}_sample.toml"
         process_toml_file(toml_file, output_file)
     
+    # Process provider TOML files
+    if provider_toml_files:
+        print("\nProcessing provider configuration files:")
+        for toml_file in provider_toml_files:
+            output_file = providers_samples_dir / f"{toml_file.stem}_sample.toml"
+            process_toml_file(toml_file, output_file)
+    
     print("-" * 50)
-    print(f"✓ Processed {len(toml_files)} TOML files")
+    print(f"✓ Processed {len(main_toml_files)} main TOML files")
+    print(f"✓ Processed {len(provider_toml_files)} provider TOML files")
     print(f"✓ Config samples created in: {config_samples_dir}")
+    print(f"✓ Provider samples created in: {providers_samples_dir}")
     
     # Create a README file
     readme_path = config_samples_dir / "README.md"
@@ -332,15 +353,37 @@ def main():
         f.write("This directory contains sanitized sample configuration files for the `lc` tool.\n\n")
         f.write("## Usage\n\n")
         f.write("1. Copy the relevant sample file(s) to your `~/Library/Application Support/lc/` directory\n")
-        f.write("2. Rename them by removing the `_sample` suffix\n")
-        f.write("3. Replace all `<your-*>` placeholders with your actual API keys and credentials\n\n")
+        f.write("2. For provider files, copy them to `~/Library/Application Support/lc/providers/`\n")
+        f.write("3. Rename them by removing the `_sample` suffix\n")
+        f.write("4. Replace all `<your-*>` placeholders with your actual API keys and credentials\n\n")
         f.write("## Files\n\n")
+        f.write("### Main Configuration Files\n\n")
         
-        for toml_file in sorted(toml_files):
+        for toml_file in sorted(main_toml_files):
             sample_name = f"{toml_file.stem}_sample.toml"
             f.write(f"- `{sample_name}` - Sample for `{toml_file.name}`\n")
         
-        f.write("\n## Security Note\n\n")
+        if provider_toml_files:
+            f.write("\n### Provider Configuration Files\n\n")
+            for toml_file in sorted(provider_toml_files):
+                sample_name = f"providers/{toml_file.stem}_sample.toml"
+                f.write(f"- `{sample_name}` - Sample for `providers/{toml_file.name}`\n")
+        
+        f.write("\n## Directory Structure\n\n")
+        f.write("```\n")
+        f.write("~/Library/Application Support/lc/\n")
+        f.write("├── config.toml              # Main configuration\n")
+        f.write("├── other_config.toml        # Other main configs\n")
+        f.write("└── providers/               # Provider-specific configs\n")
+        f.write("    ├── gemini.toml          # Google Gemini provider\n")
+        f.write("    ├── vertex_google.toml   # Vertex AI Google provider\n")
+        f.write("    ├── vertex_llama.toml    # Vertex AI Llama provider\n")
+        f.write("    ├── cohere.toml          # Cohere provider\n")
+        f.write("    ├── meta.toml            # Meta/Llama provider\n")
+        f.write("    └── other_providers.toml # Other providers\n")
+        f.write("```\n\n")
+        
+        f.write("## Security Note\n\n")
         f.write("⚠️ **Never commit actual API keys or credentials to version control!**\n\n")
         f.write("These sample files have all sensitive values masked with placeholders. ")
         f.write("Always keep your actual configuration files private and secure.\n")

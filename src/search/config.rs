@@ -22,7 +22,7 @@ impl SearchConfig {
 
     pub fn load() -> Result<Self> {
         let config_path = Self::config_file_path()?;
-
+        
         if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
             let config: SearchConfig = toml::from_str(&content)?;

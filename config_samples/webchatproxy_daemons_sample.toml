@@ -1,0 +1,14 @@
+# Sample configuration file for webchatproxy_daemons.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+
+[daemons]
+
+[daemons.kagi]
+pid = 32398
+host = "127.0.0.1"
+port = 8084
+provider = "kagi"
+started_at = "2025-07-29T20:12:29.584574Z"

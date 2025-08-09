@@ -1,0 +1,52 @@
+# Sample configuration file for meta.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+# API endpoint URL for this provider
+endpoint = "https://api.llama.com/v1"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-meta-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[headers]
+
+[vars]
+
+[chat_templates]
+
+[chat_templates.]
+response = """
+{
+  "id": "chatcmpl-{{ random_id() }}",
+  "object": "chat.completion",
+  "created": {{ now() | int }},
+  "model": "{{ model }}",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{{ completion_message.content.text | replace(from='"', to='\\"') }}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0
+  }
+}
+
+"""

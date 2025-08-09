@@ -103,6 +103,8 @@ impl TemplateProcessor {
         tera.register_filter("system_to_user_role", SystemToUserRoleFilter);
         tera.register_filter("default", DefaultFilter);
         tera.register_filter("select_tool_calls", SelectToolCallsFilter);
+        tera.register_filter("from_json", FromJsonFilter);
+        tera.register_filter("selectattr", SelectAttrFilter);
         
         Ok(Self { tera })
     }
@@ -343,6 +345,63 @@ impl Filter for SelectToolCallsFilter {
                     item.as_object()
                         .map(|obj| obj.contains_key(key))
                         .unwrap_or(false)
+                })
+                .cloned()
+                .collect();
+                
+            Ok(Value::Array(filtered))
+        } else {
+            Ok(Value::Array(vec![]))
+        }
+    }
+}
+
+/// Filter to parse JSON strings
+struct FromJsonFilter;
+
+impl Filter for FromJsonFilter {
+    fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
+        if let Some(json_str) = value.as_str() {
+            match serde_json::from_str::<JsonValue>(json_str) {
+                Ok(parsed) => {
+                    // Convert JsonValue to Tera Value
+                    match serde_json::to_value(&parsed) {
+                        Ok(tera_value) => Ok(tera_value),
+                        Err(e) => Err(tera::Error::msg(format!("Failed to convert to Tera value: {}", e))),
+                    }
+                }
+                Err(e) => Err(tera::Error::msg(format!("Failed to parse JSON: {}", e))),
+            }
+        } else {
+            Ok(value.clone())
+        }
+    }
+}
+
+/// Filter to select items by attribute value (simplified version of Jinja2's selectattr)
+struct SelectAttrFilter;
+
+impl Filter for SelectAttrFilter {
+    fn filter(&self, value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
+        if let Some(array) = value.as_array() {
+            let attr_name = args.get("attr")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| tera::Error::msg("selectattr filter requires 'attr' argument"))?;
+            
+            let test_value = args.get("value")
+                .ok_or_else(|| tera::Error::msg("selectattr filter requires 'value' argument"))?;
+                
+            let filtered: Vec<Value> = array.iter()
+                .filter(|item| {
+                    if let Some(obj) = item.as_object() {
+                        if let Some(attr_value) = obj.get(attr_name) {
+                            attr_value == test_value
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
                 })
                 .cloned()
                 .collect();

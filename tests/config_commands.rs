@@ -200,3 +200,76 @@ mod config_validation_tests {
         assert_eq!(resolved, "t:nonexistent");
     }
 }
+
+#[cfg(test)]
+mod provider_config_url_tests {
+    use lc::config::ProviderConfig;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_get_chat_url_full_url_with_model_and_vars() {
+        let mut pc = ProviderConfig {
+            endpoint: "https://aiplatform.googleapis.com".to_string(),
+            api_key: None,
+            models: vec![],
+            models_path: "/v1beta1/{project}/locations/{location}/models".to_string(),
+            chat_path: "https://aiplatform.googleapis.com/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:streamGenerateContent".to_string(),
+            images_path: None,
+            embeddings_path: None,
+            headers: HashMap::new(),
+            token_url: Some("https://oauth2.googleapis.com/token".to_string()),
+            cached_token: None,
+            auth_type: Some("google_sa_jwt".to_string()),
+            vars: HashMap::new(),
+            chat_templates: None,
+            images_templates: None,
+            embeddings_templates: None,
+            models_templates: None,
+        };
+
+        pc.vars.insert("project".to_string(), "my-proj".to_string());
+        pc.vars
+            .insert("location".to_string(), "us-central1".to_string());
+
+        // Should replace {model} and interpolate vars
+        let url = pc.get_chat_url("gemini-1.5-pro");
+        assert_eq!(
+            url,
+            "https://aiplatform.googleapis.com/v1/projects/my-proj/locations/us-central1/publishers/google/models/gemini-1.5-pro:streamGenerateContent"
+        );
+
+        // Legacy placeholder {model_name} should also work
+        pc.chat_path = "https://aiplatform.googleapis.com/v1/projects/{project}/locations/{location}/models/{model_name}:generateContent".to_string();
+        let url2 = pc.get_chat_url("gemini-1.5-flash");
+        assert_eq!(
+            url2,
+            "https://aiplatform.googleapis.com/v1/projects/my-proj/locations/us-central1/models/gemini-1.5-flash:generateContent"
+        );
+    }
+
+    #[test]
+    fn test_get_chat_url_non_full_path_concatenation() {
+        let pc = ProviderConfig {
+            endpoint: "https://api.openai.com".to_string(),
+            api_key: None,
+            models: vec![],
+            models_path: "/v1/models".to_string(),
+            chat_path: "/v1/chat/completions".to_string(),
+            images_path: None,
+            embeddings_path: None,
+            headers: HashMap::new(),
+            token_url: None,
+            cached_token: None,
+            auth_type: None,
+            vars: HashMap::new(),
+            chat_templates: None,
+            images_templates: None,
+            embeddings_templates: None,
+            models_templates: None,
+        };
+
+        // For non-full URLs, no interpolation or model replacement occurs here
+        let url = pc.get_chat_url("gpt-4o");
+        assert_eq!(url, "https://api.openai.com/v1/chat/completions");
+    }
+}

@@ -4,94 +4,29 @@
 # Comments below explain what each setting does
 
 # Default AI provider to use when none is specified
-default_provider = "brave"
+default_provider = "test_config"
 
 
 [providers]
-# Configuration for brave AI provider
+# Configuration for test_config AI provider
 
-[providers.brave]
+[providers.test_config]
 # Search API endpoint URL
-url = "https://api.search.brave.com/res/v1/web/search"
+url = "https://api.search.brave.com/res/v1/test"
 
 # Search provider implementation type
 provider_type = "brave"
 
 
-[brave.headers]
-# Token header - replace with your actual token
-X-Subscription-Token = "<your-api-key>"
+[test_config.headers]
+# Configuration for brave_config_test AI provider
 
-# Configuration for exa AI provider
-
-[providers.exa]
+[providers.brave_config_test]
 # Search API endpoint URL
-url = "https://api.exa.ai/search"
+url = "https://api.search.brave.com/res/v1"
 
 # Search provider implementation type
-provider_type = "exa"
+provider_type = "brave"
 
 
-[exa.headers]
-# API key header - replace with your actual key
-x-api-key = "<your-api-key>"
-
-# Configuration for ddg AI provider
-
-[providers.ddg]
-# Search API endpoint URL
-url = "https://api.duckduckgo.com/"
-
-# Search provider implementation type
-provider_type = "duckduckgo"
-
-
-[ddg.headers]
-# Configuration for serper AI provider
-
-[providers.serper]
-# Search API endpoint URL
-url = "https://google.serper.dev/search"
-
-# Search provider implementation type
-provider_type = "serper"
-
-
-[serper.headers]
-# API key header - replace with your actual key
-X-API-KEY = "<your-api-key>"
-
-# Configuration for jina AI provider
-
-[providers.jina]
-# Search API endpoint URL
-url = "https://s.jina.ai/"
-
-# Search provider implementation type
-provider_type = "jina"
-
-
-[jina.headers]
-# HTTP header: X-Engine
-X-Engine = "direct"
-
-# Authorization header - replace with your actual credentials
-Authorization = "<your-api-key>"
-
-# HTTP header: Accept
-Accept = "application/json"
-
-# Configuration for serpapi AI provider
-
-[providers.serpapi]
-# Search API endpoint URL
-url = "https://serpapi.com/search"
-
-# Search provider implementation type
-provider_type = "serpapi"
-
-
-[serpapi.headers]
-# API key header - replace with your actual key
-api_key = "<your-api-key>"
-
+[brave_config_test.headers]

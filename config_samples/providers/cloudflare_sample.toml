@@ -1,0 +1,41 @@
+# Sample configuration file for cloudflare.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+# API endpoint URL for this provider
+endpoint = "https://api.cloudflare.com/client/v4"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/accounts/{account_id}/ai/run/@cf/{model}"
+
+
+[headers]
+
+[vars]
+account_id = "<your-account-id>"
+
+[chat_templates]
+
+[chat_templates.]
+response = """
+{% if success %}
+{
+  "content": "{{ result.response }}"
+}
+{% else %}
+{
+  "error": "Cloudflare API request failed"
+}
+{% endif %}
+
+"""

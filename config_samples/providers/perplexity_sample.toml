@@ -1,0 +1,24 @@
+# Sample configuration file for perplexity.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+# API endpoint URL for this provider
+endpoint = "https://api.perplexity.ai"
+
+# API key for authentication - replace with your actual key
+api_key = "<your-perplexity-api-key>"
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/chat/completions"
+
+
+[headers]
+
+[vars]

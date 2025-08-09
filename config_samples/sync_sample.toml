@@ -5,6 +5,40 @@
 
 
 [providers]
+# Configuration for cloudflare AI provider
+
+[providers.cloudflare]
+type = "s3"
+# S3 bucket name for sync storage
+bucket_name = "rcc"
+
+# AWS region for S3 bucket
+region = "WNAM"
+
+# AWS access key ID - replace with your actual key
+access_key_id = "<your-api-key>"
+
+# AWS secret access key - replace with your actual key
+secret_access_key = "<your-api-key>"
+
+endpoint_url = "https://327aa637a8056f8681a99ec3bb4e85e5.r2.cloudflarestorage.com"
+# Configuration for backblaze AI provider
+
+[providers.backblaze]
+type = "s3"
+# S3 bucket name for sync storage
+bucket_name = "rcblaze"
+
+# AWS region for S3 bucket
+region = "us-west-004"
+
+# AWS access key ID - replace with your actual key
+access_key_id = "<your-api-key>"
+
+# AWS secret access key - replace with your actual key
+secret_access_key = "<your-api-key>"
+
+endpoint_url = "https://s3.us-west-004.backblazeb2.com"
 # Configuration for s3 AI provider
 
 [providers.s3]

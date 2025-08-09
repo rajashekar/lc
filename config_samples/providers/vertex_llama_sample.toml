@@ -1,0 +1,54 @@
+# Sample configuration file for vertex_llama.toml
+# This is a sanitized version with sensitive values masked
+# Replace <your-*> placeholders with your actual values
+# Comments below explain what each setting does
+
+# API endpoint URL for this provider
+endpoint = "https://us-east5-aiplatform.googleapis.com"
+
+# API key for authentication - replace with your actual key
+api_key = """
+{
+  "type": "service_account",
+  "project_id": "<your-project-id>",
+  "private_key_id": "<your-private-key-id>",
+  "private_key": "<your-private-key>",
+  "client_email": "<your-service-account-email>",
+  "client_id": "<your-client-id>",
+  "auth_uri": "<your-auth-uri>",
+  "token_uri": "<your-token-uri>",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "<your-client-x509-cert-url>",
+  "universe_domain": "googleapis.com"
+}
+"""
+
+# List of available models (auto-populated by the tool)
+models = []
+
+# API path to fetch available models
+models_path = "/models"
+
+# API path for chat completions
+chat_path = "/v1/projects/{project}/locations/{location}/endpoints/openapi/chat/completions"
+
+# URL to refresh authentication tokens
+token_url = "<your-jwt-token>"
+
+# Authentication method used by this provider
+auth_type = "<your-api-key>"
+
+
+[headers]
+
+[cached_token]
+# Cached authentication token (auto-refreshed)
+token = "<your-jwt-token>"
+
+# Token expiration timestamp
+expires_at = "2025-08-09T08:18:35Z"
+
+
+[vars]
+project = "gen-lang-client-0931965430"
+location = "us-east5"
