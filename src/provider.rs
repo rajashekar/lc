@@ -814,7 +814,12 @@ impl OpenAIClient {
         &self,
         request: &ImageGenerationRequest,
     ) -> Result<ImageGenerationResponse> {
-        let url = format!("{}/images/generations", self.base_url);
+        // Use provider config's images path if available, otherwise default
+        let url = if let Some(ref config) = self.provider_config {
+            format!("{}{}", self.base_url, config.images_path.as_deref().unwrap_or("/images/generations"))
+        } else {
+            format!("{}/images/generations", self.base_url)
+        };
 
         let mut req = self
             .client
@@ -831,7 +836,40 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
 
-        let response = req.json(request).send().await?;
+        // Check if we have a template for this provider/model/endpoint
+        let request_body = if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get template for images endpoint
+                let model_name = request.model.as_deref().unwrap_or("");
+                let template = config.get_endpoint_template("images", model_name);
+
+                if let Some(template_str) = template {
+                    // Clone the processor to avoid mutable borrow issues
+                    let mut processor_clone = processor.clone();
+                    // Use template to transform request
+                    match processor_clone.process_image_request(request, &template_str, &config.vars) {
+                        Ok(json_value) => Some(json_value),
+                        Err(e) => {
+                            eprintln!("Warning: Failed to process image request template: {}. Falling back to default.", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Send request with template-processed body or fall back to default logic
+        let response = if let Some(json_body) = request_body {
+            req.json(&json_body).send().await?
+        } else {
+            req.json(request).send().await?
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -843,7 +881,40 @@ impl OpenAIClient {
             );
         }
 
-        let image_response: ImageGenerationResponse = response.json().await?;
+        // Get the response text first to handle different formats
+        let response_text = response.text().await?;
+
+        // Check if we have a response template for this provider/model/endpoint
+        if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get response template for images endpoint
+                let model_name = request.model.as_deref().unwrap_or("");
+                let template = config.get_endpoint_response_template("images", model_name);
+
+                if let Some(template_str) = template {
+                    // Parse response as JSON
+                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                        // Clone the processor to avoid mutable borrow issues
+                        let mut processor_clone = processor.clone();
+                        // Use template to transform response
+                        match processor_clone.process_response(&response_json, &template_str) {
+                            Ok(transformed) => {
+                                // Try to parse the transformed response as ImageGenerationResponse
+                                if let Ok(image_response) = serde_json::from_value::<ImageGenerationResponse>(transformed) {
+                                    return Ok(image_response);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Warning: Failed to process image response template: {}. Falling back to default parsing.", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fall back to default parsing
+        let image_response: ImageGenerationResponse = serde_json::from_str(&response_text)?;
         Ok(image_response)
     }
 

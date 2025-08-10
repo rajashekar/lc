@@ -6497,33 +6497,41 @@ pub async fn handle_image_command(
                         response.data.len()
                     );
 
-                    if let Some(ref dir) = output_dir {
-                        let filename = format!(
-                            "image_{}_{}.png",
-                            chrono::Utc::now().format("%Y%m%d_%H%M%S"),
-                            image_num
-                        );
-                        let filepath = Path::new(dir).join(&filename);
+                    // For base64 data, always save to a file (either specified output dir or current dir)
+                    let save_dir = output_dir.as_deref().unwrap_or(".");
+                    let filename = format!(
+                        "image_{}_{}.png",
+                        chrono::Utc::now().format("%Y%m%d_%H%M%S"),
+                        image_num
+                    );
+                    let filepath = Path::new(save_dir).join(&filename);
 
-                        match save_base64_image(b64_data, &filepath) {
-                            Ok(_) => {
-                                println!("   {} Saved to: {}", "💾".green(), filepath.display());
-                            }
-                            Err(e) => {
-                                eprintln!("   {} Failed to save image: {}", "❌".red(), e);
-                            }
+                    match save_base64_image(b64_data, &filepath) {
+                        Ok(_) => {
+                            println!("   {} Saved to: {}", "💾".green(), filepath.display());
                         }
-                    } else {
-                        println!("   Base64 data available (use --output to save)");
+                        Err(e) => {
+                            eprintln!("   {} Failed to save image: {}", "❌".red(), e);
+                        }
+                    }
+
+                    if let Some(revised_prompt) = &image_data.revised_prompt {
+                        if revised_prompt != &prompt {
+                            println!("   Revised prompt: {}", revised_prompt.dimmed());
+                        }
                     }
                 }
             }
 
             if output_dir.is_none() {
-                println!(
-                    "\n{} Use --output <directory> to automatically download images",
-                    "💡".yellow()
-                );
+                // Check if we had any URL-based images that weren't downloaded
+                let has_url_images = response.data.iter().any(|img| img.url.is_some());
+                if has_url_images {
+                    println!(
+                        "\n{} Use --output <directory> to automatically download URL-based images",
+                        "💡".yellow()
+                    );
+                }
             }
         }
         Err(e) => {

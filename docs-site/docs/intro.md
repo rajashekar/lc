@@ -10,7 +10,7 @@ slug: /
 <img src="img/social-card.png" alt="LLM Client" width="450" />
 </p>
 
-A fast, Rust-based command-line tool for interacting with Large Language Models through OpenAI-compatible APIs. Built for speed, efficiency, and ease of use. This tool is inspired by Simon Willison's [llm](https://github.com/simonw/llm).
+A fast, Rust-based command-line tool for interacting with Large Language Models through OpenAI-compatible APIs. Built for speed, efficiency, and ease of use.
 
 ## Why LLM Client?
 
@@ -83,7 +83,7 @@ or
 lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Write a haiku about coding"
 
 # Use MCP tools for internet access
-lc -t fetch "What's the latest news about AI?"
+lc -t playwright "What's the latest news about AI?"
 
 # Use web search integration
 lc --use-search ddg "What are the latest AI developments?"  # Free!

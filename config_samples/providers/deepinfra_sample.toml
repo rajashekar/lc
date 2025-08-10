@@ -18,7 +18,42 @@ models_path = "/models"
 # API path for chat completions
 chat_path = "/chat/completions"
 
+# API path for image generation
+images_path = "/images/generations"
+
 
 [headers]
 
 [vars]
+
+# Image generation templates
+# DeepInfra requires "response_format": "b64_json" and doesn't support "url"
+# This template forces response_format to b64_json
+[images_templates.""]
+request = """
+{
+  "prompt": "{{ prompt }}"{% if model %},
+  "model": "{{ model }}"{% endif %}{% if n %},
+  "n": {{ n }}{% endif %}{% if size %},
+  "size": "{{ size }}"{% endif %}{% if quality %},
+  "quality": "{{ quality }}"{% endif %}{% if style %},
+  "style": "{{ style }}"{% endif %},
+  "response_format": "b64_json"
+}
+"""
+
+# DeepInfra returns images as base64 in "b64_json" field
+# Transform to match expected format
+response = """
+{
+  "created": {{ created }},
+  "data": [
+    {% for item in data %}
+    {
+      {% if item.b64_json %}"b64_json": "{{ item.b64_json }}"{% endif %}{% if item.url %},
+      "url": "{{ item.url }}"{% endif %}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+"""

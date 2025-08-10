@@ -55,6 +55,7 @@ const sidebars = {
         'advanced/rag',
         'advanced/sync',
         'advanced/mcp',
+        'advanced/vision'
       ],
     },
     'troubleshooting',

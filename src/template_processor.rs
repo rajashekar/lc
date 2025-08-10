@@ -166,6 +166,47 @@ impl TemplateProcessor {
         Ok(json_value)
     }
 
+    /// Process an image generation request using the provided template
+    pub fn process_image_request(
+        &mut self,
+        request: &crate::provider::ImageGenerationRequest,
+        template: &str,
+        provider_vars: &HashMap<String, String>,
+    ) -> Result<JsonValue> {
+        // Add template to Tera
+        self.tera
+            .add_raw_template("image_request", template)
+            .context("Failed to parse image request template")?;
+
+        // Build context from ImageGenerationRequest
+        let mut context = TeraContext::new();
+        
+        // Add basic fields
+        context.insert("prompt", &request.prompt);
+        context.insert("model", &request.model);
+        context.insert("n", &request.n);
+        context.insert("size", &request.size);
+        context.insert("quality", &request.quality);
+        context.insert("style", &request.style);
+        context.insert("response_format", &request.response_format);
+        
+        // Add provider-specific variables
+        for (key, value) in provider_vars {
+            context.insert(key, value);
+        }
+
+        // Render template
+        let rendered = self.tera
+            .render("image_request", &context)
+            .context("Failed to render image request template")?;
+
+        // Parse as JSON to validate
+        let json_value: JsonValue = serde_json::from_str(&rendered)
+            .context("Image template did not produce valid JSON")?;
+
+        Ok(json_value)
+    }
+
     /// Process a response using the provided template
     pub fn process_response(
         &mut self,

@@ -225,7 +225,7 @@ lc keys add hf
 ```
 ### Google Vertex AI (Service Account JWT)
 
-Vertex AI on Google Cloud uses OAuth 2.0 with a Service Account (SA). lc supports first-class auth using the JWT Bearer flow with automatic token mint/refresh and path templating for project/location/model.
+Vertex AI on Google Cloud uses OAuth 2.0 with a Service Account (SA). lc supports first-class auth using the JWT Bearer flow with automatic token mint/refresh and path templating for `project/location/model`.
 
 Quickstart
 
@@ -260,19 +260,19 @@ Notes
   - iat, exp (~1 hour)
 - lc exchanges the assertion at the token URL for an access_token, caches it with a safety skew, and automatically refreshes when needed.
 - The chat path templates:
-  - {project}, {location} from provider vars
-  - {model} from the runtime -m flag
+  - `{project}`, `{location}` from provider vars
+  - `{model}` from the runtime -m flag
 - For Gemini API (non-Vertex) providers using x-goog-api-key, continue to use standard API key flows. Vertex AI flows use Bearer tokens obtained via the SA JWT exchange.
 
 Troubleshooting
 
 - "Missing provider vars"
-  - Set vars: lc providers vars vertex_google set project <id>; lc providers vars vertex_google set location <loc>
+  - Set vars: lc providers vars vertex_google set project `<id>`; lc providers vars vertex_google set location `<loc>`
   - List vars: lc providers vars vertex_google list
 - "Invalid service account JSON" or "Invalid base64 format"
   - Re-run: lc keys add vertex_google and paste the base64 version: cat sa.json | base64
 - "Authentication failed"
-  - Ensure the Service Account has Vertex AI permissions (e.g., Vertex AI User) and the project/location are correct
+  - Ensure the Service Account has Vertex AI permissions (e.g., Vertex AI User) and the `project/location` are correct
   - If using a VPC-SC or restricted org policy, confirm token audience and scopes are permitted
 
 ## Provider Features

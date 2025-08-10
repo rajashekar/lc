@@ -8,9 +8,16 @@ sidebar_position: 2
 
 Get up and running with LLM Client in just a few minutes. This guide will walk you through the essential steps to start using `lc`.
 
+
 ## Step 1: Add a Provider
 
-First, add an LLM provider. We'll use OpenAI as an example:
+First, add an LLM provider. 
+
+```bash
+lc providers add <provider-name> <base-url>
+```
+
+We'll use OpenAI as an example:
 
 ```bash
 lc providers add openai https://api.openai.com/v1
