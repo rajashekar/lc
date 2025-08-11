@@ -97,6 +97,20 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum CompletionShell {
+    /// Bash shell
+    Bash,
+    /// Zsh shell
+    Zsh,
+    /// Fish shell
+    Fish,
+    /// PowerShell
+    PowerShell,
+    /// Elvish shell
+    Elvish,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
     /// Provider management (alias: p)
@@ -206,7 +220,7 @@ pub enum Commands {
         #[arg(short = 'p', long = "port", default_value = "6789")]
         port: u16,
         /// Host to bind to
-        #[arg(short = 'h', long = "host", default_value = "127.0.0.1")]
+        #[arg(long = "host", default_value = "127.0.0.1")]
         host: String,
         /// Filter by provider
         #[arg(long = "provider")]
@@ -321,6 +335,12 @@ pub enum Commands {
         /// List available cached metadata files
         #[arg(short, long)]
         list: bool,
+    },
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: CompletionShell,
     },
 }
 
@@ -1056,6 +1076,7 @@ pub enum McpServerType {
     /// Streamable HTTP MCP server
     Streamable,
 }
+
 
 // Helper function to parse environment variable KEY=VALUE pairs
 fn parse_env_var(s: &str) -> Result<(String, String), String> {
@@ -6583,6 +6604,22 @@ pub async fn handle_dump_metadata_command(provider: Option<String>, list: bool) 
     }
 
     Ok(())
+}
+
+// Completion generation handler
+pub async fn handle_completions_command(shell: CompletionShell) -> Result<()> {
+    crate::completion::generate_completions(shell).await
+}
+
+// Custom completion functions for dynamic values
+#[allow(dead_code)]
+pub fn complete_providers() -> Vec<String> {
+    crate::completion::get_available_providers()
+}
+
+#[allow(dead_code)]
+pub fn complete_models() -> Vec<String> {
+    crate::completion::get_available_models()
 }
 
 // Include test module

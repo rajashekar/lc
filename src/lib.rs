@@ -5,6 +5,7 @@
 
 pub mod chat;
 pub mod cli;
+pub mod completion;
 pub mod config;
 pub mod database;
 pub mod dump_metadata;

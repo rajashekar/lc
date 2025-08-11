@@ -46,6 +46,28 @@ lc "What is the capital of France?"
 - 🔐 **Secure** - Encrypted configuration sync
 - 💬 **Intuitive** - Simple commands with short aliases
 - 🎨 **Flexible Templates** - Configure request/response formats for any LLM API
+- ⚡ **Shell Completion** - Tab completion for commands, providers, models, and more
+
+## Shell Completion
+
+`lc` supports comprehensive tab completion for all major shells (Bash, Zsh, Fish, PowerShell, Elvish) with both static and dynamic completion:
+
+```bash
+# Generate completion script for your shell
+lc completions bash > ~/.local/share/bash-completion/completions/lc
+lc completions zsh > ~/.local/share/zsh/site-functions/_lc
+lc completions fish > ~/.config/fish/completions/lc.fish
+
+# Dynamic provider completion
+lc -p <TAB>                 # Shows all configured providers
+lc -p g<TAB>                # Shows providers starting with "g"
+
+# Command completion
+lc providers <TAB>          # Shows provider subcommands
+lc config set <TAB>         # Shows configuration options
+```
+
+For detailed setup instructions, see [Shell Completion Guide](docs/shell-completion.md).
 
 ## Documentation
 

@@ -1,5 +1,6 @@
 mod chat;
 mod cli;
+mod completion;
 mod config;
 mod database;
 mod dump_metadata;
@@ -338,6 +339,9 @@ async fn main() -> Result<()> {
         }
         (true, Some(Commands::DumpMetadata { provider, list })) => {
             cli::handle_dump_metadata_command(provider, list).await?;
+        }
+        (true, Some(Commands::Completions { shell })) => {
+            cli::handle_completions_command(shell).await?;
         }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped
