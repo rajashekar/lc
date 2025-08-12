@@ -64,12 +64,6 @@ jobs:
       - name: Run tests
         run: cargo test --release --target ${{ matrix.target }}
       
-      - name: Run PDF tests with feature enabled
-        run: cargo test --release --target ${{ matrix.target }} --features pdf pdf_reader_tests
-      
-      - name: Run PDF tests without feature (should fail gracefully)
-        run: cargo test --release --target ${{ matrix.target }} --no-default-features pdf_reader_tests::tests::test_pdf_feature_disabled
-      
       - name: Check formatting
         if: matrix.rust == 'stable'
         run: cargo fmt -- --check

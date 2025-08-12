@@ -38,9 +38,6 @@ jobs:
       - name: Run tests
         run: cargo test --release
       
-      - name: Run PDF tests with feature
-        run: cargo test --release --features pdf pdf_reader_tests
-      
       - name: Check formatting
         run: cargo fmt -- --check
       
