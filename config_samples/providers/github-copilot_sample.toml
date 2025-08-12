@@ -23,11 +23,11 @@ token_url = "<your-jwt-token>"
 
 
 [headers]
-# HTTP header: editor-version
-editor-version = "vscode/1.101.1"
-
 # HTTP header: user-agent
 user-agent = "GitHubCopilotChat/0.28.2"
+
+# HTTP header: editor-version
+editor-version = "vscode/1.101.1"
 
 
 [cached_token]

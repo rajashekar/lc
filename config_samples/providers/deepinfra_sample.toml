@@ -26,9 +26,8 @@ images_path = "/images/generations"
 
 [vars]
 
-# Image generation templates
-# DeepInfra requires "response_format": "b64_json" and doesn't support "url"
-# This template forces response_format to b64_json
+[images_templates]
+
 [images_templates.""]
 request = """
 {
@@ -40,10 +39,8 @@ request = """
   "style": "{{ style }}"{% endif %},
   "response_format": "b64_json"
 }
-"""
 
-# DeepInfra returns images as base64 in "b64_json" field
-# Transform to match expected format
+"""
 response = """
 {
   "created": {{ created }},
@@ -56,4 +53,5 @@ response = """
     {% endfor %}
   ]
 }
+
 """

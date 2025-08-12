@@ -18,6 +18,9 @@ models_path = "/models"
 # API path for chat completions
 chat_path = "/chat/completions"
 
+# API path for image generation
+images_path = "/images/generations"
+
 
 [headers]
 

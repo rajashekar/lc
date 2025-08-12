@@ -27,7 +27,7 @@ This directory contains sanitized sample configuration files for the `lc` tool.
 - `providers/.toml_sample.toml` - Sample for `providers/.toml`
 - `providers/ai21_sample.toml` - Sample for `providers/ai21.toml`
 - `providers/alibaba_sample.toml` - Sample for `providers/alibaba.toml`
-- `providers/bedrock_sample.toml` - Sample for `providers/bedrock.toml`
+- `providers/amazon_bedrock_sample.toml` - Sample for `providers/amazon_bedrock.toml`
 - `providers/cerebras_sample.toml` - Sample for `providers/cerebras.toml`
 - `providers/chub_sample.toml` - Sample for `providers/chub.toml`
 - `providers/chutes_sample.toml` - Sample for `providers/chutes.toml`
@@ -71,7 +71,7 @@ This directory contains sanitized sample configuration files for the `lc` tool.
 - `providers/vertex_llama_sample.toml` - Sample for `providers/vertex_llama.toml`
 - `providers/wmt_sample.toml` - Sample for `providers/wmt.toml`
 - `providers/wmtghco_sample.toml` - Sample for `providers/wmtghco.toml`
-- `providers/z_sample.toml` - Sample for `providers/z.toml`
+- `providers/zhipu_sample.toml` - Sample for `providers/zhipu.toml`
 
 ## Directory Structure
 
