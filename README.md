@@ -87,7 +87,7 @@ For comprehensive documentation, visit **[lc.viwq.dev](https://lc.viwq.dev)**
 Any OpenAI-compatible API can be used with `lc`. Here are some popular providers:
 Anthropic, Gemini, and Amazon Bedrock also supported.
   - ai21 - https://api.ai21.com/studio/v1 (API Key: ✓)
-  - bedrock - https://bedrock-runtime.us-east-1.amazonaws.com (API Key: ✓) - See [Bedrock Setup](#amazon-bedrock-setup)
+  - amazon_bedrock - https://bedrock-runtime.us-east-1.amazonaws.com (API Key: ✓) - See [Bedrock Setup](#amazon-bedrock-setup)
   - cerebras - https://api.cerebras.ai/v1 (API Key: ✓)
   - chub - https://inference.chub.ai/v1 (API Key: ✓)
   - chutes - https://llm.chutes.ai/v1 (API Key: ✓)
@@ -101,7 +101,7 @@ Anthropic, Gemini, and Amazon Bedrock also supported.
   - github-copilot - https://api.individual.githubcopilot.com (API Key: ✓)
   - grok - https://api.x.ai/v1 (API Key: ✓)
   - groq - https://api.groq.com/openai/v1 (API Key: ✓)
-  - hf - https://router.huggingface.co/v1 (API Key: ✓)
+  - huggingface - https://router.huggingface.co/v1 (API Key: ✓)
   - hyperbolic - https://api.hyperbolic.xyz/v1 (API Key: ✓)
   - kilo - https://kilocode.ai/api/openrouter (API Key: ✓)
   - meta - https://api.llama.com/v1 (API Key: ✓)
@@ -304,6 +304,16 @@ lc -t fetch "Get the current weather in Tokyo"
 lc chat -m gpt-4 -t fetch
 ```
 
+**Platform Support for MCP Daemon:**
+- **Unix systems** (Linux, macOS, WSL2): Full MCP daemon support with persistent connections via Unix sockets (enabled by default with the `unix-sockets` feature)
+- **Windows**: MCP daemon functionality is not available due to lack of Unix socket support. Direct MCP connections without the daemon work on all platforms.
+- **WSL2**: Full Unix compatibility including MCP daemon support (works exactly like Linux)
+
+To build without Unix socket support:
+```bash
+cargo build --release --no-default-features --features pdf
+```
+
 Learn more about MCP in our [documentation](https://lc.viwq.dev/advanced/mcp).
 
 ### File Attachments and PDF Support
@@ -344,36 +354,57 @@ cargo build --release --features pdf
 `lc` supports configurable request/response templates, allowing you to work with any LLM API format without code changes:
 
 ```toml
-# Fix GPT-5's max_completion_tokens requirement
-[providers.openai.model_templates."gpt-5-nano"]
-request = '''
+# Fix GPT-5's max_completion_tokens and temperature requirement
+[chat_templates."gpt-5.*"]
+request = """
 {
   "model": "{{ model }}",
-  "messages": {{ messages | json }},
-  {% if max_tokens %}"max_completion_tokens": {{ max_tokens }}{% endif %}
+  "messages": {{ messages | json }}{% if max_tokens %},
+  "max_completion_tokens": {{ max_tokens }}{% endif %},
+  "temperature": 1{% if tools %},
+  "tools": {{ tools | json }}{% endif %}{% if stream %},
+  "stream": {{ stream }}{% endif %}
 }
-'''
-
-# Configure custom provider formats
-[providers.custom.templates]
-request = '''
-{
-  "model_id": "{{ model }}",
-  "conversation": {
-    "history": [
-      {% for msg in messages %}
-      {
-        "speaker": "{{ msg.role | upper }}",
-        "text": "{{ msg.content }}"
-      }{% if not loop.last %},{% endif %}
-      {% endfor %}
-    ]
-  }
-}
-'''
+"""
 ```
 
 See [Template System Documentation](docs/TEMPLATE_SYSTEM.md) and [config_samples/templates_sample.toml](config_samples/templates_sample.toml) for more examples.
+
+## Features
+
+`lc` supports several optional features that can be enabled or disabled during compilation:
+
+### Default Features
+
+- `pdf`: Enables PDF file processing and analysis
+- `unix-sockets`: Enables Unix domain socket support for MCP daemon (Unix systems only)
+
+### Build Options
+
+```bash
+# Build with all default features
+cargo build --release
+
+# Build with minimal features (no PDF, no Unix sockets)
+cargo build --release --no-default-features
+
+# Build with only PDF support (no Unix sockets)
+cargo build --release --no-default-features --features pdf
+
+# Build with only Unix socket support (no PDF)
+cargo build --release --no-default-features --features unix-sockets
+
+# Explicitly enable all features
+cargo build --release --features "pdf,unix-sockets"
+```
+
+**Note:** The `unix-sockets` feature is only functional on Unix-like systems (Linux, macOS, BSD, WSL2). On Windows native command prompt/PowerShell, this feature has no effect and MCP daemon functionality is not available regardless of the feature flag. WSL2 provides full Unix compatibility.
+
+
+| Feature | Windows | macOS | Linux | WSL2 |
+|---------|---------|-------|-------|------|
+| MCP Daemon | ❌ | ✅ | ✅ | ✅ |
+| Direct MCP | ✅ | ✅ | ✅ | ✅ |
 
 ## Contributing
 

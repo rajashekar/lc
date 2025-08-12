@@ -73,8 +73,9 @@ warp = "0.3"
 serial_test = "3.0"
 
 [features]
-default = ["pdf"]
+default = ["pdf", "unix-sockets"]
 pdf = ["pdf-extract"]
+unix-sockets = []
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

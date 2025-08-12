@@ -4990,7 +4990,7 @@ pub async fn handle_mcp_command(command: crate::cli::McpCommands) -> Result<()> 
                 anyhow::bail!("MCP server '{}' not found", name);
             }
         }
-        crate::cli::McpCommands::Invoke {
+                        crate::cli::McpCommands::Invoke {
             name,
             function,
             args,
@@ -5082,7 +5082,7 @@ pub async fn fetch_mcp_tools(
     // Load MCP configuration
     let config = McpConfig::load()?;
 
-    // Use daemon client for persistent connections
+                // Use daemon client for persistent connections
     let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
 
     for server_name in server_names {

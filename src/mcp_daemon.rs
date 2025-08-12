@@ -12,7 +12,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+#[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::net::{UnixListener, UnixStream};
+
+// Windows stubs - MCP daemon functionality is not supported on Windows
+// The daemon relies on Unix domain sockets which are not available on Windows.
+// Alternative implementation using named pipes or TCP would be possible but
+// is not currently implemented.
+#[cfg(windows)]
+use std::io;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DaemonRequest {
@@ -45,11 +53,93 @@ pub enum DaemonResponse {
     Error(String),
 }
 
+#[cfg(all(unix, feature = "unix-sockets"))]
 pub struct McpDaemon {
     manager: SdkMcpManager,
     socket_path: PathBuf,
 }
 
+#[cfg(windows)]
+pub struct McpDaemon {
+    _phantom: std::marker::PhantomData<()>,
+}
+
+// Unix stub when unix-sockets feature is disabled
+#[cfg(all(unix, not(feature = "unix-sockets")))]
+pub struct McpDaemon {
+    _phantom: std::marker::PhantomData<()>,
+}
+
+#[cfg(all(unix, not(feature = "unix-sockets")))]
+impl McpDaemon {
+    /// Creates a new MCP daemon instance.
+    /// 
+    /// **Note**: MCP daemon functionality requires the "unix-sockets" feature to be enabled.
+    pub fn new() -> Result<Self> {
+        Err(anyhow::anyhow!(
+            "MCP daemon functionality requires the 'unix-sockets' feature to be enabled. \
+             Enable it in Cargo.toml or use direct MCP connections without the daemon."
+        ))
+    }
+
+    /// Returns the socket path for the daemon.
+    /// 
+    /// **Note**: This returns an error when the unix-sockets feature is disabled.
+    pub fn get_socket_path() -> Result<PathBuf> {
+        Err(anyhow::anyhow!(
+            "Unix socket functionality requires the 'unix-sockets' feature to be enabled"
+        ))
+    }
+
+    /// Starts the daemon service.
+    /// 
+    /// **Note**: This returns an error when the unix-sockets feature is disabled.
+    pub async fn start(&mut self) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "MCP daemon requires the 'unix-sockets' feature to be enabled"
+        ))
+    }
+}
+
+#[cfg(windows)]
+pub struct McpDaemon {
+    _phantom: std::marker::PhantomData<()>,
+}
+
+#[cfg(windows)]
+impl McpDaemon {
+    /// Creates a new MCP daemon instance.
+    /// 
+    /// **Note**: MCP daemon functionality is not supported on Windows.
+    /// This returns an error indicating unsupported operation.
+    pub fn new() -> Result<Self> {
+        Err(anyhow::anyhow!(
+            "MCP daemon functionality is not supported on Windows. \
+             The daemon requires Unix domain sockets which are not available on Windows. \
+             Consider using direct MCP connections without the daemon."
+        ))
+    }
+
+    /// Returns the socket path for the daemon.
+    /// 
+    /// **Note**: This always returns an error on Windows as Unix sockets are not supported.
+    pub fn get_socket_path() -> Result<PathBuf> {
+        Err(anyhow::anyhow!(
+            "Unix socket paths are not supported on Windows"
+        ))
+    }
+
+    /// Starts the daemon service.
+    /// 
+    /// **Note**: This always returns an error on Windows.
+    pub async fn start(&mut self) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "MCP daemon cannot be started on Windows due to lack of Unix socket support"
+        ))
+    }
+}
+
+#[cfg(all(unix, feature = "unix-sockets"))]
 impl McpDaemon {
     pub fn new() -> Result<Self> {
         let socket_path = Self::get_socket_path()?;
@@ -301,10 +391,185 @@ impl McpDaemon {
 }
 
 // Client functions for CLI to communicate with daemon
+#[cfg(all(unix, feature = "unix-sockets"))]
 pub struct DaemonClient {
     socket_path: PathBuf,
 }
 
+// Unix stub when unix-sockets feature is disabled
+#[cfg(all(unix, not(feature = "unix-sockets")))]
+pub struct DaemonClient {
+    _phantom: std::marker::PhantomData<()>,
+}
+
+#[cfg(windows)]
+pub struct DaemonClient {
+    _phantom: std::marker::PhantomData<()>,
+}
+
+#[cfg(all(unix, not(feature = "unix-sockets")))]
+impl DaemonClient {
+    /// Creates a new daemon client.
+    /// 
+    /// **Note**: MCP daemon functionality requires the "unix-sockets" feature to be enabled.
+    pub fn new() -> Result<Self> {
+        Err(anyhow::anyhow!(
+            "MCP daemon client requires the 'unix-sockets' feature to be enabled"
+        ))
+    }
+
+    /// Checks if the daemon is running.
+    /// 
+    /// **Note**: Always returns false when unix-sockets feature is disabled.
+    pub async fn is_daemon_running(&self) -> bool {
+        false
+    }
+
+    /// Attempts to start the daemon if needed.
+    /// 
+    /// **Note**: Always returns an error when unix-sockets feature is disabled.
+    pub async fn start_daemon_if_needed(&self) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Cannot start MCP daemon - 'unix-sockets' feature is required"
+        ))
+    }
+
+    /// Sends a request to the daemon.
+    /// 
+    /// **Note**: Always returns an error when unix-sockets feature is disabled.
+    pub async fn send_request(&self, _request: DaemonRequest) -> Result<DaemonResponse> {
+        Err(anyhow::anyhow!(
+            "Cannot communicate with MCP daemon - 'unix-sockets' feature is required"
+        ))
+    }
+
+    /// Ensures a server is connected via the daemon.
+    /// 
+    /// **Note**: Always returns an error when unix-sockets feature is disabled.
+    pub async fn ensure_server_connected(&self, _server_name: &str) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "MCP daemon server connections require the 'unix-sockets' feature"
+        ))
+    }
+
+    /// Calls a tool via the daemon.
+    /// 
+    /// **Note**: Always returns an error when unix-sockets feature is disabled.
+    pub async fn call_tool(
+        &self,
+        _server_name: &str,
+        _tool_name: &str,
+        _arguments: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        Err(anyhow::anyhow!(
+            "MCP daemon tool calls require the 'unix-sockets' feature"
+        ))
+    }
+
+    /// Lists tools via the daemon.
+    /// 
+    /// **Note**: Always returns an error when unix-sockets feature is disabled.
+    pub async fn list_tools(
+        &self,
+        _server_name: &str,
+    ) -> Result<HashMap<String, Vec<rmcp::model::Tool>>> {
+        Err(anyhow::anyhow!(
+            "MCP daemon tool listing requires the 'unix-sockets' feature"
+        ))
+    }
+
+    /// Closes a server connection via the daemon.
+    /// 
+    /// **Note**: Always returns an error when unix-sockets feature is disabled.
+    pub async fn close_server(&self, _server_name: &str) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "MCP daemon server closing requires the 'unix-sockets' feature"
+        ))
+    }
+}
+
+#[cfg(windows)]
+impl DaemonClient {
+    /// Creates a new daemon client.
+    /// 
+    /// **Note**: MCP daemon functionality is not supported on Windows.
+    pub fn new() -> Result<Self> {
+        Err(anyhow::anyhow!(
+            "MCP daemon client is not supported on Windows"
+        ))
+    }
+
+    /// Checks if the daemon is running.
+    /// 
+    /// **Note**: Always returns false on Windows.
+    pub async fn is_daemon_running(&self) -> bool {
+        false
+    }
+
+    /// Attempts to start the daemon if needed.
+    /// 
+    /// **Note**: Always returns an error on Windows.
+    pub async fn start_daemon_if_needed(&self) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Cannot start MCP daemon on Windows - Unix sockets not supported"
+        ))
+    }
+
+    /// Sends a request to the daemon.
+    /// 
+    /// **Note**: Always returns an error on Windows.
+    pub async fn send_request(&self, _request: DaemonRequest) -> Result<DaemonResponse> {
+        Err(anyhow::anyhow!(
+            "Cannot communicate with MCP daemon on Windows"
+        ))
+    }
+
+    /// Ensures a server is connected via the daemon.
+    /// 
+    /// **Note**: Always returns an error on Windows.
+    pub async fn ensure_server_connected(&self, _server_name: &str) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "MCP daemon server connections not supported on Windows"
+        ))
+    }
+
+    /// Calls a tool via the daemon.
+    /// 
+    /// **Note**: Always returns an error on Windows.
+    pub async fn call_tool(
+        &self,
+        _server_name: &str,
+        _tool_name: &str,
+        _arguments: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        Err(anyhow::anyhow!(
+            "MCP daemon tool calls not supported on Windows"
+        ))
+    }
+
+    /// Lists tools via the daemon.
+    /// 
+    /// **Note**: Always returns an error on Windows.
+    pub async fn list_tools(
+        &self,
+        _server_name: &str,
+    ) -> Result<HashMap<String, Vec<rmcp::model::Tool>>> {
+        Err(anyhow::anyhow!(
+            "MCP daemon tool listing not supported on Windows"
+        ))
+    }
+
+    /// Closes a server connection via the daemon.
+    /// 
+    /// **Note**: Always returns an error on Windows.
+    pub async fn close_server(&self, _server_name: &str) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "MCP daemon server closing not supported on Windows"
+        ))
+    }
+}
+
+#[cfg(all(unix, feature = "unix-sockets"))]
 impl DaemonClient {
     pub fn new() -> Result<Self> {
         Ok(Self {

@@ -177,6 +177,7 @@ impl UsageAnalyzer {
     }
 }
 
+
 pub struct BarChart;
 
 impl BarChart {
@@ -342,5 +343,48 @@ pub fn display_usage_overview(stats: &UsageStats) {
         println!("{} {}", "Total Tokens:".bold(), BarChart::format_tokens(avg_tokens).green());
         println!("{} {}", "Input Tokens:".bold(), BarChart::format_tokens(avg_input).cyan());
         println!("{} {}", "Output Tokens:".bold(), BarChart::format_tokens(avg_output).yellow());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_usage_analyzer_creation() {
+        // Test that creating a UsageAnalyzer works on all platforms
+        // Note: This may fail if database setup fails, which is acceptable for this test
+        let _result = UsageAnalyzer::new();
+        // We don't assert success here because database setup might fail in test environment
+        // but we're primarily testing the compilation path
+    }
+
+    #[test]
+    fn test_usage_stats_struct_creation() {
+        // Test that we can create empty UsageStats (should work on all platforms)
+        let stats = UsageStats {
+            total_tokens: 0,
+            total_requests: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            model_usage: Vec::new(),
+            daily_usage: Vec::new(),
+            weekly_usage: Vec::new(),
+            monthly_usage: Vec::new(),
+            yearly_usage: Vec::new(),
+            date_range: None,
+        };
+        
+        assert_eq!(stats.total_tokens, 0);
+        assert_eq!(stats.total_requests, 0);
+        assert!(stats.model_usage.is_empty());
+    }
+
+    #[test]
+    fn test_bar_chart_format_tokens() {
+        // Test token formatting function (should work on all platforms)
+        assert_eq!(BarChart::format_tokens(500), "500");
+        assert_eq!(BarChart::format_tokens(1500), "1.5k");
+        assert_eq!(BarChart::format_tokens(1_500_000), "1.5M");
     }
 }

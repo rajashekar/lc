@@ -9,6 +9,7 @@ mod http_client;
 mod image_utils;
 mod input;
 mod mcp;
+// MCP daemon module - Unix implementation with Windows stubs
 mod mcp_daemon;
 mod model_metadata;
 mod models_cache;
@@ -88,12 +89,15 @@ async fn main() -> Result<()> {
     }
 
     // Check for daemon mode first
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 && args[1] == "--mcp-daemon" {
-        // Run in daemon mode
-        let mut daemon = mcp_daemon::McpDaemon::new()?;
-        daemon.start().await?;
-        return Ok(());
+    #[cfg(all(unix, feature = "unix-sockets"))]
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if args.len() > 1 && args[1] == "--mcp-daemon" {
+            // Run in daemon mode
+            let mut daemon = mcp_daemon::McpDaemon::new()?;
+            daemon.start().await?;
+            return Ok(());
+        }
     }
 
     let cli = Cli::parse();
