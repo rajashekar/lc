@@ -20,7 +20,7 @@ const config = {
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'viwq', // Usually your GitHub org/user name.
+  organizationName: 'rajashekar', // Usually your GitHub org/user name.
   projectName: 'lc', // Usually your repo name.
 
   onBrokenLinks: 'warn',
@@ -45,7 +45,7 @@ const config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/your-username/lc/tree/main/docs-site/',
+            'https://github.com/rajashekar/lc/tree/main/docs-site/',
         },
         blog: false, // Disable the blog plugin
         theme: {
@@ -77,7 +77,7 @@ const config = {
             label: 'Documentation',
           },
           {
-            href: 'https://github.com/your-username/lc',
+            href: 'https://github.com/rajashekar/lc',
             label: 'GitHub',
             position: 'right',
           },
@@ -104,11 +104,11 @@ const config = {
             items: [
               {
                 label: 'GitHub',
-                href: 'https://github.com/your-username/lc',
+                href: 'https://github.com/rajashekar/lc',
               },
               {
                 label: 'Issues',
-                href: 'https://github.com/your-username/lc/issues',
+                href: 'https://github.com/rajashekar/lc/issues',
               },
             ],
           },
@@ -117,7 +117,7 @@ const config = {
             items: [
               {
                 label: 'Changelog',
-                href: 'https://github.com/your-username/lc/releases',
+                href: 'https://github.com/rajashekar/lc/releases',
               },
             ],
           },

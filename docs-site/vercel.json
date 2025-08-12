@@ -1,6 +1,14 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "build",
-  "installCommand": "npm install",
-  "framework": null
+  "installCommand": "npm ci",
+  "framework": null,
+  "github": {
+    "silent": true
+  },
+  "functions": {
+    "app/**/*.js": {
+      "runtime": "nodejs18.x"
+    }
+  }
 }
