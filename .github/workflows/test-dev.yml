@@ -35,8 +35,8 @@ jobs:
       - name: Build
         run: cargo build --release
       
-      - name: Run tests
-        run: cargo test --release
+      - name: Run tests (sequential to avoid race conditions)
+        run: cargo test --release -- --test-threads=1
       
       - name: Check formatting
         run: cargo fmt -- --check
