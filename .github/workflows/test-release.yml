@@ -17,7 +17,7 @@ jobs:
         include:
           # Test oldest supported Rust version - LINUX ONLY (cheapest)
           - os: ubuntu-22.04
-            rust: "1.79.0"
+            rust: "1.88.0"
             target: x86_64-unknown-linux-gnu
             
           # Test stable - LINUX ONLY for cost efficiency
