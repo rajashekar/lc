@@ -4,23 +4,19 @@
 //! connections, allowing browser sessions and other stateful resources to persist
 //! across multiple CLI command invocations.
 
-use crate::mcp::{
-    create_sse_server_config, create_stdio_server_config, McpConfig, McpServerType, SdkMcpManager,
-};
-use anyhow::{anyhow, Result};
+use crate::mcp::SdkMcpManager;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+#[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::net::{UnixListener, UnixStream};
-
-// Windows stubs - MCP daemon functionality is not supported on Windows
-// The daemon relies on Unix domain sockets which are not available on Windows.
-// Alternative implementation using named pipes or TCP would be possible but
-// is not currently implemented.
-#[cfg(windows)]
-use std::io;
+#[cfg(all(unix, feature = "unix-sockets"))]
+use crate::mcp::{create_sse_server_config, create_stdio_server_config, McpConfig, McpServerType};
+#[cfg(all(unix, feature = "unix-sockets"))]
+use anyhow::anyhow;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DaemonRequest {
@@ -59,13 +55,13 @@ pub struct McpDaemon {
     socket_path: PathBuf,
 }
 
-#[cfg(windows)]
+// Unix stub when unix-sockets feature is disabled
+#[cfg(all(unix, not(feature = "unix-sockets")))]
 pub struct McpDaemon {
     _phantom: std::marker::PhantomData<()>,
 }
 
-// Unix stub when unix-sockets feature is disabled
-#[cfg(all(unix, not(feature = "unix-sockets")))]
+#[cfg(windows)]
 pub struct McpDaemon {
     _phantom: std::marker::PhantomData<()>,
 }
@@ -99,11 +95,6 @@ impl McpDaemon {
             "MCP daemon requires the 'unix-sockets' feature to be enabled"
         ))
     }
-}
-
-#[cfg(windows)]
-pub struct McpDaemon {
-    _phantom: std::marker::PhantomData<()>,
 }
 
 #[cfg(windows)]

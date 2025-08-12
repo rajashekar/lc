@@ -36,17 +36,22 @@ jobs:
             
             ### Installation
             
-            **macOS (Homebrew)**:
+            **Recommended (All Platforms)**:
+            ```bash
+            cargo install lc-cli
+            ```
+            
+            **macOS (Homebrew)** - Coming Soon:
             ```bash
             brew install lc
             ```
             
-            **Windows (Scoop)**:
+            **Windows (Scoop)** - Coming Soon:
             ```bash
             scoop install lc
             ```
             
-            **Linux/macOS/Windows (Direct Download)**:
+            **Direct Download**:
             Download the appropriate binary below and add to your PATH.
             
             ### Changelog
@@ -64,7 +69,7 @@ jobs:
           - os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
             artifact_name: lc
-            asset_name: lc-linux-amd64
+            asset_name: lc-linux-x86_64
             
           # Linux ARM64
           - os: ubuntu-20.04
@@ -77,7 +82,7 @@ jobs:
           - os: macos-12
             target: x86_64-apple-darwin
             artifact_name: lc
-            asset_name: lc-macos-amd64
+            asset_name: lc-macos-x86_64
             
           # macOS ARM64
           - os: macos-12
@@ -169,6 +174,6 @@ jobs:
           formula-name: lc
           homebrew-tap: ${{ github.repository_owner }}/homebrew-tap
           tag-name: v${{ needs.create-release.outputs.version }}
-          download-url: https://github.com/${{ github.repository }}/releases/download/v${{ needs.create-release.outputs.version }}/lc-macos-amd64.tar.gz
+          download-url: https://github.com/${{ github.repository }}/releases/download/v${{ needs.create-release.outputs.version }}/lc-macos-x86_64.tar.gz
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TOKEN }}

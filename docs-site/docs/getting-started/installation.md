@@ -47,18 +47,18 @@ dnf install lc                     # 🚧 Coming soon
 yay -S lc                          # 🚧 Coming soon (AUR)
 
 # Universal (Rust users)
-cargo install lc-cli               # 🚧 Coming soon
+cargo install lc-cli               # ✅ Available now!
 ```
 
 ### 📦 From Cargo (Rust Users)
 
-**Note**: Package will be published to crates.io soon.
+**Recommended method for all platforms!**
 
 ```bash
-# Install from crates.io (when published)
+# Install from crates.io (published!)
 cargo install lc-cli
 
-# Or install directly from git (current method)
+# Or install directly from git (development version)
 cargo install --git https://github.com/your-username/lc
 ```
 

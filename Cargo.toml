@@ -1,6 +1,6 @@
 [package]
 name = "lc-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.88.0"
 description = "LLM Client - A fast Rust-based LLM CLI tool with provider management and chat sessions"

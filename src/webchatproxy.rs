@@ -724,14 +724,14 @@ pub async fn start_webchatproxy_daemon(
 pub async fn stop_webchatproxy_daemon(provider: &str) -> Result<()> {
     let mut registry = DaemonRegistry::load()?;
 
-    if let Some(daemon_info) = registry.remove_daemon(provider) {
+    if let Some(_daemon_info) = registry.remove_daemon(provider) {
         // Try to kill the process
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};
             use nix::unistd::Pid;
 
-            let pid = Pid::from_raw(daemon_info.pid as i32);
+            let pid = Pid::from_raw(_daemon_info.pid as i32);
             match signal::kill(pid, Signal::SIGTERM) {
                 Ok(_) => {
                     registry.save()?;
@@ -742,7 +742,7 @@ pub async fn stop_webchatproxy_daemon(provider: &str) -> Result<()> {
                     registry.save()?;
                     Err(anyhow::anyhow!(
                         "Failed to kill process {}: {}",
-                        daemon_info.pid,
+                        _daemon_info.pid,
                         e
                     ))
                 }
