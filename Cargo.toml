@@ -2,6 +2,7 @@
 name = "lc"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.79.0"
 description = "LLM Client - A fast Rust-based LLM CLI tool with provider management and chat sessions"
 authors = ["Rajashekar Chintalapati <rajshekar.ch@gmail.com>"]
 license = "MIT"
