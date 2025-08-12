@@ -29,9 +29,21 @@ impl SearchConfig {
             Ok(config)
         } else {
             let config = Self::new();
-            config.save()?;
+            // Only try to save if we can create the parent directory
+            if Self::ensure_config_dir().is_ok() {
+                let _ = config.save(); // Ignore save errors during initial load
+            }
             Ok(config)
         }
+    }
+    
+    /// Ensure the config directory exists
+    fn ensure_config_dir() -> Result<()> {
+        let config_path = Self::config_file_path()?;
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        Ok(())
     }
 
     pub fn save(&self) -> Result<()> {

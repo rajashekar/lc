@@ -4,7 +4,6 @@
 //! connections, allowing browser sessions and other stateful resources to persist
 //! across multiple CLI command invocations.
 
-use crate::mcp::SdkMcpManager;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -14,7 +13,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::net::{UnixListener, UnixStream};
 #[cfg(all(unix, feature = "unix-sockets"))]
-use crate::mcp::{create_sse_server_config, create_stdio_server_config, McpConfig, McpServerType};
+use crate::mcp::{create_sse_server_config, create_stdio_server_config, McpConfig, McpServerType, SdkMcpManager};
 #[cfg(all(unix, feature = "unix-sockets"))]
 use anyhow::anyhow;
 

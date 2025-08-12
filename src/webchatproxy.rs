@@ -763,6 +763,7 @@ pub async fn stop_webchatproxy_daemon(provider: &str) -> Result<()> {
 pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> {
     let mut registry = DaemonRegistry::load()?;
     let mut active_daemons = HashMap::new();
+    let mut dead_processes = Vec::new();
 
     // Check which processes are still alive
     for (provider, daemon_info) in registry.list_daemons().clone() {
@@ -778,8 +779,8 @@ pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> 
                     active_daemons.insert(provider, daemon_info);
                 }
                 Err(_) => {
-                    // Process is dead, remove from registry
-                    registry.remove_daemon(&provider);
+                    // Process is dead, mark for removal
+                    dead_processes.push(provider);
                 }
             }
         }
@@ -789,6 +790,11 @@ pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> 
             // On non-Unix systems, assume all registered daemons are active
             active_daemons.insert(provider, daemon_info);
         }
+    }
+
+    // Remove dead processes from registry
+    for provider in dead_processes {
+        registry.remove_daemon(&provider);
     }
 
     // Save updated registry
