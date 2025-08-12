@@ -13,7 +13,10 @@ A fast, Rust-based command-line tool for interacting with Large Language Models.
 ## Quick Start
 
 ```bash
-# Install from source
+# Option 1: Install from crates.io (when published)
+cargo install lc-cli
+
+# Option 2: Install from source
 git clone <repository-url>
 cd lc
 cargo build --release

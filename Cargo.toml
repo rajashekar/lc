@@ -1,11 +1,15 @@
 [package]
-name = "lc"
+name = "lc-cli"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.88.0"
 description = "LLM Client - A fast Rust-based LLM CLI tool with provider management and chat sessions"
 authors = ["Rajashekar Chintalapati <rajshekar.ch@gmail.com>"]
 license = "MIT"
+homepage = "https://lc.viwq.dev"
+repository = "https://github.com/your-username/lc"
+keywords = ["llm", "cli", "openai", "anthropic", "chat"]
+categories = ["command-line-utilities", "api-bindings"]
 
 [[bin]]
 name = "lc"
@@ -44,7 +48,7 @@ glob = "0.3"
 lazy_static = "1.4"
 regex = "1.10"
 crossterm = "0.27"
-rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk.git", rev = "209dbac5", features = ["client", "transport-child-process", "transport-sse-client", "reqwest"] }
+rmcp = { version = "0.5.0", features = ["client", "transport-child-process", "transport-sse-client", "reqwest"] }
 scraper = "0.18"
 urlencoding = "2.1"
 tera = "1.19"

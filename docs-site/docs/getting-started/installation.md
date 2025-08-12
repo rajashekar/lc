@@ -28,7 +28,56 @@ cargo --version
 
 ## Installation Methods
 
-### From Source (Recommended)
+### 🚀 Quick Install (Coming Soon)
+
+**Note**: Package manager installations are planned for future releases. Currently, install from source or use cargo.
+
+```bash
+# macOS
+brew install lc                    # 🚧 Coming soon
+
+# Windows
+scoop install lc                   # 🚧 Coming soon
+choco install lc                   # 🚧 Coming soon
+winget install lc                  # 🚧 Coming soon
+
+# Linux
+apt install lc                     # 🚧 Coming soon
+dnf install lc                     # 🚧 Coming soon
+yay -S lc                          # 🚧 Coming soon (AUR)
+
+# Universal (Rust users)
+cargo install lc-cli               # 🚧 Coming soon
+```
+
+### 📦 From Cargo (Rust Users)
+
+**Note**: Package will be published to crates.io soon.
+
+```bash
+# Install from crates.io (when published)
+cargo install lc-cli
+
+# Or install directly from git (current method)
+cargo install --git https://github.com/your-username/lc
+```
+
+### 📁 Pre-built Binaries (Recommended)
+
+**Note**: GitHub releases with pre-built binaries are coming soon.
+
+1. Download the latest binary for your platform from [GitHub Releases](https://github.com/your-username/lc/releases)
+2. Extract and place in your PATH
+
+| Platform | Architecture | Binary Name |
+|----------|-------------|-------------|
+| **Linux** | x86_64 | `lc-linux-amd64` |
+| **Linux** | ARM64 | `lc-linux-arm64` |
+| **macOS** | Intel | `lc-macos-amd64` |
+| **macOS** | Apple Silicon | `lc-macos-arm64` |
+| **Windows** | x86_64 | `lc-windows-amd64.exe` |
+
+### 🔨 From Source (Current Method)
 
 1. Clone the repository:
 
