@@ -28,22 +28,9 @@ impl SearchConfig {
             let config: SearchConfig = toml::from_str(&content)?;
             Ok(config)
         } else {
-            let config = Self::new();
-            // Only try to save if we can create the parent directory
-            if Self::ensure_config_dir().is_ok() {
-                let _ = config.save(); // Ignore save errors during initial load
-            }
-            Ok(config)
+            // Just return a new config without saving during load to prevent recursion
+            Ok(Self::new())
         }
-    }
-    
-    /// Ensure the config directory exists
-    fn ensure_config_dir() -> Result<()> {
-        let config_path = Self::config_file_path()?;
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        Ok(())
     }
 
     pub fn save(&self) -> Result<()> {
@@ -51,7 +38,10 @@ impl SearchConfig {
 
         // Ensure parent directory exists
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)?;
+            // Only create directory if it doesn't exist to prevent potential recursion
+            if !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
         }
 
         let content = toml::to_string_pretty(self)?;

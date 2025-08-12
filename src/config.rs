@@ -603,7 +603,11 @@ impl Config {
         let data_dir = dirs::data_local_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?
             .join("lc");
-        fs::create_dir_all(&data_dir)?;
+        
+        // Only create directory if it doesn't exist to prevent potential recursion
+        if !data_dir.exists() {
+            fs::create_dir_all(&data_dir)?;
+        }
         Ok(data_dir)
     }
 
