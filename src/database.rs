@@ -537,9 +537,16 @@ mod tests {
     #[test]
     fn test_optimized_database() {
         let temp_dir = tempdir().unwrap();
-        std::env::set_var("HOME", temp_dir.path());
-
-        let db = Database::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        
+        // Create test database with isolated path
+        let pool = ConnectionPool::new(db_path, 3).unwrap();
+        let db = Database { pool };
+        
+        // Initialize schema for test database
+        let conn = db.pool.get_connection().unwrap();
+        Database::initialize_schema(&conn).unwrap();
+        drop(conn);
 
         // Test saving and retrieving
         db.save_chat_entry_with_tokens(
