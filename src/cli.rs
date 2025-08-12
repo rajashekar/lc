@@ -131,6 +131,24 @@ pub enum Commands {
         #[command(subcommand)]
         command: LogCommands,
     },
+    /// Usage statistics and analytics (alias: u)
+    #[command(alias = "u")]
+    Usage {
+        #[command(subcommand)]
+        command: Option<UsageCommands>,
+        /// Show usage for the last N days
+        #[arg(short = 'd', long = "days")]
+        days: Option<u32>,
+        /// Show only token usage (default shows both tokens and requests)
+        #[arg(short = 't', long = "tokens")]
+        tokens_only: bool,
+        /// Show only request counts
+        #[arg(short = 'r', long = "requests")]
+        requests_only: bool,
+        /// Maximum number of items to show in charts
+        #[arg(short = 'n', long = "limit", default_value = "10")]
+        limit: usize,
+    },
     /// Configuration management (alias: co)
     #[command(alias = "co")]
     Config {
@@ -696,6 +714,45 @@ pub enum RecentCommands {
     /// Get session ID of last interaction (alias: s)
     #[command(alias = "s")]
     Session,
+}
+
+#[derive(Subcommand)]
+pub enum UsageCommands {
+    /// Show daily usage statistics (alias: d)
+    #[command(alias = "d")]
+    Daily {
+        /// Number of days to show
+        #[arg(short = 'n', long = "count", default_value = "30")]
+        count: usize,
+    },
+    /// Show weekly usage statistics (alias: w)
+    #[command(alias = "w")]
+    Weekly {
+        /// Number of weeks to show
+        #[arg(short = 'n', long = "count", default_value = "12")]
+        count: usize,
+    },
+    /// Show monthly usage statistics (alias: m)
+    #[command(alias = "m")]
+    Monthly {
+        /// Number of months to show
+        #[arg(short = 'n', long = "count", default_value = "12")]
+        count: usize,
+    },
+    /// Show yearly usage statistics (alias: y)
+    #[command(alias = "y")]
+    Yearly {
+        /// Number of years to show
+        #[arg(short = 'n', long = "count", default_value = "5")]
+        count: usize,
+    },
+    /// Show top models by usage (alias: models)
+    #[command(alias = "models")]
+    Models {
+        /// Number of models to show
+        #[arg(short = 'n', long = "count", default_value = "10")]
+        count: usize,
+    },
 }
 
 #[derive(Subcommand)]
@@ -6601,6 +6658,174 @@ pub async fn handle_dump_metadata_command(provider: Option<String>, list: bool) 
     } else {
         // Dump metadata for all providers
         MetadataDumper::dump_all_metadata().await?;
+    }
+
+    Ok(())
+}
+
+// Usage command handler
+pub async fn handle_usage_command(
+    command: Option<UsageCommands>,
+    days: Option<u32>,
+    tokens_only: bool,
+    requests_only: bool,
+    limit: usize,
+) -> Result<()> {
+    use crate::usage_stats::{UsageAnalyzer, BarChart, display_usage_overview};
+    use colored::Colorize;
+
+    let analyzer = UsageAnalyzer::new()?;
+    let stats = analyzer.get_usage_stats(days)?;
+
+    if stats.total_requests == 0 {
+        println!("{} No usage data found", "ℹ️".blue());
+        if days.is_some() {
+            println!("Try expanding the time range or check if you have any logged interactions.");
+        }
+        return Ok(());
+    }
+
+    match command {
+        Some(UsageCommands::Daily { count }) => {
+            let value_type = if tokens_only {
+                "tokens"
+            } else if requests_only {
+                "requests"
+            } else {
+                "tokens"
+            };
+            
+            BarChart::render_time_series(
+                "📅 Daily Usage",
+                &stats.daily_usage,
+                value_type,
+                50,
+                count.min(limit),
+            );
+        }
+        Some(UsageCommands::Weekly { count }) => {
+            let value_type = if tokens_only {
+                "tokens"
+            } else if requests_only {
+                "requests"
+            } else {
+                "tokens"
+            };
+            
+            BarChart::render_time_series(
+                "📊 Weekly Usage",
+                &stats.weekly_usage,
+                value_type,
+                50,
+                count.min(limit),
+            );
+        }
+        Some(UsageCommands::Monthly { count }) => {
+            let value_type = if tokens_only {
+                "tokens"
+            } else if requests_only {
+                "requests"
+            } else {
+                "tokens"
+            };
+            
+            BarChart::render_time_series(
+                "📈 Monthly Usage",
+                &stats.monthly_usage,
+                value_type,
+                50,
+                count.min(limit),
+            );
+        }
+        Some(UsageCommands::Yearly { count }) => {
+            let value_type = if tokens_only {
+                "tokens"
+            } else if requests_only {
+                "requests"
+            } else {
+                "tokens"
+            };
+            
+            BarChart::render_time_series(
+                "📊 Yearly Usage",
+                &stats.yearly_usage,
+                value_type,
+                50,
+                count.min(limit),
+            );
+        }
+        Some(UsageCommands::Models { count }) => {
+            let value_type = if tokens_only {
+                "tokens"
+            } else if requests_only {
+                "requests"
+            } else {
+                "tokens"
+            };
+            
+            BarChart::render_horizontal(
+                "🤖 Top Models by Usage",
+                &stats.model_usage,
+                value_type,
+                50,
+                count.min(limit),
+            );
+        }
+        None => {
+            // Default: show overview and top charts
+            display_usage_overview(&stats);
+
+            if !tokens_only && !requests_only {
+                // Show both tokens and requests by default
+                BarChart::render_horizontal(
+                    "🤖 Top Models by Token Usage",
+                    &stats.model_usage,
+                    "tokens",
+                    50,
+                    limit.min(5),
+                );
+
+                BarChart::render_time_series(
+                    "📅 Recent Daily Usage (Tokens)",
+                    &stats.daily_usage,
+                    "tokens",
+                    50,
+                    limit.min(14),
+                );
+            } else if tokens_only {
+                BarChart::render_horizontal(
+                    "🤖 Top Models by Token Usage",
+                    &stats.model_usage,
+                    "tokens",
+                    50,
+                    limit.min(10),
+                );
+
+                BarChart::render_time_series(
+                    "📅 Recent Daily Token Usage",
+                    &stats.daily_usage,
+                    "tokens",
+                    50,
+                    limit.min(14),
+                );
+            } else if requests_only {
+                BarChart::render_horizontal(
+                    "🤖 Top Models by Request Count",
+                    &stats.model_usage,
+                    "requests",
+                    50,
+                    limit.min(10),
+                );
+
+                BarChart::render_time_series(
+                    "📅 Recent Daily Request Count",
+                    &stats.daily_usage,
+                    "requests",
+                    50,
+                    limit.min(14),
+                );
+            }
+        }
     }
 
     Ok(())

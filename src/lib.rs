@@ -26,6 +26,7 @@ pub mod template_processor;
 pub mod test_utils;
 pub mod token_utils;
 pub mod unified_cache;
+pub mod usage_stats;
 pub mod vector_db;
 pub mod webchatproxy;
 

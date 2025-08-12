@@ -1,0 +1,33 @@
+name: Test Billing Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/test-billing.yml']
+
+jobs:
+  test-minimal:
+    name: Test Minimal Job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Simple test
+        run: |
+          echo "Testing that billing issues are resolved"
+          echo "Repository: ${{ github.repository }}"
+          echo "Runner OS: ${{ runner.os }}"
+          
+  test-billing-sensitive:
+    name: Test Billing-Sensitive Job
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Billing test
+        run: |
+          echo "This job specifically tests ubuntu-22.04 which was failing due to billing"
+          echo "If this runs successfully, billing issues should be resolved"

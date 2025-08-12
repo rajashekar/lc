@@ -10,36 +10,27 @@ on:
 jobs:
   test-builds:
     name: Test ${{ matrix.os }} / ${{ matrix.rust }}
+    timeout-minutes: 60  # Prevent runaway jobs
     strategy:
-      fail-fast: false
+      fail-fast: true  # Stop on first failure to save costs
       matrix:
         include:
-          # Test oldest supported Rust version
-          - os: ubuntu-20.04
+          # Test oldest supported Rust version - LINUX ONLY (cheapest)
+          - os: ubuntu-22.04
             rust: "1.70.0"
             target: x86_64-unknown-linux-gnu
             
-          # Test stable on all platforms
-          - os: ubuntu-20.04
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            
+          # Test stable - LINUX ONLY for cost efficiency
           - os: ubuntu-22.04
             rust: stable
             target: x86_64-unknown-linux-gnu
             
-          - os: macos-12
-            rust: stable
-            target: x86_64-apple-darwin
-            
+          # Only ONE macOS job (most expensive) - remove macOS-12 to save ~$7
           - os: macos-13
             rust: stable
             target: aarch64-apple-darwin
             
-          - os: windows-2019
-            rust: stable
-            target: x86_64-pc-windows-msvc
-            
+          # Only ONE Windows job - save ~$2 by removing windows-2022 duplicate
           - os: windows-2022
             rust: stable
             target: x86_64-pc-windows-msvc
@@ -115,6 +106,7 @@ jobs:
   cross-compile:
     name: Cross-compile ${{ matrix.target }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         target:
@@ -130,6 +122,7 @@ jobs:
   package-test:
     name: Test Package Installation
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       matrix:
         include:
@@ -173,6 +166,7 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

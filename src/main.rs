@@ -20,6 +20,7 @@ mod sync;
 mod template_processor;
 mod token_utils;
 mod unified_cache;
+mod usage_stats;
 mod vector_db;
 mod webchatproxy;
 
@@ -190,6 +191,18 @@ async fn main() -> Result<()> {
         }
         (true, Some(Commands::Logs { command })) => {
             cli::handle_log_command(command).await?;
+        }
+        (
+            true,
+            Some(Commands::Usage {
+                command,
+                days,
+                tokens_only,
+                requests_only,
+                limit,
+            }),
+        ) => {
+            cli::handle_usage_command(command, days, tokens_only, requests_only, limit).await?;
         }
         (true, Some(Commands::Config { command })) => {
             cli::handle_config_command(command).await?;
