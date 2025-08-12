@@ -64,6 +64,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Vercel deployment configuration
+.vercel/
+
 # Coverage reports
 tarpaulin-report.html
 lcov.info
