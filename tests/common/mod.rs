@@ -5,10 +5,47 @@
 
 use lc::config::{Config, ProviderConfig};
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Once;
 use tempfile::TempDir;
 
 /// Prefix for test providers to avoid conflicts with real configurations
 const TEST_PROVIDER_PREFIX: &str = "test-";
+
+static BUILD_ONCE: Once = Once::new();
+
+/// Get the path to the compiled test binary
+/// This ensures the binary is built once and returns the correct path for the platform
+#[allow(dead_code)]
+pub fn get_test_binary_path() -> PathBuf {
+    BUILD_ONCE.call_once(|| {
+        let output = std::process::Command::new("cargo")
+            .args(&["build", "--bin", "lc"])
+            .output()
+            .expect("Failed to build test binary");
+        
+        if !output.status.success() {
+            panic!(
+                "Failed to build test binary: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    });
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("target");
+    path.push("debug");
+    path.push("lc");
+    
+    #[cfg(windows)]
+    path.set_extension("exe");
+    
+    if !path.exists() {
+        panic!("Test binary not found at: {:?}", path);
+    }
+    
+    path
+}
 
 /// Get test provider name with prefix
 #[allow(dead_code)]

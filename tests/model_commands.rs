@@ -4,6 +4,7 @@
 //! CLI commands, testing the underlying functionality as the CLI would use it.
 
 mod common;
+use common::get_test_binary_path;
 
 use lc::model_metadata::{ModelMetadata, ModelType};
 use lc::unified_cache::UnifiedCache;
@@ -15,8 +16,8 @@ mod models_cache_tests {
 
     #[test]
     fn test_lc_models_list_with_capabilities() {
-        let output = Command::new("cargo")
-            .args(["run", "--", "models"])
+        let output = Command::new(get_test_binary_path())
+            .args(["models"])
             .output()
             .expect("Failed to execute command");
 

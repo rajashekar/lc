@@ -403,11 +403,38 @@ cargo build --release --features "pdf,unix-sockets"
 
 **Note:** The `unix-sockets` feature is only functional on Unix-like systems (Linux, macOS, BSD, WSL2). On Windows native command prompt/PowerShell, this feature has no effect and MCP daemon functionality is not available regardless of the feature flag. WSL2 provides full Unix compatibility.
 
+### Windows-Specific Build Information
+
+#### Compilation on Windows
+
+Due to AWS SDK dependencies requiring specific C++ toolchain setup, the recommended build for Windows excludes S3 sync support:
+
+```bash
+# Recommended build for Windows (excludes S3 sync to avoid AWS LC compilation issues)
+cargo build --release --no-default-features --features "pdf unix-sockets"
+
+# Run tests on Windows
+cargo test --no-default-features --features "pdf unix-sockets"
+```
+
+If you need S3 sync functionality on Windows, ensure you have:
+- Visual Studio 2019 or later with C++ build tools
+- Windows SDK installed
+- Then build with: `cargo build --release --features s3-sync`
+
+#### Feature Availability
 
 | Feature | Windows | macOS | Linux | WSL2 |
 |---------|---------|-------|-------|------|
 | MCP Daemon | ❌ | ✅ | ✅ | ✅ |
 | Direct MCP | ✅ | ✅ | ✅ | ✅ |
+| S3 Sync | ⚠️* | ✅ | ✅ | ✅ |
+| PDF Processing | ✅ | ✅ | ✅ | ✅ |
+| Vision/Images | ✅ | ✅ | ✅ | ✅ |
+| Web Search | ✅ | ✅ | ✅ | ✅ |
+| Vector DB/RAG | ✅ | ✅ | ✅ | ✅ |
+
+*S3 Sync on Windows requires Visual Studio C++ build tools and is disabled by default to avoid compilation issues.
 
 ## Contributing
 

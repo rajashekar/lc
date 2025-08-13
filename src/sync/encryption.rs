@@ -51,6 +51,7 @@ pub fn encrypt_data(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
 }
 
 /// Decrypt data using AES256-GCM
+#[allow(dead_code)]
 pub fn decrypt_data(encrypted_data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
     if encrypted_data.len() < 12 {
         anyhow::bail!("Invalid encrypted data: too short");
@@ -70,11 +71,13 @@ pub fn decrypt_data(encrypted_data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
 }
 
 /// Encode binary data to base64 for safe transport/storage
+#[allow(dead_code)]
 pub fn encode_base64(data: &[u8]) -> String {
     general_purpose::STANDARD.encode(data)
 }
 
 /// Decode base64 data back to binary
+#[allow(dead_code)]
 pub fn decode_base64(data: &str) -> Result<Vec<u8>> {
     general_purpose::STANDARD
         .decode(data)

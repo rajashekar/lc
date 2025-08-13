@@ -111,8 +111,12 @@ jobs:
         run: cargo install cross
       
       - name: Build (native)
-        if: '!matrix.use_cross'
+        if: '!matrix.use_cross && matrix.os != "windows-2019"'
         run: cargo build --release --target ${{ matrix.target }}
+      
+      - name: Build Windows (without S3 to avoid AWS LC issues)
+        if: matrix.os == 'windows-2019'
+        run: cargo build --release --target ${{ matrix.target }} --no-default-features --features "pdf unix-sockets"
       
       - name: Build (cross)
         if: matrix.use_cross

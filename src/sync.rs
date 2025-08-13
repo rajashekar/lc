@@ -10,7 +10,11 @@ pub mod providers;
 // Re-export all public items from submodules
 pub use config::*;
 pub use encryption::*;
+#[cfg(feature = "s3-sync")]
 pub use providers::*;
+
+#[cfg(feature = "s3-sync")]
+use providers::S3Provider;
 
 use anyhow::Result;
 use colored::Colorize;
@@ -158,6 +162,7 @@ impl ConfigResolver {
     }
 
     /// Write configuration files back to the lc directory, preserving directory structure
+    #[allow(dead_code)]
     pub fn write_config_files(files: &[ConfigFile]) -> Result<()> {
         let config_dir = Self::get_config_dir()?;
         fs::create_dir_all(&config_dir)?;
@@ -372,7 +377,7 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
     }
 
     // Handle encryption if requested
-    let files_to_upload = if encrypted {
+    let _files_to_upload = if encrypted {
         println!("\n{} Encryption enabled", "🔒".yellow());
         print!("Enter encryption password: ");
         io::stdout().flush()?;
@@ -403,28 +408,35 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
     // Upload to cloud provider
     match provider {
         CloudProvider::S3 => {
-            let s3_client = S3Provider::new_with_provider(provider_name).await?;
-            s3_client
-                .upload_configs(&files_to_upload, encrypted)
-                .await?;
+            #[cfg(feature = "s3-sync")]
+            {
+                let s3_client = S3Provider::new_with_provider(provider_name).await?;
+                s3_client
+                    .upload_configs(&_files_to_upload, encrypted)
+                    .await?;
+                
+                println!(
+                    "\n{} Sync to {} completed successfully!",
+                    "🎉".green(),
+                    CloudProvider::display_name_for_provider(provider_name)
+                );
+
+                if encrypted {
+                    println!("{} Files were encrypted before upload", "🔒".green());
+                }
+                
+                return Ok(());
+            }
+            #[cfg(not(feature = "s3-sync"))]
+            {
+                anyhow::bail!("S3 sync support not compiled. Rebuild with --features s3-sync");
+            }
         }
     }
-
-    println!(
-        "\n{} Sync to {} completed successfully!",
-        "🎉".green(),
-        CloudProvider::display_name_for_provider(provider_name)
-    );
-
-    if encrypted {
-        println!("{} Files were encrypted before upload", "🔒".green());
-    }
-
-    Ok(())
 }
 
 /// Handle sync from cloud command
-pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -> Result<()> {
+pub async fn handle_sync_from(provider_name: &str, _encrypted: bool, _yes: bool) -> Result<()> {
     let provider = CloudProvider::from_str(provider_name)?;
 
     println!(
@@ -435,12 +447,36 @@ pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -
     );
 
     // Download from cloud provider
-    let downloaded_files = match provider {
+    match provider {
         CloudProvider::S3 => {
-            let s3_client = S3Provider::new_with_provider(provider_name).await?;
-            s3_client.download_configs(encrypted).await?
+            #[cfg(feature = "s3-sync")]
+            {
+                let s3_client = S3Provider::new_with_provider(provider_name).await?;
+                let downloaded_files = s3_client.download_configs(encrypted).await?;
+                
+                // Process downloaded files
+                process_downloaded_files(downloaded_files, encrypted, yes, provider_name).await?;
+                return Ok(());
+            }
+            #[cfg(not(feature = "s3-sync"))]
+            {
+                anyhow::bail!("S3 sync support not compiled. Rebuild with --features s3-sync");
+            }
         }
-    };
+    }
+}
+
+#[cfg(feature = "s3-sync")]
+async fn process_downloaded_files(
+    downloaded_files: Vec<ConfigFile>,
+    encrypted: bool,
+    yes: bool,
+    provider_name: &str,
+) -> Result<()> {
+    use colored::Colorize;
+    use std::io::{self, Write};
+    use rpassword::read_password;
+    use super::{CloudProvider, derive_key_from_password, decrypt_data};
 
     if downloaded_files.is_empty() {
         println!(

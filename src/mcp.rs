@@ -389,6 +389,7 @@ pub enum SdkMcpTransport {
 }
 
 // Helper functions to create SDK configurations
+#[allow(dead_code)]
 pub fn create_stdio_server_config(
     name: String,
     command_parts: Vec<String>,
@@ -414,6 +415,7 @@ pub fn create_stdio_server_config(
     }
 }
 
+#[allow(dead_code)]
 pub fn create_sse_server_config(name: String, url: String) -> SdkMcpServerConfig {
     SdkMcpServerConfig {
         name,

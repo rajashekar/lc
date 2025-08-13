@@ -79,3 +79,5 @@ criterion/
 .local/
 scratch/
 test_data/
+
+.claude

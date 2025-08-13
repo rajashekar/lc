@@ -102,6 +102,7 @@ impl McpDaemon {
     /// 
     /// **Note**: MCP daemon functionality is not supported on Windows.
     /// This returns an error indicating unsupported operation.
+    #[allow(dead_code)]
     pub fn new() -> Result<Self> {
         Err(anyhow::anyhow!(
             "MCP daemon functionality is not supported on Windows. \
@@ -113,6 +114,7 @@ impl McpDaemon {
     /// Returns the socket path for the daemon.
     /// 
     /// **Note**: This always returns an error on Windows as Unix sockets are not supported.
+    #[allow(dead_code)]
     pub fn get_socket_path() -> Result<PathBuf> {
         Err(anyhow::anyhow!(
             "Unix socket paths are not supported on Windows"
@@ -122,6 +124,7 @@ impl McpDaemon {
     /// Starts the daemon service.
     /// 
     /// **Note**: This always returns an error on Windows.
+    #[allow(dead_code)]
     pub async fn start(&mut self) -> Result<()> {
         Err(anyhow::anyhow!(
             "MCP daemon cannot be started on Windows due to lack of Unix socket support"
@@ -492,6 +495,7 @@ impl DaemonClient {
     /// Checks if the daemon is running.
     /// 
     /// **Note**: Always returns false on Windows.
+    #[allow(dead_code)]
     pub async fn is_daemon_running(&self) -> bool {
         false
     }
@@ -499,6 +503,7 @@ impl DaemonClient {
     /// Attempts to start the daemon if needed.
     /// 
     /// **Note**: Always returns an error on Windows.
+    #[allow(dead_code)]
     pub async fn start_daemon_if_needed(&self) -> Result<()> {
         Err(anyhow::anyhow!(
             "Cannot start MCP daemon on Windows - Unix sockets not supported"
@@ -508,6 +513,7 @@ impl DaemonClient {
     /// Sends a request to the daemon.
     /// 
     /// **Note**: Always returns an error on Windows.
+    #[allow(dead_code)]
     pub async fn send_request(&self, _request: DaemonRequest) -> Result<DaemonResponse> {
         Err(anyhow::anyhow!(
             "Cannot communicate with MCP daemon on Windows"

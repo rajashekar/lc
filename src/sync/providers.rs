@@ -1,14 +1,22 @@
 //! Cloud provider implementations for configuration synchronization
 
+#[cfg(feature = "s3-sync")]
 use anyhow::Result;
-use aws_config::BehaviorVersion;
-use aws_sdk_s3::{config::Credentials, primitives::ByteStream, Client};
+#[cfg(feature = "s3-sync")]
 use colored::Colorize;
+#[cfg(feature = "s3-sync")]
 use std::collections::HashMap;
 
+#[cfg(feature = "s3-sync")]
 use super::{decode_base64, encode_base64, ConfigFile};
 
+#[cfg(feature = "s3-sync")]
+use aws_config::BehaviorVersion;
+#[cfg(feature = "s3-sync")]
+use aws_sdk_s3::{config::Credentials, primitives::ByteStream, Client};
+
 /// S3 configuration for sync operations
+#[cfg(feature = "s3-sync")]
 #[derive(Debug, Clone)]
 pub struct S3Config {
     pub bucket_name: String,
@@ -19,12 +27,14 @@ pub struct S3Config {
 }
 
 /// S3 provider for configuration synchronization
+#[cfg(feature = "s3-sync")]
 pub struct S3Provider {
     client: Client,
     bucket_name: String,
     folder_prefix: String,
 }
 
+#[cfg(feature = "s3-sync")]
 impl S3Provider {
     /// Create a new S3 provider instance with a specific provider name
     pub async fn new_with_provider(provider_name: &str) -> Result<Self> {
@@ -472,7 +482,7 @@ impl S3Provider {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "s3-sync"))]
 mod tests {
     use super::*;
 

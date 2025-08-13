@@ -19,6 +19,7 @@ pub struct UsageStats {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum TimeFrame {
     Daily,
     Weekly,
