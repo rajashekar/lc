@@ -187,14 +187,14 @@ mod integration_tests {
     #[ignore] // Ignore by default since it requires AWS setup
     async fn test_s3_integration() -> Result<()> {
         // Only run if AWS credentials are available
-        if env::var("AWS_ACCESS_KEY_ID").is_err() || env::var("LC_S3_BUCKET").is_err() {
+        if std::env::var("AWS_ACCESS_KEY_ID").is_err() || std::env::var("LC_S3_BUCKET").is_err() {
             println!("Skipping S3 integration test - AWS credentials or bucket not configured");
             return Ok(());
         }
 
         // This would test actual S3 operations
         // For now, just ensure the S3Provider can be created
-        let result = lc::sync::S3Provider::new_with_provider("s3").await;
+        let result = lc::sync::providers::S3Provider::new_with_provider("s3").await;
 
         match result {
             Ok(_) => {
@@ -212,7 +212,7 @@ mod integration_tests {
 
 #[cfg(test)]
 mod cli_integration_tests {
-    use super::*;
+    // use super::*; // Unused import removed
 
     #[test]
     fn test_sync_help_command() {

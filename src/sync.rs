@@ -436,7 +436,7 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
 }
 
 /// Handle sync from cloud command
-pub async fn handle_sync_from(provider_name: &str, _encrypted: bool, _yes: bool) -> Result<()> {
+pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -> Result<()> {
     let provider = CloudProvider::from_str(provider_name)?;
 
     println!(
@@ -476,7 +476,7 @@ async fn process_downloaded_files(
     use colored::Colorize;
     use std::io::{self, Write};
     use rpassword::read_password;
-    use super::{CloudProvider, derive_key_from_password, decrypt_data};
+    use crate::sync::{derive_key_from_password, decrypt_data};
 
     if downloaded_files.is_empty() {
         println!(
