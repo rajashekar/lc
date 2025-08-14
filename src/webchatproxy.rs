@@ -763,7 +763,7 @@ pub async fn stop_webchatproxy_daemon(provider: &str) -> Result<()> {
 pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> {
     let mut registry = DaemonRegistry::load()?;
     let mut active_daemons = HashMap::new();
-    let dead_processes: Vec<String> = Vec::new();
+    let mut dead_processes: Vec<String> = Vec::new();
 
     // Check which processes are still alive
     for (provider, daemon_info) in registry.list_daemons().clone() {

@@ -13,8 +13,9 @@ use std::collections::HashMap;
 mod similar_search_tests {
     use super::*;
 
-    fn setup_test_database_with_vectors() -> VectorDatabase {
-        let db = VectorDatabase::new("similar_test").unwrap();
+    fn setup_test_database_with_vectors(test_name: &str) -> VectorDatabase {
+        let db_name = format!("similar_test_{}_{}", test_name, std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
 
@@ -58,7 +59,7 @@ mod similar_search_tests {
 
     #[test]
     fn test_basic_similarity_search() {
-        let db = setup_test_database_with_vectors();
+        let db = setup_test_database_with_vectors("basic");
 
         // Query with AI-related vector
         let ai_query = vec![0.85, 0.55, 0.15, 0.1, 0.0];
@@ -82,7 +83,7 @@ mod similar_search_tests {
 
     #[test]
     fn test_similarity_search_with_limit() {
-        let db = setup_test_database_with_vectors();
+        let db = setup_test_database_with_vectors("with_limit");
 
         let query = vec![0.5, 0.5, 0.5, 0.5, 0.5];
 
@@ -99,7 +100,7 @@ mod similar_search_tests {
 
     #[test]
     fn test_similarity_search_with_zero_limit() {
-        let db = setup_test_database_with_vectors();
+        let db = setup_test_database_with_vectors("zero_limit");
 
         let query = vec![0.5, 0.5, 0.5, 0.5, 0.5];
         let result = db.find_similar(&query, 0);
@@ -111,7 +112,7 @@ mod similar_search_tests {
 
     #[test]
     fn test_similarity_search_exact_match() {
-        let db = setup_test_database_with_vectors();
+        let db = setup_test_database_with_vectors("exact_match");
 
         // Use exact vector from our test data
         let exact_query = vec![0.8, 0.6, 0.2, 0.1, 0.0];
@@ -128,7 +129,7 @@ mod similar_search_tests {
 
     #[test]
     fn test_similarity_search_ordering() {
-        let db = setup_test_database_with_vectors();
+        let db = setup_test_database_with_vectors("ordering");
 
         let query = vec![0.8, 0.6, 0.2, 0.1, 0.0]; // AI-related query
         let result = db.find_similar(&query, 6);
@@ -173,7 +174,8 @@ mod similar_search_tests {
 
     #[test]
     fn test_similarity_search_empty_database() {
-        let db = VectorDatabase::new("empty_similar_test").unwrap();
+        let db_name = format!("empty_similar_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
 
         let query = vec![1.0, 0.0, 0.0];
         let result = db.find_similar(&query, 5);
@@ -183,12 +185,13 @@ mod similar_search_tests {
         assert!(similar.is_empty());
 
         // Cleanup
-        VectorDatabase::delete_database("empty_similar_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 
     #[test]
     fn test_similarity_search_single_vector() {
-        let db = VectorDatabase::new("single_similar_test").unwrap();
+        let db_name = format!("single_similar_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
 
@@ -207,7 +210,7 @@ mod similar_search_tests {
         assert_eq!(similar[0].0.text, "Single vector");
 
         // Cleanup
-        VectorDatabase::delete_database("single_similar_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 }
 
@@ -287,7 +290,8 @@ mod similar_model_resolution_tests {
         let config = create_test_config_for_similarity();
 
         // Create database with specific model
-        let db = VectorDatabase::new("model_resolution_test").unwrap();
+        let db_name = format!("model_resolution_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let stored_model = "text-embedding-3-large";
         let stored_provider = "openai";
 
@@ -314,7 +318,7 @@ mod similar_model_resolution_tests {
         assert_eq!(resolved_model, stored_model);
 
         // Cleanup
-        VectorDatabase::delete_database("model_resolution_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 
     #[test]
@@ -322,7 +326,8 @@ mod similar_model_resolution_tests {
         let config = create_test_config_for_similarity();
 
         // Create database with one model
-        let db = VectorDatabase::new("model_override_test").unwrap();
+        let db_name = format!("model_override_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         db.add_vector(
             "Test",
             &vec![0.1, 0.2, 0.3],
@@ -344,7 +349,7 @@ mod similar_model_resolution_tests {
         assert_eq!(model, "embed-english-v3.0");
 
         // Cleanup
-        VectorDatabase::delete_database("model_override_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 
     #[test]
@@ -371,7 +376,8 @@ mod similar_parameter_validation_tests {
 
     #[test]
     fn test_similarity_limit_validation() {
-        let db = VectorDatabase::new("limit_validation_test").unwrap();
+        let db_name = format!("limit_validation_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
 
@@ -402,12 +408,13 @@ mod similar_parameter_validation_tests {
         }
 
         // Cleanup
-        VectorDatabase::delete_database("limit_validation_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 
     #[test]
     fn test_similarity_query_vector_validation() {
-        let db = VectorDatabase::new("query_validation_test").unwrap();
+        let db_name = format!("query_validation_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
 
@@ -441,12 +448,13 @@ mod similar_parameter_validation_tests {
         }
 
         // Cleanup
-        VectorDatabase::delete_database("query_validation_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 
     #[test]
     fn test_similarity_with_special_values() {
-        let db = VectorDatabase::new("special_values_test").unwrap();
+        let db_name = format!("special_values_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
 
@@ -486,7 +494,7 @@ mod similar_parameter_validation_tests {
         }
 
         // Cleanup
-        VectorDatabase::delete_database("special_values_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 }
 
@@ -497,7 +505,8 @@ mod similar_error_handling_tests {
     #[test]
     fn test_similar_with_nonexistent_database() {
         // Try to search in a database that doesn't exist
-        let result = VectorDatabase::new("nonexistent_similar_db");
+        let db_name = format!("nonexistent_similar_db_{}", std::process::id());
+        let result = VectorDatabase::new(&db_name);
 
         // This might succeed (creating the database) or fail
         match result {
@@ -511,7 +520,7 @@ mod similar_error_handling_tests {
                 assert!(similar.is_empty());
 
                 // Cleanup
-                VectorDatabase::delete_database("nonexistent_similar_db").unwrap();
+                VectorDatabase::delete_database(&db_name).unwrap();
             }
             Err(_) => {
                 // Error is also acceptable
@@ -523,7 +532,8 @@ mod similar_error_handling_tests {
     fn test_similar_with_corrupted_data() {
         // This test would be implementation-specific
         // Testing how the system handles corrupted vector data
-        let db = VectorDatabase::new("corruption_test").unwrap();
+        let db_name = format!("corruption_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
 
@@ -537,7 +547,7 @@ mod similar_error_handling_tests {
         assert!(result.is_ok());
 
         // Cleanup
-        VectorDatabase::delete_database("corruption_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 
     #[test]
@@ -574,7 +584,8 @@ mod similar_performance_tests {
 
     #[test]
     fn test_similarity_search_performance() {
-        let db = VectorDatabase::new("performance_test").unwrap();
+        let db_name = format!("performance_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let model = "text-embedding-3-small";
         let provider = "openai";
 
@@ -605,12 +616,13 @@ mod similar_performance_tests {
         );
 
         // Cleanup
-        VectorDatabase::delete_database("performance_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 
     #[test]
     fn test_similarity_search_with_large_vectors() {
-        let db = VectorDatabase::new("large_vector_performance_test").unwrap();
+        let db_name = format!("large_vector_performance_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
         let model = "text-embedding-3-large";
         let provider = "openai";
 
@@ -641,7 +653,7 @@ mod similar_performance_tests {
         }
 
         // Cleanup
-        VectorDatabase::delete_database("large_vector_performance_test").unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 }
 
@@ -663,12 +675,12 @@ mod similar_integration_tests {
             stream: None,
         };
 
-        let db_name = "similarity_workflow_test";
+        let db_name = format!("similarity_workflow_test_{}", std::process::id());
         let model = "text-embedding-3-small";
         let provider = "openai";
 
         // 1. Create database and add vectors
-        let db = VectorDatabase::new(db_name).unwrap();
+        let db = VectorDatabase::new(&db_name).unwrap();
 
         let test_vectors = vec![
             (
@@ -729,13 +741,13 @@ mod similar_integration_tests {
         }
 
         // Cleanup
-        VectorDatabase::delete_database(db_name).unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 
     #[test]
     fn test_similarity_with_model_consistency() {
-        let db_name = "model_consistency_test";
-        let db = VectorDatabase::new(db_name).unwrap();
+        let db_name = format!("model_consistency_test_{}", std::process::id());
+        let db = VectorDatabase::new(&db_name).unwrap();
 
         // Add vectors with consistent model
         let model = "text-embedding-3-small";
@@ -763,6 +775,6 @@ mod similar_integration_tests {
         }
 
         // Cleanup
-        VectorDatabase::delete_database(db_name).unwrap();
+        VectorDatabase::delete_database(&db_name).unwrap();
     }
 }

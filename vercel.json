@@ -4,7 +4,8 @@
   "installCommand": "echo 'Skipping root install'",
   "framework": null,
   "github": {
-    "silent": true
+    "silent": true,
+    "enabled": false
   },
   "functions": {
     "docs-site/src/**/*.js": {
