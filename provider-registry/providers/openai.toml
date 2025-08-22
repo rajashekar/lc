@@ -7,6 +7,8 @@ models_path = "/models"
 chat_path = "/chat/completions"
 images_path = "/images/generations"
 embeddings_path = "/embeddings"
+audio_path = "/audio/transcriptions"
+speech_path = "/audio/speech"
 
 [headers]
 

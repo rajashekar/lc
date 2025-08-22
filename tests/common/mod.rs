@@ -7,7 +7,7 @@ use lc::config::{Config, ProviderConfig};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Once;
-use tempfile::TempDir;
+// Removed unused import: tempfile::TempDir
 
 /// Prefix for test providers to avoid conflicts with real configurations
 const TEST_PROVIDER_PREFIX: &str = "test-";
@@ -34,6 +34,7 @@ impl TestEnvironment {
     }
     
     /// Get the path to the test configuration directory
+    #[allow(dead_code)]
     pub fn config_path(&self) -> &PathBuf {
         &self.config_dir
     }

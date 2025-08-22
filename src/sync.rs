@@ -436,7 +436,7 @@ pub async fn handle_sync_to(provider_name: &str, encrypted: bool, yes: bool) -> 
 }
 
 /// Handle sync from cloud command
-pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -> Result<()> {
+pub async fn handle_sync_from(provider_name: &str, _encrypted: bool, _yes: bool) -> Result<()> {
     let provider = CloudProvider::from_str(provider_name)?;
 
     println!(
@@ -452,10 +452,10 @@ pub async fn handle_sync_from(provider_name: &str, encrypted: bool, yes: bool) -
             #[cfg(feature = "s3-sync")]
             {
                 let s3_client = S3Provider::new_with_provider(provider_name).await?;
-                let downloaded_files = s3_client.download_configs(encrypted).await?;
+                let downloaded_files = s3_client.download_configs(_encrypted).await?;
                 
                 // Process downloaded files
-                process_downloaded_files(downloaded_files, encrypted, yes, provider_name).await?;
+                process_downloaded_files(downloaded_files, _encrypted, _yes, provider_name).await?;
                 return Ok(());
             }
             #[cfg(not(feature = "s3-sync"))]

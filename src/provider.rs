@@ -85,18 +85,25 @@ pub struct AudioTranscriptionRequest {
 pub struct AudioTranscriptionResponse {
     pub text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[allow(dead_code)]
     pub language: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[allow(dead_code)]
     pub duration: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[allow(dead_code)]
     pub segments: Option<Vec<TranscriptionSegment>>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct TranscriptionSegment {
+    #[allow(dead_code)]
     pub id: i32,
+    #[allow(dead_code)]
     pub start: f32,
+    #[allow(dead_code)]
     pub end: f32,
+    #[allow(dead_code)]
     pub text: String,
 }
 
@@ -975,17 +982,18 @@ pub async fn transcribe_audio(
         };
 
         // Decode base64 audio data
+        use base64::Engine;
         let audio_bytes = if request.file.starts_with("data:") {
             // Handle data URL format
             let parts: Vec<&str> = request.file.splitn(2, ',').collect();
             if parts.len() == 2 {
-                base64::decode(parts[1])?
+                base64::engine::general_purpose::STANDARD.decode(parts[1])?
             } else {
                 anyhow::bail!("Invalid data URL format");
             }
         } else {
             // Assume it's raw base64
-            base64::decode(&request.file)?
+            base64::engine::general_purpose::STANDARD.decode(&request.file)?
         };
 
         // Determine file extension based on the audio format

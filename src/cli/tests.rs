@@ -15,6 +15,7 @@ const TEST_PROVIDER_PREFIX: &str = "test-";
 /// Helper function to create a temporary config for testing
 fn create_test_config() -> (Config, TempDir) {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    std::env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
     let _config_path = temp_dir.path().join("config.toml");
 
     let config = Config {
@@ -59,7 +60,11 @@ fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
 }
 
 /// Helper function to create a config with test providers
-fn create_config_with_providers() -> Config {
+fn create_config_with_providers() -> (Config, TempDir) {
+    // Set up temporary test environment
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    std::env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
+    
     let mut config = Config {
         providers: HashMap::new(),
         default_provider: None,
@@ -88,7 +93,7 @@ fn create_config_with_providers() -> Config {
 
     config.default_provider = Some(openai_name);
 
-    config
+    (config, temp_dir)
 }
 
 /// Get test provider name with prefix
@@ -218,7 +223,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_add_second_provider_doesnt_change_default() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
         let original_default = config.default_provider.clone();
 
         // Add another provider
@@ -235,7 +240,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_update_existing() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
 
         // Update existing provider
@@ -251,7 +256,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_remove_existing() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
         let anthropic_name = get_test_provider_name("anthropic");
 
         // Remove existing provider
@@ -262,7 +267,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_remove_nonexistent() {
-        let config = create_config_with_providers();
+        let (config, _temp_dir) = create_config_with_providers();
 
         // Try to get non-existent provider
         let result = config.get_provider("nonexistent");
@@ -289,7 +294,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_list_with_providers() {
-        let config = create_config_with_providers();
+        let (config, _temp_dir) = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
         let anthropic_name = get_test_provider_name("anthropic");
 
@@ -300,15 +305,16 @@ mod provider_tests {
 
     #[test]
     fn test_provider_api_key_management() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
 
         // Test setting API key
         let result = config.set_api_key(openai_name.clone(), "new-api-key".to_string());
         assert!(result.is_ok());
 
-        let provider = config.get_provider(&openai_name).unwrap();
-        assert_eq!(provider.api_key, Some("new-api-key".to_string()));
+        // Use get_provider_with_auth to get the provider with API key
+        let provider_with_auth = config.get_provider_with_auth(&openai_name).unwrap();
+        assert_eq!(provider_with_auth.api_key, Some("new-api-key".to_string()));
 
         // Test setting API key for non-existent provider
         let result = config.set_api_key("nonexistent".to_string(), "key".to_string());
@@ -318,7 +324,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_headers_management() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
 
         // Test adding header
@@ -359,7 +365,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_token_url_management() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
 
         // Test setting token URL
@@ -384,7 +390,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_cached_token_management() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
         let expires_at = Utc::now() + chrono::Duration::hours(1);
 
@@ -410,7 +416,7 @@ mod provider_tests {
 
     #[test]
     fn test_provider_token_url_clears_cached_token() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
         let expires_at = Utc::now() + chrono::Duration::hours(1);
 
@@ -792,7 +798,7 @@ mod provider_edge_cases {
 
     #[test]
     fn test_provider_header_edge_cases() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
 
         let openai_name = get_test_provider_name("openai");
 
@@ -839,6 +845,10 @@ mod provider_integration_tests {
 
     #[test]
     fn test_provider_workflow_complete() {
+        // Set up temporary test environment
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        std::env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
+        
         let mut config = Config {
             providers: HashMap::new(),
             default_provider: None,
@@ -868,8 +878,8 @@ mod provider_integration_tests {
         config
             .set_api_key("test-provider-100".to_string(), "secret-key".to_string())
             .unwrap();
-        let provider = config.get_provider("test-provider-100").unwrap();
-        assert_eq!(provider.api_key, Some("secret-key".to_string()));
+        let provider_with_auth = config.get_provider_with_auth("test-provider-100").unwrap();
+        assert_eq!(provider_with_auth.api_key, Some("secret-key".to_string()));
 
         // 3. Add headers
         config
@@ -936,7 +946,7 @@ mod provider_integration_tests {
                 "secret-key-updated".to_string(),
             )
             .unwrap();
-        let provider_with_key = config.get_provider("test-provider-100").unwrap();
+        let provider_with_key = config.get_provider_with_auth("test-provider-100").unwrap();
         assert_eq!(
             provider_with_key.api_key,
             Some("secret-key-updated".to_string())
@@ -970,10 +980,17 @@ mod provider_integration_tests {
         // 8. Remove provider
         config.providers.remove("test-provider-100");
         assert!(!config.has_provider("test-provider-100"));
+        
+        // Keep temp_dir alive until the end
+        drop(temp_dir);
     }
 
     #[test]
     fn test_multiple_providers_workflow() {
+        // Set up temporary test environment
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        std::env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
+        
         let mut config = Config {
             providers: HashMap::new(),
             default_provider: None,
@@ -1013,8 +1030,8 @@ mod provider_integration_tests {
 
         // Each provider should have its API key
         for (name, _) in &[("test-openai-1", ""), ("test-anthropic-1", ""), ("test-cohere-1", "")] {
-            let provider = config.get_provider(name).unwrap();
-            assert_eq!(provider.api_key, Some(format!("{}-api-key", name)));
+            let provider_with_auth = config.get_provider_with_auth(name).unwrap();
+            assert_eq!(provider_with_auth.api_key, Some(format!("{}-api-key", name)));
         }
 
         // Add different headers to each provider
@@ -1056,11 +1073,14 @@ mod provider_integration_tests {
         assert!(cohere_headers.contains_key("X-Cohere-Version"));
         assert!(!cohere_headers.contains_key("X-OpenAI-Version"));
         assert!(!cohere_headers.contains_key("X-Anthropic-Version"));
+        
+        // Keep temp_dir alive until the end
+        drop(temp_dir);
     }
 
     #[test]
     fn test_provider_error_scenarios() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
 
         // Test operations on non-existent provider
         let nonexistent_provider = "nonexistent".to_string();
@@ -1110,7 +1130,11 @@ mod provider_integration_tests {
 
     #[test]
     fn test_provider_concurrent_operations() {
-        let mut config = create_config_with_providers();
+        // Set up temporary test environment
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        std::env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
+        
+        let (mut config, _config_temp_dir) = create_config_with_providers();
 
         // Test multiple operations on the same provider
         let provider_name = get_test_provider_name("openai");
@@ -1152,10 +1176,10 @@ mod provider_integration_tests {
             .unwrap();
 
         // Verify all operations succeeded
-        let provider = config.get_provider(&provider_name).unwrap();
-        assert_eq!(provider.api_key, Some("api-key-1".to_string()));
+        let provider_with_auth = config.get_provider_with_auth(&provider_name).unwrap();
+        assert_eq!(provider_with_auth.api_key, Some("api-key-1".to_string()));
         assert_eq!(
-            provider.token_url,
+            provider_with_auth.token_url,
             Some("https://auth.openai.com/token".to_string())
         );
 
@@ -1169,8 +1193,8 @@ mod provider_integration_tests {
         config
             .set_api_key(provider_name.clone(), "api-key-2".to_string())
             .unwrap();
-        let provider = config.get_provider(&provider_name).unwrap();
-        assert_eq!(provider.api_key, Some("api-key-2".to_string()));
+        let provider_with_auth = config.get_provider_with_auth(&provider_name).unwrap();
+        assert_eq!(provider_with_auth.api_key, Some("api-key-2".to_string()));
 
         // Remove some headers - check if header exists first
         let headers_before = config.list_headers(&provider_name).unwrap();
@@ -1182,6 +1206,10 @@ mod provider_integration_tests {
             assert_eq!(headers.len(), 2);
             assert!(!headers.contains_key("X-Header-2"));
         }
+        
+        // Keep temp_dir alive until the end
+        drop(temp_dir);
+        drop(_config_temp_dir);
     }
 }
 
@@ -1191,7 +1219,7 @@ mod provider_alias_integration_tests {
 
     #[test]
     fn test_provider_alias_workflow() {
-        let mut config = create_config_with_providers();
+        let (mut config, _temp_dir) = create_config_with_providers();
 
         let openai_name = get_test_provider_name("openai");
 
@@ -1270,8 +1298,13 @@ mod provider_config_persistence_tests {
         assert_eq!(provider.endpoint, "https://api.test.com");
         assert_eq!(provider.models_path, "/v1/models");
         assert_eq!(provider.chat_path, "/v1/chat");
-        assert_eq!(provider.api_key, Some("secret-key".to_string()));
+        // API key is now stored separately in keys.toml, so the provider config won't have it
+        assert_eq!(provider.api_key, None);
         assert_eq!(provider.headers.get("X-Custom"), Some(&"value".to_string()));
+        
+        // Verify the API key can be retrieved via get_provider_with_auth
+        let provider_with_auth = loaded_config.get_provider_with_auth("test-provider").unwrap();
+        assert_eq!(provider_with_auth.api_key, Some("secret-key".to_string()));
     }
 
     #[test]

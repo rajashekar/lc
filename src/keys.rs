@@ -97,11 +97,13 @@ impl KeysConfig {
     }
     
     /// Get an API key for a provider
+    #[allow(dead_code)]
     pub fn get_api_key(&self, provider: &str) -> Option<&String> {
         self.api_keys.get(provider)
     }
     
     /// Remove an API key for a provider
+    #[allow(dead_code)]
     pub fn remove_api_key(&mut self, provider: &str) -> Result<bool> {
         let removed = self.api_keys.remove(provider).is_some();
         if removed {
@@ -111,34 +113,40 @@ impl KeysConfig {
     }
     
     /// Set a service account JSON for a provider
+    #[allow(dead_code)]
     pub fn set_service_account(&mut self, provider: String, sa_json: String) -> Result<()> {
         self.service_accounts.insert(provider, sa_json);
         self.save()
     }
     
     /// Get a service account JSON for a provider
+    #[allow(dead_code)]
     pub fn get_service_account(&self, provider: &str) -> Option<&String> {
         self.service_accounts.get(provider)
     }
     
     /// Set an authentication token
+    #[allow(dead_code)]
     pub fn set_token(&mut self, name: String, token: String) -> Result<()> {
         self.tokens.insert(name, token);
         self.save()
     }
     
     /// Get an authentication token
+    #[allow(dead_code)]
     pub fn get_token(&self, name: &str) -> Option<&String> {
         self.tokens.get(name)
     }
     
     /// Set authentication headers for a provider
+    #[allow(dead_code)]
     pub fn set_auth_headers(&mut self, provider: String, headers: HashMap<String, String>) -> Result<()> {
         self.custom_headers.insert(provider, headers);
         self.save()
     }
     
     /// Get authentication headers for a provider (returns custom headers)
+    #[allow(dead_code)]
     pub fn get_auth_headers(&self, provider: &str) -> HashMap<String, String> {
         let mut headers = HashMap::new();
         
@@ -182,6 +190,7 @@ impl KeysConfig {
     }
     
     /// List all providers with configured keys
+    #[allow(dead_code)]
     pub fn list_providers_with_keys(&self) -> Vec<String> {
         let mut providers = Vec::new();
         
@@ -286,10 +295,20 @@ mod tests {
         env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
         
         let mut keys = KeysConfig::default();
-        keys.set_api_key("openai".to_string(), "test-key".to_string()).unwrap();
+        keys.set_api_key("test-openai-save-load".to_string(), "test-key".to_string()).unwrap();
         
+        // Load a fresh instance to test persistence
         let loaded_keys = KeysConfig::load().unwrap();
-        assert_eq!(loaded_keys.get_api_key("openai"), Some(&"test-key".to_string()));
+        
+        // Check that the loaded keys has the API key using get_auth instead
+        let auth = loaded_keys.get_auth("test-openai-save-load");
+        assert!(auth.is_some());
+        
+        if let Some(ProviderAuth::ApiKey(key)) = auth {
+            assert_eq!(key, "test-key");
+        } else {
+            panic!("Expected API key auth type");
+        }
     }
     
     #[test]
@@ -300,18 +319,18 @@ mod tests {
         let mut keys = KeysConfig::default();
         
         // Test API key
-        keys.set_api_key("openai".to_string(), "sk-test".to_string()).unwrap();
-        assert!(keys.has_auth("openai"));
+        keys.set_api_key("test-openai-auth-types".to_string(), "sk-test".to_string()).unwrap();
+        assert!(keys.has_auth("test-openai-auth-types"));
         
         // Test service account
-        keys.set_service_account("vertex".to_string(), "{\"type\":\"service_account\"}".to_string()).unwrap();
-        assert!(keys.has_auth("vertex"));
+        keys.set_service_account("test-vertex-auth-types".to_string(), "{\"type\":\"service_account\"}".to_string()).unwrap();
+        assert!(keys.has_auth("test-vertex-auth-types"));
         
         // Test auth headers
         let mut headers = HashMap::new();
         headers.insert("X-API-Key".to_string(), "test-key".to_string());
-        keys.set_auth_headers("custom".to_string(), headers).unwrap();
-        assert!(keys.has_auth("custom"));
+        keys.set_auth_headers("test-custom-auth-types".to_string(), headers).unwrap();
+        assert!(keys.has_auth("test-custom-auth-types"));
         
         // Test non-existent provider
         assert!(!keys.has_auth("nonexistent"));

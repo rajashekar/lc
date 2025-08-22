@@ -451,6 +451,11 @@ impl Config {
     }
 
     pub fn set_api_key(&mut self, provider: String, api_key: String) -> Result<()> {
+        // First check if the provider exists
+        if !self.has_provider(&provider) {
+            anyhow::bail!("Provider '{}' not found", provider);
+        }
+        
         // Store in centralized keys.toml instead of provider config
         let mut keys = crate::keys::KeysConfig::load()?;
         keys.set_api_key(provider.clone(), api_key)?;
@@ -664,6 +669,16 @@ impl Config {
     }
 
     pub fn config_dir() -> Result<PathBuf> {
+        // Check for explicit test environment override first (highest priority)
+        if let Ok(test_dir) = std::env::var("LC_TEST_CONFIG_DIR") {
+            let test_path = PathBuf::from(test_dir);
+            // Create test directory if it doesn't exist
+            if !test_path.exists() {
+                fs::create_dir_all(&test_path)?;
+            }
+            return Ok(test_path);
+        }
+        
         // Automatically detect if we're running in a test environment
         // This works because cargo test sets CARGO_TARGET_TMPDIR and other test-specific env vars
         // We can also check if we're running under cargo test by checking for CARGO env vars
@@ -750,16 +765,6 @@ impl Config {
                     }
                 }
             }
-        }
-        
-        // Check for explicit test environment override (kept for backward compatibility)
-        if let Ok(test_dir) = std::env::var("LC_TEST_CONFIG_DIR") {
-            let test_path = PathBuf::from(test_dir);
-            // Create test directory if it doesn't exist
-            if !test_path.exists() {
-                fs::create_dir_all(&test_path)?;
-            }
-            return Ok(test_path);
         }
         
         // Use data_local_dir for cross-platform data storage to match database location

@@ -35,7 +35,9 @@ jobs:
         run: cargo check --all-features --verbose
 
       - name: Run tests (with all features)
-        run: cargo test --all-features --verbose
+        # Using --test-threads=1 to prevent race conditions in integration tests
+        # that use shared file system resources and environment variables
+        run: cargo test --all-features --verbose -- --test-threads=1
 
       - name: Build release (with all features)
         run: cargo build --release --all-features --verbose
@@ -44,7 +46,8 @@ jobs:
         run: cargo check --no-default-features --features "pdf unix-sockets" --verbose
 
       - name: Run tests (without S3)
-        run: cargo test --no-default-features --features "pdf unix-sockets" --verbose
+        # Using --test-threads=1 to prevent race conditions in integration tests
+        run: cargo test --no-default-features --features "pdf unix-sockets" --verbose -- --test-threads=1
 
       - name: Build release (without S3)
         run: cargo build --release --no-default-features --features "pdf unix-sockets" --verbose

@@ -100,6 +100,7 @@ pub fn process_audio_url(url: &str) -> Result<String> {
 }
 
 /// Process multiple audio inputs (files or URLs)
+#[allow(dead_code)]
 pub fn process_audio_files(paths: &[String]) -> Result<Vec<String>> {
     let mut processed_audio = Vec::new();
 
@@ -118,6 +119,7 @@ pub fn process_audio_files(paths: &[String]) -> Result<Vec<String>> {
 }
 
 /// Download audio from URL and save to file
+#[allow(dead_code)]
 pub async fn download_audio(url: &str, output_path: &Path) -> Result<()> {
     let response = reqwest::get(url).await?;
     
@@ -132,6 +134,7 @@ pub async fn download_audio(url: &str, output_path: &Path) -> Result<()> {
 }
 
 /// Save base64 audio data to file
+#[allow(dead_code)]
 pub fn save_base64_audio(b64_data: &str, filepath: &Path) -> Result<()> {
     let audio_bytes = general_purpose::STANDARD.decode(b64_data)?;
     fs::write(filepath, audio_bytes)?;

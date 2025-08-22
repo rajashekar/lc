@@ -91,7 +91,7 @@ impl ProviderInstaller {
         
         // Default to GitHub repository
         let registry_source = std::env::var("LC_PROVIDER_REGISTRY")
-            .unwrap_or_else(|_| "https://raw.githubusercontent.com/your-org/lc-providers/main".to_string());
+            .unwrap_or_else(|_| "https://raw.githubusercontent.com/rajashekar/lc-providers/main".to_string());
         
         Ok(Self {
             registry_source,
@@ -429,6 +429,7 @@ impl ProviderInstaller {
 }
 
 /// Create a sample provider registry for testing
+#[allow(dead_code)]
 pub fn create_sample_registry() -> ProviderRegistry {
     let mut providers = HashMap::new();
     
@@ -472,7 +473,7 @@ pub fn create_sample_registry() -> ProviderRegistry {
     ProviderRegistry {
         version: "1.0.0".to_string(),
         providers,
-        base_url: "https://raw.githubusercontent.com/your-org/lc-providers/main".to_string(),
+        base_url: "https://raw.githubusercontent.com/rajashekar/lc-providers/main".to_string(),
     }
 }
 

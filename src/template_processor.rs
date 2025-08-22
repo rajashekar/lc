@@ -208,6 +208,7 @@ impl TemplateProcessor {
     }
 
     /// Process an audio transcription request using the provided template
+    #[allow(dead_code)]
     pub fn process_audio_request(
         &mut self,
         request: &crate::provider::AudioTranscriptionRequest,
