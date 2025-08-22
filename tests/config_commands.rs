@@ -225,6 +225,10 @@ mod provider_config_url_tests {
             images_templates: None,
             embeddings_templates: None,
             models_templates: None,
+            audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
         };
 
         pc.vars.insert("project".to_string(), "my-proj".to_string());
@@ -265,7 +269,11 @@ mod provider_config_url_tests {
             chat_templates: None,
             images_templates: None,
             embeddings_templates: None,
-            models_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
         };
 
         // For non-full URLs, no interpolation or model replacement occurs here

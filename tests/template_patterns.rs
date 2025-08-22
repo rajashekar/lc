@@ -23,6 +23,10 @@ fn test_regex_pattern_matching() {
         images_templates: None,
         embeddings_templates: None,
         models_templates: None,
+        audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
     };
 
     // Create chat endpoint templates
@@ -89,7 +93,11 @@ fn test_multiple_patterns() {
         chat_templates: None,
         images_templates: None,
         embeddings_templates: None,
-        models_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
     };
 
     // Create chat endpoint templates
@@ -157,7 +165,11 @@ fn test_default_template_fallback() {
         chat_templates: None,
         images_templates: None,
         embeddings_templates: None,
-        models_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
     };
 
     // Create chat endpoint templates with default
@@ -210,7 +222,11 @@ fn test_endpoint_specific_templates() {
         chat_templates: None,
         images_templates: None,
         embeddings_templates: None,
-        models_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
     };
 
     // Create different templates for different endpoints

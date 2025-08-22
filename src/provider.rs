@@ -67,6 +67,50 @@ pub struct ImageGenerationRequest {
     pub response_format: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct AudioTranscriptionRequest {
+    pub file: String, // Base64 encoded audio or URL
+    pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<String>, // json, text, srt, verbose_json, vtt
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AudioTranscriptionResponse {
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub segments: Option<Vec<TranscriptionSegment>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TranscriptionSegment {
+    pub id: i32,
+    pub start: f32,
+    pub end: f32,
+    pub text: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AudioSpeechRequest {
+    pub model: String, // tts-1, tts-1-hd
+    pub input: String, // Text to convert to speech
+    pub voice: String, // alloy, echo, fable, onyx, nova, shimmer
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<String>, // mp3, opus, aac, flac, wav, pcm
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speed: Option<f32>, // 0.25 to 4.0
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ImageGenerationResponse {
     pub data: Vec<ImageData>,
@@ -916,6 +960,220 @@ impl OpenAIClient {
         // Fall back to default parsing
         let image_response: ImageGenerationResponse = serde_json::from_str(&response_text)?;
         Ok(image_response)
+    }
+pub async fn transcribe_audio(
+        &self,
+        request: &AudioTranscriptionRequest,
+    ) -> Result<AudioTranscriptionResponse> {
+        use reqwest::multipart;
+        
+        // Use provider config's audio path if available, otherwise default
+        let url = if let Some(ref config) = self.provider_config {
+            format!("{}{}", self.base_url, config.audio_path.as_deref().unwrap_or("/audio/transcriptions"))
+        } else {
+            format!("{}/audio/transcriptions", self.base_url)
+        };
+
+        // Decode base64 audio data
+        let audio_bytes = if request.file.starts_with("data:") {
+            // Handle data URL format
+            let parts: Vec<&str> = request.file.splitn(2, ',').collect();
+            if parts.len() == 2 {
+                base64::decode(parts[1])?
+            } else {
+                anyhow::bail!("Invalid data URL format");
+            }
+        } else {
+            // Assume it's raw base64
+            base64::decode(&request.file)?
+        };
+
+        // Determine file extension based on the audio format
+        // We'll try to detect from the data URL or default to wav
+        let file_extension = if request.file.starts_with("data:audio/") {
+            let mime_part = request.file.split(';').next().unwrap_or("");
+            match mime_part {
+                "data:audio/mpeg" | "data:audio/mp3" => "mp3",
+                "data:audio/wav" | "data:audio/wave" => "wav",
+                "data:audio/flac" => "flac",
+                "data:audio/ogg" => "ogg",
+                "data:audio/webm" => "webm",
+                "data:audio/mp4" => "mp4",
+                _ => "wav"
+            }
+        } else {
+            "wav" // Default extension
+        };
+
+        // Create multipart form
+        let mut form = multipart::Form::new()
+            .text("model", request.model.clone())
+            .part("file", multipart::Part::bytes(audio_bytes)
+                .file_name(format!("audio.{}", file_extension))
+                .mime_str(&format!("audio/{}", if file_extension == "mp3" { "mpeg" } else { file_extension }))?);
+
+        // Add optional parameters
+        if let Some(language) = &request.language {
+            form = form.text("language", language.clone());
+        }
+        if let Some(prompt) = &request.prompt {
+            form = form.text("prompt", prompt.clone());
+        }
+        if let Some(response_format) = &request.response_format {
+            form = form.text("response_format", response_format.clone());
+        }
+        if let Some(temperature) = request.temperature {
+            form = form.text("temperature", temperature.to_string());
+        }
+
+        let mut req = self
+            .client
+            .post(&url);
+
+        // Add Authorization header only if no custom headers are present
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
+
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+
+        // Send multipart form request
+        let response = req.multipart(form).send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "Audio transcription API request failed with status {}: {}",
+                status,
+                text
+            );
+        }
+
+        // Get the response text first to handle different formats
+        let response_text = response.text().await?;
+
+        // Check if we have a response template for this provider/model/endpoint
+        if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get response template for audio endpoint
+                let template = config.get_endpoint_response_template("audio", &request.model);
+
+                if let Some(template_str) = template {
+                    // Parse response as JSON
+                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                        // Clone the processor to avoid mutable borrow issues
+                        let mut processor_clone = processor.clone();
+                        // Use template to transform response
+                        match processor_clone.process_response(&response_json, &template_str) {
+                            Ok(transformed) => {
+                                // Try to parse the transformed response as AudioTranscriptionResponse
+                                if let Ok(audio_response) = serde_json::from_value::<AudioTranscriptionResponse>(transformed) {
+                                    return Ok(audio_response);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Warning: Failed to process audio response template: {}. Falling back to default parsing.", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fall back to default parsing
+        // OpenAI can return just plain text for response_format=text
+        if response_text.starts_with('{') {
+            // JSON response
+            let audio_response: AudioTranscriptionResponse = serde_json::from_str(&response_text)?;
+            Ok(audio_response)
+        } else {
+            // Plain text response
+            Ok(AudioTranscriptionResponse {
+                text: response_text.trim().to_string(),
+                language: None,
+                duration: None,
+                segments: None,
+            })
+        }
+    }
+
+    pub async fn generate_speech(
+        &self,
+        request: &AudioSpeechRequest,
+    ) -> Result<Vec<u8>> {
+        // Use provider config's speech path if available, otherwise default
+        let url = if let Some(ref config) = self.provider_config {
+            format!("{}{}", self.base_url, config.speech_path.as_deref().unwrap_or("/audio/speech"))
+        } else {
+            format!("{}/audio/speech", self.base_url)
+        };
+
+        let mut req = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json");
+
+        // Add Authorization header only if no custom headers are present
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
+
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+
+        // Check if we have a template for this provider/model/endpoint
+        let request_body = if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get template for speech endpoint
+                let template = config.get_endpoint_template("speech", &request.model);
+
+                if let Some(template_str) = template {
+                    // Clone the processor to avoid mutable borrow issues
+                    let mut processor_clone = processor.clone();
+                    // Use template to transform request
+                    match processor_clone.process_speech_request(request, &template_str, &config.vars) {
+                        Ok(json_value) => Some(json_value),
+                        Err(e) => {
+                            eprintln!("Warning: Failed to process speech request template: {}. Falling back to default.", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Send request with template-processed body or fall back to default logic
+        let response = if let Some(json_body) = request_body {
+            req.json(&json_body).send().await?
+        } else {
+            req.json(request).send().await?
+        };
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "Speech generation API request failed with status {}: {}",
+                status,
+                text
+            );
+        }
+
+        // Speech API returns raw audio bytes
+        let audio_bytes = response.bytes().await?;
+        Ok(audio_bytes.to_vec())
     }
 
     pub async fn chat_stream(&self, request: &ChatRequest) -> Result<()> {

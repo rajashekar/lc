@@ -1,4 +1,5 @@
 use crate::{chat, config, database, input::MultiLineInput, readers};
+use crate::provider_installer::{AuthType, ProviderInstaller};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -64,6 +65,10 @@ pub struct Cli {
     /// Attach image(s) to the prompt (supports jpg, png, gif, webp, or URLs)
     #[arg(short = 'i', long = "image")]
     pub images: Vec<String>,
+
+    /// Attach audio file(s) for transcription (supports mp3, wav, flac, etc.)
+    #[arg(short = 'u', long = "audio")]
+    pub audio_files: Vec<String>,
 
     /// Include tools from MCP server(s) (comma-separated server names)
     #[arg(short = 't', long = "tools")]
@@ -345,6 +350,62 @@ pub enum Commands {
         #[arg(short = 'd', long = "debug")]
         debug: bool,
     },
+    /// Transcribe audio to text (alias: tr)
+    #[command(alias = "tr")]
+    Transcribe {
+        /// Audio file(s) to transcribe (supports mp3, wav, flac, etc.)
+        audio_files: Vec<String>,
+        /// Model to use for transcription
+        #[arg(short, long)]
+        model: Option<String>,
+        /// Provider to use for transcription
+        #[arg(short, long)]
+        provider: Option<String>,
+        /// Language of the audio (ISO-639-1 format, e.g., "en", "es")
+        #[arg(short = 'l', long)]
+        language: Option<String>,
+        /// Optional prompt to guide the transcription
+        #[arg(long)]
+        prompt: Option<String>,
+        /// Response format (json, text, srt, verbose_json, vtt)
+        #[arg(short = 'f', long, default_value = "text")]
+        format: String,
+        /// Temperature for transcription (0.0 to 1.0)
+        #[arg(long)]
+        temperature: Option<f32>,
+        /// Output file for transcription (optional, prints to stdout if not specified)
+        #[arg(short, long)]
+        output: Option<String>,
+        /// Enable debug/verbose logging
+        #[arg(short = 'd', long = "debug")]
+        debug: bool,
+    },
+    /// Convert text to speech
+    TTS {
+        /// Text to convert to speech
+        text: String,
+        /// Model to use for TTS
+        #[arg(short, long)]
+        model: Option<String>,
+        /// Provider to use for TTS
+        #[arg(short, long)]
+        provider: Option<String>,
+        /// Voice to use (e.g., alloy, echo, fable, onyx, nova, shimmer)
+        #[arg(short = 'v', long, default_value = "alloy")]
+        voice: String,
+        /// Output audio format (mp3, opus, aac, flac, wav, pcm)
+        #[arg(short = 'f', long, default_value = "mp3")]
+        format: String,
+        /// Speech speed (0.25 to 4.0)
+        #[arg(short = 's', long)]
+        speed: Option<f32>,
+        /// Output file for audio (required)
+        #[arg(short, long)]
+        output: String,
+        /// Enable debug/verbose logging
+        #[arg(short = 'd', long = "debug")]
+        debug: bool,
+    },
     /// Dump metadata JSON from models cache (alias: dump)
     #[command(alias = "dump")]
     DumpMetadata {
@@ -475,6 +536,37 @@ pub enum TemplateCommands {
 
 #[derive(Subcommand)]
 pub enum ProviderCommands {
+    /// Install a provider from the registry (alias: i)
+    #[command(alias = "i")]
+    Install {
+        /// Provider name to install
+        name: String,
+        /// Force reinstall even if already installed
+        #[arg(short = 'f', long = "force")]
+        force: bool,
+    },
+    /// Update installed providers (alias: up)
+    #[command(alias = "up")]
+    Upgrade {
+        /// Provider name to update (updates all if not specified)
+        name: Option<String>,
+    },
+    /// Uninstall a provider (alias: un)
+    #[command(alias = "un")]
+    Uninstall {
+        /// Provider name to uninstall
+        name: String,
+    },
+    /// List available providers from registry (alias: av)
+    #[command(alias = "av")]
+    Available {
+        /// Show only official providers
+        #[arg(long = "official")]
+        official: bool,
+        /// Filter by tag
+        #[arg(short = 't', long = "tag")]
+        tag: Option<String>,
+    },
     /// Add a new provider (alias: a)
     #[command(alias = "a")]
     Add {
@@ -1183,6 +1275,78 @@ fn extract_code_blocks(text: &str) -> Vec<String> {
 // Provider command handlers
 pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
     match command {
+        ProviderCommands::Install { name, force } => {
+            let installer = ProviderInstaller::new()?;
+            installer.install_provider(&name, force).await?;
+        }
+        ProviderCommands::Upgrade { name } => {
+            let installer = ProviderInstaller::new()?;
+            if let Some(provider_name) = name {
+                installer.update_provider(&provider_name).await?;
+            } else {
+                installer.update_all_providers().await?;
+            }
+        }
+        ProviderCommands::Uninstall { name } => {
+            let installer = ProviderInstaller::new()?;
+            installer.uninstall_provider(&name)?;
+        }
+        ProviderCommands::Available { official, tag } => {
+            let installer = ProviderInstaller::new()?;
+            let providers = installer.list_available().await?;
+            
+            println!("\n{}", "Available Providers:".bold().blue());
+            
+            let mut displayed_count = 0;
+            for (id, metadata) in providers {
+                // Apply filters
+                if official && !metadata.official {
+                    continue;
+                }
+                if let Some(ref filter_tag) = tag {
+                    if !metadata.tags.contains(filter_tag) {
+                        continue;
+                    }
+                }
+                
+                displayed_count += 1;
+                
+                print!("  {} {} - {}", "•".blue(), id.bold(), metadata.name);
+                
+                if metadata.official {
+                    print!(" {}", "✓ official".green());
+                }
+                
+                if !metadata.tags.is_empty() {
+                    print!(" [{}]", metadata.tags.join(", ").dimmed());
+                }
+                
+                println!("\n    {}", metadata.description.dimmed());
+                
+                // Show auth type
+                let auth_str = match metadata.auth_type {
+                    AuthType::ApiKey => "API Key",
+                    AuthType::ServiceAccount => "Service Account",
+                    AuthType::OAuth => "OAuth",
+                    AuthType::Token => "Token",
+                    AuthType::Headers => "Custom Headers",
+                    AuthType::None => "None",
+                };
+                println!("    Auth: {}", auth_str.yellow());
+            }
+            
+            if displayed_count == 0 {
+                if official {
+                    println!("No official providers found.");
+                } else if tag.is_some() {
+                    println!("No providers found with the specified tag.");
+                } else {
+                    println!("No providers available.");
+                }
+            } else {
+                println!("\n{} Use 'lc providers install <name>' to install a provider", "💡".yellow());
+            }
+        }
         ProviderCommands::Add {
             name,
             url,
@@ -1221,12 +1385,16 @@ pub async fn handle_provider_command(command: ProviderCommands) -> Result<()> {
 
             println!("\n{}", "Configured Providers:".bold().blue());
 
+            // Load keys config to check authentication status
+            let keys = crate::keys::KeysConfig::load().unwrap_or_else(|_| crate::keys::KeysConfig::new());
+
             // Sort providers by name for easier lookup
             let mut sorted_providers: Vec<_> = config.providers.iter().collect();
             sorted_providers.sort_by(|a, b| a.0.cmp(b.0));
 
             for (name, provider_config) in sorted_providers {
-                let has_key = provider_config.api_key.is_some();
+                // Check if provider has authentication in keys.toml
+                let has_key = keys.has_auth(name);
                 let key_status = if has_key { "✓".green() } else { "✗".red() };
                 println!(
                     "  {} {} - {} (API Key: {})",
@@ -2560,6 +2728,7 @@ pub async fn handle_direct_prompt(
     temperature_override: Option<String>,
     attachments: Vec<String>,
     images: Vec<String>,
+    audio_files: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
     use_search: Option<String>,
@@ -2581,11 +2750,79 @@ pub async fn handle_direct_prompt(
         Vec::new()
     };
 
-    // Combine prompt with attachments
-    let final_prompt = if attachment_content.is_empty() {
-        prompt.clone()
-    } else {
-        format!("{}\n\n{}", prompt, attachment_content)
+    // Process audio files if provided - transcribe them and add to context
+    let mut audio_transcriptions = String::new();
+    if !audio_files.is_empty() {
+        println!("{} Transcribing {} audio file(s)...", "🎤".blue(), audio_files.len());
+        
+        // Use the default whisper model for transcription
+        let transcription_model = "whisper-1".to_string();
+        
+        // Find a provider that supports whisper (usually OpenAI)
+        let transcription_provider = config.providers.iter()
+            .find(|(_, pc)| pc.models.iter().any(|m| m.contains("whisper")))
+            .map(|(name, _)| name.clone())
+            .unwrap_or_else(|| provider_override.clone().unwrap_or_else(|| "openai".to_string()));
+        
+        // Create a client for transcription
+        let mut transcription_config = config.clone();
+        let transcription_client = chat::create_authenticated_client(&mut transcription_config, &transcription_provider).await?;
+        
+        for (i, audio_file) in audio_files.iter().enumerate() {
+            println!("  Processing audio file {}/{}: {}", i + 1, audio_files.len(), audio_file);
+            
+            // Process audio file
+            let audio_data = if audio_file.starts_with("http://") || audio_file.starts_with("https://") {
+                crate::audio_utils::process_audio_url(audio_file)?
+            } else {
+                crate::audio_utils::process_audio_file(std::path::Path::new(audio_file))?
+            };
+            
+            // Create transcription request
+            let transcription_request = crate::provider::AudioTranscriptionRequest {
+                file: audio_data,
+                model: transcription_model.clone(),
+                language: None,
+                prompt: None,
+                response_format: Some("text".to_string()),
+                temperature: None,
+            };
+            
+            // Transcribe audio
+            match transcription_client.transcribe_audio(&transcription_request).await {
+                Ok(response) => {
+                    if !audio_transcriptions.is_empty() {
+                        audio_transcriptions.push_str("\n\n");
+                    }
+                    audio_transcriptions.push_str(&format!("=== Audio Transcription: {} ===\n{}", audio_file, response.text));
+                    println!("  ✅ Transcribed successfully");
+                }
+                Err(e) => {
+                    eprintln!("  Warning: Failed to transcribe audio file '{}': {}", audio_file, e);
+                }
+            }
+        }
+        
+        if !audio_transcriptions.is_empty() {
+            println!("{} Audio transcription complete", "✅".green());
+        }
+    }
+
+    // Combine prompt with attachments and audio transcriptions
+    let final_prompt = {
+        let mut combined = prompt.clone();
+        
+        if !attachment_content.is_empty() {
+            combined.push_str("\n\n");
+            combined.push_str(&attachment_content);
+        }
+        
+        if !audio_transcriptions.is_empty() {
+            combined.push_str("\n\n");
+            combined.push_str(&audio_transcriptions);
+        }
+        
+        combined
     };
 
     // Determine system prompt to use (CLI override takes precedence over config)
@@ -2623,8 +2860,8 @@ pub async fn handle_direct_prompt(
     let (provider_name, model_name) =
         resolve_model_and_provider(&config, provider_override, model_override)?;
 
-    // Get provider config
-    let provider_config = config.get_provider(&provider_name)?;
+    // Get provider config with authentication from centralized keys
+    let provider_config = config.get_provider_with_auth(&provider_name)?;
 
     if provider_config.api_key.is_none() {
         anyhow::bail!(
@@ -2936,6 +3173,7 @@ pub async fn handle_direct_prompt_with_piped_input(
     temperature_override: Option<String>,
     attachments: Vec<String>,
     images: Vec<String>,
+    audio_files: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
     use_search: Option<String>,
@@ -2960,14 +3198,79 @@ pub async fn handle_direct_prompt_with_piped_input(
     // Read and format file attachments
     let file_attachment_content = read_and_format_attachments(&all_attachments)?;
 
-    // Combine prompt with piped content and file attachments
-    let final_prompt = if file_attachment_content.is_empty() {
-        format!("{}\n\n{}", prompt, piped_attachment)
-    } else {
-        format!(
-            "{}\n\n{}\n\n{}",
-            prompt, piped_attachment, file_attachment_content
-        )
+    // Process audio files if provided - transcribe them and add to context
+    let mut audio_transcriptions = String::new();
+    if !audio_files.is_empty() {
+        println!("{} Transcribing {} audio file(s)...", "🎤".blue(), audio_files.len());
+        
+        // Use the default whisper model for transcription
+        let transcription_model = "whisper-1".to_string();
+        
+        // Find a provider that supports whisper (usually OpenAI)
+        let transcription_provider = config.providers.iter()
+            .find(|(_, pc)| pc.models.iter().any(|m| m.contains("whisper")))
+            .map(|(name, _)| name.clone())
+            .unwrap_or_else(|| provider_override.clone().unwrap_or_else(|| "openai".to_string()));
+        
+        // Create a client for transcription
+        let mut transcription_config = config.clone();
+        let transcription_client = chat::create_authenticated_client(&mut transcription_config, &transcription_provider).await?;
+        
+        for (i, audio_file) in audio_files.iter().enumerate() {
+            println!("  Processing audio file {}/{}: {}", i + 1, audio_files.len(), audio_file);
+            
+            // Process audio file
+            let audio_data = if audio_file.starts_with("http://") || audio_file.starts_with("https://") {
+                crate::audio_utils::process_audio_url(audio_file)?
+            } else {
+                crate::audio_utils::process_audio_file(std::path::Path::new(audio_file))?
+            };
+            
+            // Create transcription request
+            let transcription_request = crate::provider::AudioTranscriptionRequest {
+                file: audio_data,
+                model: transcription_model.clone(),
+                language: None,
+                prompt: None,
+                response_format: Some("text".to_string()),
+                temperature: None,
+            };
+            
+            // Transcribe audio
+            match transcription_client.transcribe_audio(&transcription_request).await {
+                Ok(response) => {
+                    if !audio_transcriptions.is_empty() {
+                        audio_transcriptions.push_str("\n\n");
+                    }
+                    audio_transcriptions.push_str(&format!("=== Audio Transcription: {} ===\n{}", audio_file, response.text));
+                    println!("  ✅ Transcribed successfully");
+                }
+                Err(e) => {
+                    eprintln!("  Warning: Failed to transcribe audio file '{}': {}", audio_file, e);
+                }
+            }
+        }
+        
+        if !audio_transcriptions.is_empty() {
+            println!("{} Audio transcription complete", "✅".green());
+        }
+    }
+
+    // Combine prompt with piped content, file attachments, and audio transcriptions
+    let final_prompt = {
+        let mut combined = format!("{}\n\n{}", prompt, piped_attachment);
+        
+        if !file_attachment_content.is_empty() {
+            combined.push_str("\n\n");
+            combined.push_str(&file_attachment_content);
+        }
+        
+        if !audio_transcriptions.is_empty() {
+            combined.push_str("\n\n");
+            combined.push_str(&audio_transcriptions);
+        }
+        
+        combined
     };
 
     // Determine system prompt to use (CLI override takes precedence over config)
@@ -3005,8 +3308,8 @@ pub async fn handle_direct_prompt_with_piped_input(
     let (provider_name, model_name) =
         resolve_model_and_provider(&config, provider_override, model_override)?;
 
-    // Get provider config
-    let provider_config = config.get_provider(&provider_name)?;
+    // Get provider config with authentication from centralized keys
+    let provider_config = config.get_provider_with_auth(&provider_name)?;
 
     if provider_config.api_key.is_none() {
         anyhow::bail!(
@@ -5261,8 +5564,8 @@ pub async fn handle_embed_command(
     let (provider_name, resolved_model) =
         resolve_model_and_provider(&config, provider, Some(model))?;
 
-    // Get provider config
-    let provider_config = config.get_provider(&provider_name)?;
+    // Get provider config with authentication from centralized keys
+    let provider_config = config.get_provider_with_auth(&provider_name)?;
 
     if provider_config.api_key.is_none() {
         anyhow::bail!(
@@ -5562,8 +5865,8 @@ pub async fn handle_similar_command(
     let (provider_name, model_name) =
         resolve_model_and_provider(&config, Some(resolved_provider), Some(resolved_model))?;
 
-    // Get provider config
-    let provider_config = config.get_provider(&provider_name)?;
+    // Get provider config with authentication from centralized keys
+    let provider_config = config.get_provider_with_auth(&provider_name)?;
 
     if provider_config.api_key.is_none() {
         anyhow::bail!(
@@ -6465,8 +6768,8 @@ pub async fn handle_image_command(
     // Resolve provider and model using the same logic as other commands
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider, model)?;
 
-    // Get provider config
-    let provider_config = config.get_provider(&provider_name)?;
+    // Get provider config with authentication from centralized keys
+    let provider_config = config.get_provider_with_auth(&provider_name)?;
 
     if provider_config.api_key.is_none() {
         anyhow::bail!(
@@ -6641,6 +6944,278 @@ fn save_base64_image(b64_data: &str, filepath: &std::path::Path) -> Result<()> {
 
     let image_bytes = general_purpose::STANDARD.decode(b64_data)?;
     std::fs::write(filepath, image_bytes)?;
+
+    Ok(())
+}
+
+// Audio transcription command handler
+pub async fn handle_transcribe_command(
+    audio_files: Vec<String>,
+    model: Option<String>,
+    provider: Option<String>,
+    language: Option<String>,
+    prompt: Option<String>,
+    format: String,
+    temperature: Option<f32>,
+    output: Option<String>,
+    debug: bool,
+) -> Result<()> {
+    use crate::audio_utils;
+    use colored::Colorize;
+    use std::io::{self, Write};
+
+    // Set debug mode if requested
+    if debug {
+        set_debug_mode(true);
+    }
+
+    if audio_files.is_empty() {
+        anyhow::bail!("No audio files provided for transcription");
+    }
+
+    let config = config::Config::load()?;
+
+    // Default to whisper-1 model if not specified
+    let model_str = model.unwrap_or_else(|| "whisper-1".to_string());
+    
+    // Resolve provider and model
+    let (provider_name, model_name) = if let Some(p) = provider {
+        (p, model_str)
+    } else {
+        // Try to find a provider that has the whisper model
+        let provider_name = config
+            .providers
+            .iter()
+            .find(|(_, pc)| pc.models.iter().any(|m| m.contains("whisper")))
+            .map(|(name, _)| name.clone())
+            .unwrap_or_else(|| "openai".to_string());
+        (provider_name, model_str)
+    };
+
+    // Get provider config with authentication
+    let provider_config = config.get_provider_with_auth(&provider_name)?;
+
+    if provider_config.api_key.is_none() {
+        anyhow::bail!(
+            "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
+            provider_name,
+            provider_name
+        );
+    }
+
+    let mut config_mut = config.clone();
+    let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+
+    // Save config if tokens were updated
+    if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
+        config_mut.save()?;
+    }
+
+    println!(
+        "{} Transcribing {} audio file(s)",
+        "🎤".blue(),
+        audio_files.len()
+    );
+    println!("{} Model: {}", "🤖".blue(), model_name);
+    println!("{} Provider: {}", "🏢".blue(), provider_name);
+    if let Some(ref lang) = language {
+        println!("{} Language: {}", "🌐".blue(), lang);
+    }
+    println!("{} Format: {}", "📄".blue(), format);
+
+    let mut all_transcriptions = Vec::new();
+
+    for (i, audio_file) in audio_files.iter().enumerate() {
+        println!(
+            "\n{} Processing file {}/{}: {}",
+            "📁".blue(),
+            i + 1,
+            audio_files.len(),
+            audio_file
+        );
+
+        print!("{} ", "Transcribing...".dimmed());
+        io::stdout().flush()?;
+
+        // Process audio file (handles both local files and URLs)
+        let audio_data = if audio_file.starts_with("http://") || audio_file.starts_with("https://") {
+            audio_utils::process_audio_url(audio_file)?
+        } else {
+            audio_utils::process_audio_file(std::path::Path::new(audio_file))?
+        };
+
+        // Create transcription request
+        let transcription_request = crate::provider::AudioTranscriptionRequest {
+            file: audio_data,
+            model: model_name.clone(),
+            language: language.clone(),
+            prompt: prompt.clone(),
+            response_format: Some(format.clone()),
+            temperature,
+        };
+
+        // Transcribe audio
+        match client.transcribe_audio(&transcription_request).await {
+            Ok(response) => {
+                print!("\r{}\r", " ".repeat(20)); // Clear "Transcribing..."
+                println!("{} Transcription complete!", "✅".green());
+                
+                // Display or save transcription
+                let transcription_text = response.text;
+                
+                if let Some(ref output_file) = output {
+                    // Append to output file if multiple files
+                    let mut file = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(output_file)?;
+                    
+                    if audio_files.len() > 1 {
+                        writeln!(file, "\n=== {} ===", audio_file)?;
+                    }
+                    writeln!(file, "{}", transcription_text)?;
+                    
+                    all_transcriptions.push(transcription_text);
+                } else {
+                    // Print to stdout
+                    if audio_files.len() > 1 {
+                        println!("\n{} Transcription for {}:", "📝".blue(), audio_file);
+                    } else {
+                        println!("\n{} Transcription:", "📝".blue());
+                    }
+                    println!("{}", transcription_text);
+                    
+                    all_transcriptions.push(transcription_text);
+                }
+            }
+            Err(e) => {
+                print!("\r{}\r", " ".repeat(20)); // Clear "Transcribing..."
+                eprintln!("{} Failed to transcribe {}: {}", "❌".red(), audio_file, e);
+            }
+        }
+    }
+
+    if let Some(output_file) = output {
+        println!(
+            "\n{} All transcriptions saved to: {}",
+            "💾".green(),
+            output_file
+        );
+    }
+
+    Ok(())
+}
+
+// Text-to-speech command handler
+pub async fn handle_tts_command(
+    text: String,
+    model: Option<String>,
+    provider: Option<String>,
+    voice: String,
+    format: String,
+    speed: Option<f32>,
+    output: String,
+    debug: bool,
+) -> Result<()> {
+    use colored::Colorize;
+    use std::io::{self, Write};
+
+    // Set debug mode if requested
+    if debug {
+        set_debug_mode(true);
+    }
+
+    let config = config::Config::load()?;
+
+    // Default to tts-1 model if not specified
+    let model_str = model.unwrap_or_else(|| "tts-1".to_string());
+    
+    // Resolve provider and model
+    let (provider_name, model_name) = if let Some(p) = provider {
+        (p, model_str)
+    } else {
+        // Try to find a provider that has TTS models
+        let provider_name = config
+            .providers
+            .iter()
+            .find(|(_, pc)| pc.models.iter().any(|m| m.contains("tts")))
+            .map(|(name, _)| name.clone())
+            .unwrap_or_else(|| "openai".to_string());
+        (provider_name, model_str)
+    };
+
+    // Get provider config with authentication
+    let provider_config = config.get_provider_with_auth(&provider_name)?;
+
+    if provider_config.api_key.is_none() {
+        anyhow::bail!(
+            "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
+            provider_name,
+            provider_name
+        );
+    }
+
+    let mut config_mut = config.clone();
+    let client = chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+
+    // Save config if tokens were updated
+    if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
+        config_mut.save()?;
+    }
+
+    // Truncate text for display if it's too long
+    let display_text = if text.len() > 100 {
+        format!("{}...", &text[..100])
+    } else {
+        text.clone()
+    };
+
+    println!("{} Generating speech", "🔊".blue());
+    println!("{} Text: \"{}\"", "📝".blue(), display_text);
+    println!("{} Model: {}", "🤖".blue(), model_name);
+    println!("{} Provider: {}", "🏢".blue(), provider_name);
+    println!("{} Voice: {}", "🎭".blue(), voice);
+    println!("{} Format: {}", "🎵".blue(), format);
+    if let Some(s) = speed {
+        println!("{} Speed: {}x", "⚡".blue(), s);
+    }
+
+    print!("{} ", "Generating speech...".dimmed());
+    io::stdout().flush()?;
+
+    // Create TTS request
+    let tts_request = crate::provider::AudioSpeechRequest {
+        model: model_name,
+        input: text,
+        voice,
+        response_format: Some(format.clone()),
+        speed,
+    };
+
+    // Generate speech
+    match client.generate_speech(&tts_request).await {
+        Ok(audio_bytes) => {
+            print!("\r{}\r", " ".repeat(25)); // Clear "Generating speech..."
+            
+            // Save audio to file
+            std::fs::write(&output, audio_bytes)?;
+            
+            println!(
+                "{} Speech generated successfully!",
+                "✅".green()
+            );
+            println!("{} Saved to: {}", "💾".green(), output);
+            
+            // Show file size
+            let metadata = std::fs::metadata(&output)?;
+            let size_kb = metadata.len() as f64 / 1024.0;
+            println!("{} File size: {:.2} KB", "📊".blue(), size_kb);
+        }
+        Err(e) => {
+            print!("\r{}\r", " ".repeat(25)); // Clear "Generating speech..."
+            anyhow::bail!("Failed to generate speech: {}", e);
+        }
+    }
 
     Ok(())
 }

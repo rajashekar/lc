@@ -207,6 +207,85 @@ impl TemplateProcessor {
         Ok(json_value)
     }
 
+    /// Process an audio transcription request using the provided template
+    pub fn process_audio_request(
+        &mut self,
+        request: &crate::provider::AudioTranscriptionRequest,
+        template: &str,
+        provider_vars: &HashMap<String, String>,
+    ) -> Result<JsonValue> {
+        // Add template to Tera
+        self.tera
+            .add_raw_template("audio_request", template)
+            .context("Failed to parse audio request template")?;
+
+        // Build context from AudioTranscriptionRequest
+        let mut context = TeraContext::new();
+        
+        // Add basic fields
+        context.insert("file", &request.file);
+        context.insert("model", &request.model);
+        context.insert("language", &request.language);
+        context.insert("prompt", &request.prompt);
+        context.insert("response_format", &request.response_format);
+        context.insert("temperature", &request.temperature);
+        
+        // Add provider-specific variables
+        for (key, value) in provider_vars {
+            context.insert(key, value);
+        }
+
+        // Render template
+        let rendered = self.tera
+            .render("audio_request", &context)
+            .context("Failed to render audio request template")?;
+
+        // Parse as JSON to validate
+        let json_value: JsonValue = serde_json::from_str(&rendered)
+            .context("Audio template did not produce valid JSON")?;
+
+        Ok(json_value)
+    }
+
+    /// Process a speech generation request using the provided template
+    pub fn process_speech_request(
+        &mut self,
+        request: &crate::provider::AudioSpeechRequest,
+        template: &str,
+        provider_vars: &HashMap<String, String>,
+    ) -> Result<JsonValue> {
+        // Add template to Tera
+        self.tera
+            .add_raw_template("speech_request", template)
+            .context("Failed to parse speech request template")?;
+
+        // Build context from AudioSpeechRequest
+        let mut context = TeraContext::new();
+        
+        // Add basic fields
+        context.insert("model", &request.model);
+        context.insert("input", &request.input);
+        context.insert("voice", &request.voice);
+        context.insert("response_format", &request.response_format);
+        context.insert("speed", &request.speed);
+        
+        // Add provider-specific variables
+        for (key, value) in provider_vars {
+            context.insert(key, value);
+        }
+
+        // Render template
+        let rendered = self.tera
+            .render("speech_request", &context)
+            .context("Failed to render speech request template")?;
+
+        // Parse as JSON to validate
+        let json_value: JsonValue = serde_json::from_str(&rendered)
+            .context("Speech template did not produce valid JSON")?;
+
+        Ok(json_value)
+    }
+
     /// Process a response using the provided template
     pub fn process_response(
         &mut self,

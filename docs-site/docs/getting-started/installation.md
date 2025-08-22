@@ -59,14 +59,14 @@ cargo install lc-cli               # ✅ Available now!
 cargo install lc-cli
 
 # Or install directly from git (development version)
-cargo install --git https://github.com/your-username/lc
+cargo install --git https://github.com/rajashekar/lc
 ```
 
 ### 📁 Pre-built Binaries (Recommended)
 
 **Note**: GitHub releases with pre-built binaries are coming soon.
 
-1. Download the latest binary for your platform from [GitHub Releases](https://github.com/your-username/lc/releases)
+1. Download the latest binary for your platform from [GitHub Releases](https://github.com/rajashekar/lc/releases)
 2. Extract and place in your PATH
 
 | Platform | Architecture | Binary Name |

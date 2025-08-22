@@ -293,6 +293,10 @@ mod rag_model_consistency_tests {
                 images_templates: None,
                 embeddings_templates: None,
                 models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
             },
         );
 
@@ -316,6 +320,10 @@ mod rag_model_consistency_tests {
                 images_templates: None,
                 embeddings_templates: None,
                 models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
             },
         );
 

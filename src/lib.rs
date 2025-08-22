@@ -40,6 +40,7 @@
 //! cargo build --features "unix-sockets,pdf"
 //! ```
 
+pub mod audio_utils;
 pub mod chat;
 pub mod cli;
 pub mod completion;
@@ -50,6 +51,7 @@ pub mod error;
 pub mod http_client;
 pub mod image_utils;
 pub mod input;
+pub mod keys;
 pub mod mcp;
 // MCP daemon module - Unix implementation with Windows stubs
 // On Windows, all daemon functions return appropriate "unsupported" errors
@@ -57,6 +59,7 @@ pub mod mcp_daemon;
 pub mod model_metadata;
 pub mod models_cache;
 pub mod provider;
+pub mod provider_installer;
 pub mod proxy;
 pub mod readers;
 pub mod search;

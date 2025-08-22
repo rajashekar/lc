@@ -46,12 +46,15 @@ mod proxy_state_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        },
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
+            },
         );
 
         config.providers.insert(
@@ -69,12 +72,15 @@ mod proxy_state_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        },
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
+            },
         );
 
         config.default_provider = Some("openai".to_string());
@@ -166,12 +172,15 @@ mod proxy_model_parsing_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        },
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
+            },
         );
 
         config.providers.insert(
@@ -189,12 +198,15 @@ mod proxy_model_parsing_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        },
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
+            },
         );
 
         // Add aliases
@@ -532,12 +544,15 @@ mod proxy_filtering_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        },
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
+            },
         );
 
         config.providers.insert(
@@ -555,12 +570,15 @@ mod proxy_filtering_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        },
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
+            },
         );
 
         ProxyState {
@@ -843,12 +861,15 @@ mod proxy_integration_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        },
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
+            },
         );
 
         // Add aliases
@@ -1223,12 +1244,15 @@ mod proxy_error_handling_tests {
                 vars: HashMap::new(),
                 images_path: Some("/images/generations".to_string()),
                 embeddings_path: Some("/embeddings".to_string()),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        },
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
+            },
         );
         // Simulate alias insertions
         for i in 0..10 {

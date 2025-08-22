@@ -44,6 +44,10 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub embeddings_path: Option<String>,
     #[serde(default)]
+    pub audio_path: Option<String>,
+    #[serde(default)]
+    pub speech_path: Option<String>,
+    #[serde(default)]
     pub headers: HashMap<String, String>,
     #[serde(default)]
     pub token_url: Option<String>,
@@ -61,6 +65,10 @@ pub struct ProviderConfig {
     pub embeddings_templates: Option<HashMap<String, TemplateConfig>>, // Embeddings endpoint templates
     #[serde(default)]
     pub models_templates: Option<HashMap<String, TemplateConfig>>, // Models endpoint templates
+    #[serde(default)]
+    pub audio_templates: Option<HashMap<String, TemplateConfig>>, // Audio transcription endpoint templates
+    #[serde(default)]
+    pub speech_templates: Option<HashMap<String, TemplateConfig>>, // Speech generation endpoint templates
 }
 
 impl ProviderConfig {
@@ -138,6 +146,8 @@ impl ProviderConfig {
             "images" => self.images_templates.as_ref()?,
             "embeddings" => self.embeddings_templates.as_ref()?,
             "models" => self.models_templates.as_ref()?,
+            "audio" => self.audio_templates.as_ref()?,
+            "speech" => self.speech_templates.as_ref()?,
             _ => return None,
         };
 
@@ -151,6 +161,8 @@ impl ProviderConfig {
             "images" => self.images_templates.as_ref()?,
             "embeddings" => self.embeddings_templates.as_ref()?,
             "models" => self.models_templates.as_ref()?,
+            "audio" => self.audio_templates.as_ref()?,
+            "speech" => self.speech_templates.as_ref()?,
             _ => return None,
         };
 
@@ -263,6 +275,12 @@ impl Config {
 
         // Save the main config (without providers)
         config.save_main_config()?;
+        
+        // Migrate API keys to centralized keys.toml if needed
+        if config.has_providers_with_keys() {
+            crate::debug_log!("Detected providers with embedded API keys, initiating migration...");
+            let _ = crate::keys::KeysConfig::migrate_from_provider_configs(&config);
+        }
         
         Ok(config)
     }
@@ -392,6 +410,8 @@ impl Config {
             chat_path: chat_path.unwrap_or_else(default_chat_path),
             images_path: None,
             embeddings_path: None,
+            audio_path: None,
+            speech_path: None,
             headers: HashMap::new(),
             token_url: None,
             cached_token: None,
@@ -401,6 +421,8 @@ impl Config {
             images_templates: None,
             embeddings_templates: None,
             models_templates: None,
+            audio_templates: None,
+            speech_templates: None,
         };
 
         // Auto-detect Vertex AI host to mark google_sa_jwt
@@ -429,14 +451,60 @@ impl Config {
     }
 
     pub fn set_api_key(&mut self, provider: String, api_key: String) -> Result<()> {
+        // Store in centralized keys.toml instead of provider config
+        let mut keys = crate::keys::KeysConfig::load()?;
+        keys.set_api_key(provider.clone(), api_key)?;
+        
+        // Clear from provider config if it exists there (for migration)
         if let Some(provider_config) = self.providers.get_mut(&provider) {
-            provider_config.api_key = Some(api_key);
-            let config_clone = provider_config.clone();
-            self.save_single_provider(&provider, &config_clone)?;
-            Ok(())
-        } else {
-            anyhow::bail!("Provider '{}' not found", provider);
+            if provider_config.api_key.is_some() {
+                provider_config.api_key = None;
+                let config_clone = provider_config.clone();
+                self.save_single_provider(&provider, &config_clone)?;
+            }
         }
+        
+        Ok(())
+    }
+    
+    /// Check if any providers have embedded API keys (for migration detection)
+    pub fn has_providers_with_keys(&self) -> bool {
+        for (_name, provider_config) in &self.providers {
+            if provider_config.api_key.is_some() && !provider_config.api_key.as_ref().unwrap().is_empty() {
+                return true;
+            }
+        }
+        false
+    }
+    
+    /// Get provider with authentication from centralized keys
+    pub fn get_provider_with_auth(&self, name: &str) -> Result<ProviderConfig> {
+        let mut provider_config = self.get_provider(name)?.clone();
+        
+        // Load authentication from centralized keys
+        if let Some(auth) = crate::keys::get_provider_auth(name)? {
+            match auth {
+                crate::keys::ProviderAuth::ApiKey(key) => {
+                    provider_config.api_key = Some(key);
+                }
+                crate::keys::ProviderAuth::ServiceAccount(sa_json) => {
+                    provider_config.api_key = Some(sa_json);
+                }
+                crate::keys::ProviderAuth::OAuthToken(token) => {
+                    provider_config.api_key = Some(token);
+                }
+                crate::keys::ProviderAuth::Token(token) => {
+                    provider_config.api_key = Some(token);
+                }
+                crate::keys::ProviderAuth::Headers(headers) => {
+                    for (k, v) in headers {
+                        provider_config.headers.insert(k, v);
+                    }
+                }
+            }
+        }
+        
+        Ok(provider_config)
     }
 
     pub fn has_provider(&self, name: &str) -> bool {
@@ -596,6 +664,104 @@ impl Config {
     }
 
     pub fn config_dir() -> Result<PathBuf> {
+        // Automatically detect if we're running in a test environment
+        // This works because cargo test sets CARGO_TARGET_TMPDIR and other test-specific env vars
+        // We can also check if we're running under cargo test by checking for CARGO env vars
+        #[cfg(test)]
+        {
+            // When compiling for tests, always use a temp directory
+            use std::sync::Once;
+            use std::sync::Mutex;
+            
+            static INIT: Once = Once::new();
+            static TEST_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
+            
+            // Get or create the test directory
+            let mut test_dir_guard = TEST_DIR.lock().unwrap();
+            if test_dir_guard.is_none() {
+                // Create a unique temp directory for this test run
+                let temp_dir = std::env::temp_dir()
+                    .join("lc_test")
+                    .join(format!("test_{}", std::process::id()));
+                
+                // Register cleanup on process exit
+                let cleanup_dir = temp_dir.clone();
+                INIT.call_once(|| {
+                    // Register a cleanup function that runs when tests complete
+                    // This uses a custom panic hook and atexit-like behavior
+                    struct TestDirCleanup(PathBuf);
+                    impl Drop for TestDirCleanup {
+                        fn drop(&mut self) {
+                            // Clean up the test directory when the process exits
+                            if self.0.exists() {
+                                let _ = fs::remove_dir_all(&self.0);
+                            }
+                        }
+                    }
+                    
+                    // Create a static cleanup object that will be dropped on exit
+                    lazy_static::lazy_static! {
+                        static ref CLEANUP: Mutex<Option<TestDirCleanup>> = Mutex::new(None);
+                    }
+                    
+                    *CLEANUP.lock().unwrap() = Some(TestDirCleanup(cleanup_dir));
+                });
+                
+                *test_dir_guard = Some(temp_dir);
+            }
+            
+            if let Some(ref test_path) = *test_dir_guard {
+                if !test_path.exists() {
+                    fs::create_dir_all(test_path)?;
+                }
+                return Ok(test_path.clone());
+            }
+        }
+        
+        // For non-test builds, check if we're running under cargo test
+        // This catches integration tests that aren't compiled with #[cfg(test)]
+        if std::env::var("CARGO").is_ok() && std::env::var("CARGO_PKG_NAME").is_ok() {
+            // Additional check: see if we're likely in a test by checking the binary name
+            if let Ok(current_exe) = std::env::current_exe() {
+                if let Some(exe_name) = current_exe.file_name() {
+                    let exe_str = exe_name.to_string_lossy();
+                    // Cargo test binaries typically have hashes in their names
+                    if exe_str.contains("test") || exe_str.contains("-") && exe_str.len() > 20 {
+                        // Use a temp directory for tests with automatic cleanup
+                        use tempfile::TempDir;
+                        use std::sync::Mutex;
+                        
+                        // Store the TempDir in a static to keep it alive for the test duration
+                        lazy_static::lazy_static! {
+                            static ref TEST_TEMP_DIR: Mutex<Option<TempDir>> = Mutex::new(None);
+                        }
+                        
+                        let mut temp_dir_guard = TEST_TEMP_DIR.lock().unwrap();
+                        if temp_dir_guard.is_none() {
+                            // Create a new temp directory that will be automatically cleaned up
+                            let temp_dir = TempDir::with_prefix("lc_test_")
+                                .map_err(|e| anyhow::anyhow!("Failed to create temp dir: {}", e))?;
+                            *temp_dir_guard = Some(temp_dir);
+                        }
+                        
+                        if let Some(ref temp_dir) = *temp_dir_guard {
+                            return Ok(temp_dir.path().to_path_buf());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check for explicit test environment override (kept for backward compatibility)
+        if let Ok(test_dir) = std::env::var("LC_TEST_CONFIG_DIR") {
+            let test_path = PathBuf::from(test_dir);
+            // Create test directory if it doesn't exist
+            if !test_path.exists() {
+                fs::create_dir_all(&test_path)?;
+            }
+            return Ok(test_path);
+        }
+        
         // Use data_local_dir for cross-platform data storage to match database location
         // On macOS: ~/Library/Application Support/lc
         // On Linux: ~/.local/share/lc

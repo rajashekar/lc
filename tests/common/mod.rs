@@ -14,6 +14,62 @@ const TEST_PROVIDER_PREFIX: &str = "test-";
 
 static BUILD_ONCE: Once = Once::new();
 
+/// Test environment setup that verifies test isolation
+/// No longer needs to set environment variables as the config module
+/// automatically detects test environment
+pub struct TestEnvironment {
+    pub config_dir: PathBuf,
+}
+
+impl TestEnvironment {
+    /// Create a new test environment verification helper
+    pub fn new() -> Self {
+        // Get the actual config directory being used
+        let config_dir = lc::config::Config::config_dir()
+            .expect("Failed to get config directory");
+        
+        TestEnvironment {
+            config_dir,
+        }
+    }
+    
+    /// Get the path to the test configuration directory
+    pub fn config_path(&self) -> &PathBuf {
+        &self.config_dir
+    }
+    
+    /// Verify that we're using a test directory, not production
+    pub fn verify_test_isolation(&self) {
+        let path_str = self.config_dir.to_string_lossy();
+        
+        // Verify we're in a temp directory
+        assert!(
+            path_str.contains("lc_test") || path_str.contains("tmp") || path_str.contains("temp"),
+            "Config directory should be in temp location for tests: {}",
+            path_str
+        );
+        
+        // Verify we're NOT in production directories
+        #[cfg(target_os = "macos")]
+        assert!(
+            !path_str.contains("Library/Application Support/lc"),
+            "Should not use production config directory in tests"
+        );
+        
+        #[cfg(target_os = "linux")]
+        assert!(
+            !path_str.contains(".local/share/lc"),
+            "Should not use production config directory in tests"
+        );
+        
+        #[cfg(target_os = "windows")]
+        assert!(
+            !path_str.contains("AppData") || path_str.contains("Temp"),
+            "Should not use production config directory in tests"
+        );
+    }
+}
+
 /// Get the path to the compiled test binary
 /// This ensures the binary is built once and returns the correct path for the platform
 #[allow(dead_code)]
@@ -55,10 +111,8 @@ pub fn get_test_provider_name(base_name: &str) -> String {
 
 /// Helper function to create a temporary config for testing
 #[allow(dead_code)]
-pub fn create_test_config() -> (Config, TempDir) {
-    let temp_dir = TempDir::new().expect("Failed to create temp directory");
-
-    let config = Config {
+pub fn create_test_config() -> Config {
+    Config {
         providers: HashMap::new(),
         default_provider: None,
         default_model: None,
@@ -68,9 +122,14 @@ pub fn create_test_config() -> (Config, TempDir) {
         max_tokens: None,
         temperature: None,
         stream: None,
-    };
+    }
+}
 
-    (config, temp_dir)
+/// Helper function to verify test environment isolation
+#[allow(dead_code)]
+pub fn verify_test_isolation() {
+    let test_env = TestEnvironment::new();
+    test_env.verify_test_isolation();
 }
 
 /// Helper function to create a test provider config
@@ -84,6 +143,8 @@ pub fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
         chat_path: "/chat/completions".to_string(),
         images_path: Some("/images/generations".to_string()),
         embeddings_path: Some("/embeddings".to_string()),
+        audio_path: Some("/audio/transcriptions".to_string()),
+        speech_path: Some("/audio/speech".to_string()),
         headers: HashMap::new(),
         token_url: None,
         cached_token: None,
@@ -93,6 +154,8 @@ pub fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
         images_templates: None,
         embeddings_templates: None,
         models_templates: None,
+        audio_templates: None,
+        speech_templates: None,
     }
 }
 

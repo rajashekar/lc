@@ -1,0 +1,35 @@
+# Google Gemini Provider Configuration
+# Version: 1.0.0
+
+endpoint = "https://generativelanguage.googleapis.com/v1beta"
+models = []
+models_path = "/models"
+chat_path = "/models/{model}:generateContent"
+
+[headers]
+
+[vars]
+
+[chat_templates."gemini.*"]
+request = """
+{
+  "contents": [
+    {% for message in messages %}
+    {
+      "role": "{% if message.role == 'assistant' %}model{% else %}{{ message.role }}{% endif %}",
+      "parts": [{"text": "{{ message.content }}"}]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]{% if max_tokens or temperature %},
+  "generationConfig": {
+    {% if max_tokens %}"maxOutputTokens": {{ max_tokens }}{% if temperature %},{% endif %}{% endif %}
+    {% if temperature %}"temperature": {{ temperature }}{% endif %}
+  }{% endif %}
+}
+"""
+
+response = """
+{% if candidates and candidates[0].content.parts[0].text %}
+{{ candidates[0].content.parts[0].text }}
+{% endif %}
+"""

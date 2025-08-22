@@ -28,6 +28,13 @@ lc [COMMAND] [SUBCOMMAND] [OPTIONS] [ARGS]
 | `lc config` | `lc co` | Configure defaults |
 | `lc logs` | `lc l` | View and manage chat history |
 
+### Audio Commands
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `lc transcribe` | `lc tr` | Convert audio to text |
+| `lc tts` | - | Convert text to speech |
+
 ### Advanced Commands
 
 | Command | Alias | Description |
@@ -65,6 +72,15 @@ lc -t fetch "What's the latest news about AI?"
 
 # With web search
 lc --use-search brave "What are the latest AI developments?"
+
+# With audio attachments
+lc "What is being discussed?" --audio meeting.mp3
+
+# Transcribe audio
+lc transcribe recording.wav
+
+# Text to speech
+lc tts "Hello world" --output greeting.mp3
 ```
 
 ## Global Options
@@ -77,6 +93,7 @@ These options work with most commands:
 - `--max-tokens <MAX_TOKENS>` - Maximum number of tokens
 - `--temperature <TEMPERATURE>` - Adjust response randomness
 - `-a, --attach <ATTACHMENTS>` - Attach files
+- `-u, --audio <AUDIO_FILES>` - Attach audio files for transcription
 - `-t, --tools <TOOLS>` - Include MCP tools (comma-separated)
 - `-v, --vectordb <VECTORDB>` - Use vector database for context
 - `-d, --debug` - Enable debug mode
@@ -205,6 +222,22 @@ lc --use-search ddg "Free search integration test"
 lc --use-search jina "Research with full content"
 ```
 
+### Audio Workflow
+
+```bash
+# Transcribe audio files
+lc transcribe interview.mp3 --format json
+lc tr podcast.wav --language en
+
+# Text to speech
+lc tts "Welcome message" --voice nova
+lc tts --file script.txt --output narration.mp3
+
+# Use audio in chat
+lc "Summarize this meeting" --audio meeting_recording.mp3
+lc c -m gpt-4 --audio interview.wav
+```
+
 ## Getting Help
 
 Every command has built-in help:
@@ -230,6 +263,7 @@ Explore specific command documentation:
 - [Models Commands](/commands/models)
 - [MCP Commands](/commands/mcp)
 - [Chat Commands](/commands/chat)
+- [Audio Commands](/commands/audio)
 - [Embedding Commands](/commands/embed)
 - [Vector Commands](/commands/vectors)
 - [Search Commands](/commands/search)

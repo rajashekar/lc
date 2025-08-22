@@ -386,7 +386,7 @@ pub async fn get_or_refresh_token(
     client: &OpenAIClient,
 ) -> Result<String> {
     // If provider is configured for Google SA JWT (Vertex AI), use JWT Bearer flow
-    let provider = config.get_provider(provider_name)?.clone();
+    let provider = config.get_provider_with_auth(provider_name)?.clone();
     let is_vertex = provider
         .endpoint
         .to_lowercase()
@@ -493,7 +493,7 @@ pub async fn get_or_refresh_token(
     let token_url = match config.get_token_url(provider_name) {
         Some(url) => url.clone(),
         None => {
-            let provider_config = config.get_provider(provider_name)?;
+            let provider_config = config.get_provider_with_auth(provider_name)?;
             return provider_config.api_key.clone().ok_or_else(|| {
                 anyhow::anyhow!(
                     "No API key or token URL configured for provider '{}'",
@@ -533,7 +533,9 @@ pub async fn create_authenticated_client(
         "Creating authenticated client for provider '{}'",
         provider_name
     );
-    let provider_config = config.get_provider(provider_name)?.clone();
+    
+    // Get provider config with authentication from centralized keys
+    let mut provider_config = config.get_provider_with_auth(provider_name)?;
 
     crate::debug_log!(
         "Provider '{}' config - endpoint: {}, models_path: {}, chat_path: {}",
@@ -545,10 +547,7 @@ pub async fn create_authenticated_client(
 
     // Normalize chat_path placeholders: support both {model} and legacy {model_name}
     let normalized_chat_path = provider_config.chat_path.replace("{model_name}", "{model}");
-    let provider_config = crate::config::ProviderConfig {
-        chat_path: normalized_chat_path,
-        ..provider_config
-    };
+    provider_config.chat_path = normalized_chat_path;
 
     // All providers now use OpenAIClient with template-based transformations
     // Check if this needs OAuth authentication (Vertex AI)

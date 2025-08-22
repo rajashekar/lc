@@ -12,9 +12,9 @@ use common::get_test_binary_path;
 static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 fn get_config_dir() -> PathBuf {
-    dirs::data_local_dir()
-        .expect("Could not find data directory")
-        .join("lc")
+    // Use the Config::config_dir() which handles test isolation
+    lc::config::Config::config_dir()
+        .expect("Could not get config directory")
 }
 
 fn backup_config() -> Result<()> {

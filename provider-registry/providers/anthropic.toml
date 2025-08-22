@@ -1,0 +1,30 @@
+# Anthropic Provider Configuration
+# Version: 1.0.0
+
+endpoint = "https://api.anthropic.com/v1"
+models = []
+models_path = "/models"
+chat_path = "/messages"
+
+[headers]
+anthropic-version = "2023-06-01"
+
+[vars]
+
+[chat_templates."claude.*"]
+request = """
+{
+  "model": "{{ model }}",
+  "messages": {{ messages | json }}{% if max_tokens %},
+  "max_tokens": {{ max_tokens }}{% endif %}{% if temperature %},
+  "temperature": {{ temperature }}{% endif %}{% if system_prompt %},
+  "system": "{{ system_prompt }}"{% endif %}{% if stream %},
+  "stream": {{ stream }}{% endif %}
+}
+"""
+
+response = """
+{% if content and content[0].text %}
+{{ content[0].text }}
+{% endif %}
+"""

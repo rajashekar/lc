@@ -1,3 +1,4 @@
+mod audio_utils;
 mod chat;
 mod cli;
 mod completion;
@@ -8,12 +9,14 @@ mod error;
 mod http_client;
 mod image_utils;
 mod input;
+mod keys;
 mod mcp;
 // MCP daemon module - Unix implementation with Windows stubs
 mod mcp_daemon;
 mod model_metadata;
 mod models_cache;
 mod provider;
+mod provider_installer;
 mod proxy;
 mod readers;
 mod search;
@@ -132,6 +135,7 @@ async fn main() -> Result<()> {
                             cli.temperature,
                             cli.attachments,
                             cli.images,
+                            cli.audio_files,
                             cli.tools,
                             cli.vectordb,
                             cli.continue_session,
@@ -152,6 +156,7 @@ async fn main() -> Result<()> {
                             cli.temperature,
                             cli.attachments,
                             cli.images,
+                            cli.audio_files,
                             cli.tools,
                             cli.vectordb,
                             cli.continue_session,
@@ -177,6 +182,7 @@ async fn main() -> Result<()> {
                     cli.temperature,
                     cli.attachments,
                     cli.images,
+                    cli.audio_files,
                     cli.tools,
                     cli.vectordb,
                     cli.continue_session,
@@ -354,6 +360,49 @@ async fn main() -> Result<()> {
         ) => {
             cli::handle_image_command(prompt, model, provider, size, count, output, debug).await?;
         }
+        (
+            true,
+            Some(Commands::Transcribe {
+                audio_files,
+                model,
+                provider,
+                language,
+                prompt,
+                format,
+                temperature,
+                output,
+                debug,
+            }),
+        ) => {
+            cli::handle_transcribe_command(
+                audio_files,
+                model,
+                provider,
+                language,
+                prompt,
+                format,
+                temperature,
+                output,
+                debug,
+            )
+            .await?;
+        }
+        (
+            true,
+            Some(Commands::TTS {
+                text,
+                model,
+                provider,
+                voice,
+                format,
+                speed,
+                output,
+                debug,
+            }),
+        ) => {
+            cli::handle_tts_command(text, model, provider, voice, format, speed, output, debug)
+                .await?;
+        }
         (true, Some(Commands::DumpMetadata { provider, list })) => {
             cli::handle_dump_metadata_command(provider, list).await?;
         }
@@ -374,6 +423,7 @@ async fn main() -> Result<()> {
                         cli.temperature,
                         cli.attachments,
                         cli.images,
+                        cli.audio_files,
                         cli.tools,
                         cli.vectordb,
                         cli.continue_session,
@@ -435,6 +485,7 @@ async fn handle_prompt_with_optional_piped_input(
     temperature: Option<String>,
     attachments: Vec<String>,
     images: Vec<String>,
+    audio_files: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
     continue_session: bool,
@@ -454,6 +505,7 @@ async fn handle_prompt_with_optional_piped_input(
             temperature,
             attachments,
             images,
+            audio_files,
             tools,
             vectordb,
             continue_session,
@@ -473,6 +525,7 @@ async fn handle_prompt_with_optional_piped_input(
             temperature,
             attachments,
             images,
+            audio_files,
             tools,
             vectordb,
             continue_session,
@@ -494,6 +547,7 @@ async fn handle_prompt_with_optional_piped_input_continue(
     temperature: Option<String>,
     attachments: Vec<String>,
     images: Vec<String>,
+    audio_files: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
     continue_session: bool,
@@ -512,6 +566,7 @@ async fn handle_prompt_with_optional_piped_input_continue(
             temperature,
             attachments,
             images,
+            audio_files,
             tools,
             vectordb,
             continue_session,
@@ -531,6 +586,7 @@ async fn handle_prompt_with_optional_piped_input_continue(
             temperature,
             attachments,
             images,
+            audio_files,
             tools,
             vectordb,
             use_search,
@@ -549,6 +605,7 @@ async fn handle_direct_prompt_with_session(
     temperature: Option<String>,
     attachments: Vec<String>,
     images: Vec<String>,
+    audio_files: Vec<String>,
     tools: Option<String>,
     vectordb: Option<String>,
     continue_session: bool,
@@ -646,6 +703,7 @@ async fn handle_direct_prompt_with_session(
             temperature,
             attachments,
             images,
+            audio_files,
             tools,
             vectordb,
             use_search,

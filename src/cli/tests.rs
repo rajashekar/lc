@@ -51,6 +51,10 @@ fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
         images_templates: None,
         embeddings_templates: None,
         models_templates: None,
+        audio_path: None,
+        speech_path: None,
+        audio_templates: None,
+        speech_templates: None,
     }
 }
 

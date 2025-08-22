@@ -1,342 +1,485 @@
 ---
-id: providers
-title: Provider Commands
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # Provider Commands
 
-Manage LLM providers and their configurations. Providers are API endpoints that serve language models.
+Manage LLM provider configurations and installations.
 
-## Command: `lc providers` (alias: `lc p`)
+## Overview
 
-### Subcommands
+The `providers` command (alias: `p`) allows you to install, update, and manage provider configurations from a centralized registry. Provider configurations are stored separately from API keys for security and shareability.
 
-#### Add Provider
+## Commands
 
-Add a new provider to your configuration.
+### `lc providers install`
 
+Install a provider from the registry.
+
+**Aliases:** `lc p i`
+
+**Usage:**
 ```bash
-lc providers add <name> <endpoint> [OPTIONS]
-lc p a <name> <endpoint> [OPTIONS]
+lc providers install <name> [OPTIONS]
+```
+
+**Arguments:**
+- `<name>` - Name of the provider to install
+
+**Options:**
+- `-f, --force` - Force reinstall even if already installed
+
+**Examples:**
+```bash
+# Install OpenAI provider
+lc providers install openai
+
+# Force reinstall Anthropic provider
+lc p i anthropic --force
+
+# Install Google Gemini
+lc p i gemini
+```
+
+### `lc providers upgrade`
+
+Update installed providers to their latest versions.
+
+**Aliases:** `lc p up`
+
+**Usage:**
+```bash
+lc providers upgrade [name]
+```
+
+**Arguments:**
+- `[name]` - Optional: specific provider to update (updates all if not specified)
+
+**Examples:**
+```bash
+# Update all installed providers
+lc providers upgrade
+
+# Update only OpenAI provider
+lc p up openai
+```
+
+### `lc providers uninstall`
+
+Remove an installed provider configuration.
+
+**Aliases:** `lc p un`
+
+**Usage:**
+```bash
+lc providers uninstall <name>
+```
+
+**Arguments:**
+- `<name>` - Name of the provider to uninstall
+
+**Examples:**
+```bash
+# Uninstall a provider
+lc providers uninstall openai
+
+# Using short alias
+lc p un anthropic
+```
+
+**Note:** This removes the provider configuration but preserves any API keys in `keys.toml`.
+
+### `lc providers available`
+
+List all providers available in the registry.
+
+**Aliases:** `lc p av`
+
+**Usage:**
+```bash
+lc providers available [OPTIONS]
 ```
 
 **Options:**
-
-- `-m, --models-path <PATH>` - Custom models endpoint (default: `/models`)
-- `-c, --chat-path <PATH>` - Custom chat endpoint (default: `/chat/completions`)
+- `--official` - Show only official providers
+- `-t, --tag <tag>` - Filter by tag (e.g., chat, embeddings, vision)
 
 **Examples:**
-
 ```bash
-# Standard OpenAI-compatible provider
-lc providers add openai https://api.openai.com/v1
+# List all available providers
+lc providers available
 
-# Provider with custom endpoints
-lc providers add github https://models.github.ai \
-  --models-path /catalog/models \
-  --chat-path /inference/chat/completions
+# Show only official providers
+lc p av --official
 
-# Short form
-lc p a together https://api.together.xyz/v1
+# Filter by chat capability
+lc p av --tag chat
+
+# Filter by embeddings support
+lc p av --tag embeddings
 ```
 
-#### List Providers
+### `lc providers list`
 
-Show all configured providers.
+List all installed providers and their authentication status.
 
+**Aliases:** `lc p l`
+
+**Usage:**
 ```bash
 lc providers list
+```
+
+**Examples:**
+```bash
+# List installed providers
+lc providers list
+
+# Using short alias
 lc p l
 ```
 
-**Output example:**
-
+**Output:**
 ```
-Configured providers:
-  • openai (https://api.openai.com/v1) [key set]
-  • claude (https://api.anthropic.com/v1) [key set]
-  • together (https://api.together.xyz/v1) [no key]
+Configured Providers:
+  • openai - https://api.openai.com/v1 (API Key: ✓)
+  • anthropic - https://api.anthropic.com/v1 (API Key: ✗)
+  • gemini - https://generativelanguage.googleapis.com/v1beta (API Key: ✓)
 ```
 
-#### List Models
+### `lc providers add`
 
-Show available models from a specific provider.
+Manually add a custom provider (without using the registry).
 
+**Aliases:** `lc p a`
+
+**Usage:**
 ```bash
-lc providers models <provider>
-lc p m <provider>
+lc providers add <name> <url> [OPTIONS]
 ```
 
-**Example:**
+**Arguments:**
+- `<name>` - Provider name
+- `<url>` - Provider endpoint URL
 
+**Options:**
+- `-m, --models-path <path>` - Custom models endpoint path (default: /models)
+- `-c, --chat-path <path>` - Custom chat completions endpoint path (default: /chat/completions)
+
+**Examples:**
 ```bash
-lc providers models openai
-# Output:
-# Available models for openai:
-#   • gpt-4-turbo-preview
-#   • gpt-4
-#   • gpt-3.5-turbo
-#   • text-embedding-3-small
-#   • text-embedding-3-large
+# Add a basic provider
+lc providers add custom https://api.custom.com
+
+# Add with custom paths
+lc p a internal https://llm.internal.com \
+  --models-path /v1/models \
+  --chat-path /v1/chat
 ```
 
-#### Update Provider
+### `lc providers update`
 
-Update a provider's endpoint URL.
+Update an existing provider's endpoint URL.
 
+**Aliases:** `lc p u`
+
+**Usage:**
 ```bash
-lc providers update <name> <endpoint>
-lc p u <name> <endpoint>
+lc providers update <name> <url>
 ```
 
-**Example:**
-
+**Examples:**
 ```bash
-lc providers update openai https://api.openai.com/v1
+# Update provider endpoint
+lc providers update custom https://new-api.custom.com
 ```
 
-#### Manage Headers
+### `lc providers remove`
 
-Add, list, or delete custom headers for providers.
+Remove a manually added provider.
 
-**Add Header**
+**Aliases:** `lc p r`
 
-```bash
-lc providers headers <provider> add <header> <value>
-lc p h <provider> a <header> <value>
-```
-
-**List Headers**
-
-```bash
-lc providers headers <provider> list
-lc p h <provider> l
-```
-
-**Delete Header**
-
-```bash
-lc providers headers <provider> delete <header>
-lc p h <provider> d <header>
-```
-
-#### Set Token URL
-
-Configure token URLs for providers requiring different endpoints for token handling.
-
-```bash
-lc providers token-url <provider> <url>
-lc p t <provider> <url>
-```
-
-#### Remove Provider
-
-Remove a provider from your configuration.
-
+**Usage:**
 ```bash
 lc providers remove <name>
-lc p r <name>
 ```
 
-**Example:**
-
+**Examples:**
 ```bash
-lc providers remove old-provider
+# Remove a provider
+lc providers remove custom
 ```
 
-**Example: Token URL Setup**
+### `lc providers models`
 
+List available models for a provider.
+
+**Aliases:** `lc p m`
+
+**Usage:**
 ```bash
-# Set a custom token URL for a provider
-lc providers token-url custom-provider https://api.custom.com/auth/token
+lc providers models <name> [OPTIONS]
 ```
 
-### Custom Headers
+**Arguments:**
+- `<name>` - Provider name
 
-Some providers require additional headers beyond the standard Authorization header.
+**Options:**
+- `-r, --refresh` - Refresh the models cache
 
-**Example: Anthropic Claude Setup**
-
+**Examples:**
 ```bash
-# Add Claude provider
-lc providers add claude https://api.anthropic.com/v1 -c /messages
+# List OpenAI models
+lc providers models openai
 
-# Add required headers
-lc providers headers claude add x-api-key sk-ant-api03-...
-lc providers headers claude add anthropic-version 2023-06-01
-
-# Verify headers
-lc providers headers claude list
+# Refresh and list models
+lc p m anthropic --refresh
 ```
 
-## Common Provider Configurations
+### `lc providers headers`
 
-### OpenAI
+Manage custom headers for a provider.
+
+**Aliases:** `lc p h`
+
+**Usage:**
+```bash
+lc providers headers <provider> <COMMAND>
+```
+
+**Subcommands:**
+
+#### `add` - Add a custom header
+```bash
+lc providers headers <provider> add <name> <value>
+
+# Example
+lc p h custom add X-Custom-Auth "secret-token"
+```
+
+#### `delete` - Remove a custom header
+```bash
+lc providers headers <provider> delete <name>
+
+# Example
+lc p h custom delete X-Custom-Auth
+```
+
+#### `list` - List all custom headers
+```bash
+lc providers headers <provider> list
+
+# Example
+lc p h custom list
+```
+
+### `lc providers vars`
+
+Manage provider variables for path templating.
+
+**Aliases:** `lc p v`
+
+**Usage:**
+```bash
+lc providers vars <provider> <COMMAND>
+```
+
+**Subcommands:**
+
+#### `set` - Set a provider variable
+```bash
+lc providers vars <provider> set <key> <value>
+
+# Example: Set project ID for Vertex AI
+lc p v vertex_ai set project "my-project-id"
+lc p v vertex_ai set location "us-central1"
+```
+
+#### `get` - Get a provider variable
+```bash
+lc providers vars <provider> get <key>
+
+# Example
+lc p v vertex_ai get project
+```
+
+#### `list` - List all provider variables
+```bash
+lc providers vars <provider> list
+
+# Example
+lc p v vertex_ai list
+```
+
+### `lc providers paths`
+
+Manage API endpoint paths for a provider.
+
+**Aliases:** `lc p path`
+
+**Usage:**
+```bash
+lc providers paths <provider> <COMMAND>
+```
+
+**Subcommands:**
+
+#### `add` - Add or update provider paths
+```bash
+lc providers paths <provider> add [OPTIONS]
+
+# Options:
+# -m, --models <path>     - Models endpoint path
+# -c, --chat <path>       - Chat completions path
+# -i, --images <path>     - Image generations path
+# -e, --embeddings <path> - Embeddings path
+
+# Example
+lc p path openai add --images /v1/images/generations
+```
+
+#### `delete` - Reset provider paths to defaults
+```bash
+lc providers paths <provider> delete [OPTIONS]
+
+# Options:
+# -m, --models     - Reset models path
+# -c, --chat       - Reset chat path
+# -i, --images     - Reset images path
+# -e, --embeddings - Reset embeddings path
+
+# Example
+lc p path openai delete --images
+```
+
+#### `list` - List all provider paths
+```bash
+lc providers paths <provider> list
+
+# Example
+lc p path openai list
+```
+
+## Provider Registry
+
+The provider registry contains pre-configured providers that can be easily installed. The default registry includes:
+
+### Official Providers
+- **openai** - OpenAI's GPT models
+- **anthropic** - Anthropic's Claude models
+- **gemini** - Google's Gemini models
+
+### Community Providers
+- **groq** - High-speed inference
+- **together** - Open-source models
+- **ollama** - Local LLM inference
+- **mistral** - Mistral AI models
+- **cohere** - Cohere's language models
+- **deepseek** - DeepSeek coding models
+- **perplexity** - Models with web search
+- **vertex_ai** - Google Cloud Vertex AI
+- **amazon_bedrock** - AWS Bedrock
+
+## Authentication
+
+After installing a provider, you need to add its API key:
 
 ```bash
-lc providers add openai https://api.openai.com/v1
+# Install provider
+lc providers install openai
+
+# Add API key
 lc keys add openai
 ```
 
-### Anthropic Claude
+See [`lc keys`](./keys.md) for more information about key management.
+
+## Custom Registry
+
+You can use a custom provider registry by setting the environment variable:
 
 ```bash
-lc providers add claude https://api.anthropic.com/v1 -c /messages
-lc providers headers claude add x-api-key <your-key>
-lc providers headers claude add anthropic-version 2023-06-01
+# Use a remote registry
+export LC_PROVIDER_REGISTRY_URL="https://your-domain.com/registry"
+
+# Use a local registry
+export LC_PROVIDER_REGISTRY_URL="file:///path/to/registry"
+
+# Install from custom registry
+lc providers install custom-provider
 ```
 
-### OpenRouter
+## File Locations
+
+Provider configurations are stored in:
+- **macOS**: `~/Library/Application Support/lc/providers/`
+- **Linux**: `~/.local/share/lc/providers/`
+- **Windows**: `%LOCALAPPDATA%\lc\providers\`
+
+## Examples
+
+### Complete Provider Setup
 
 ```bash
-lc providers add openrouter https://openrouter.ai/api/v1
-lc keys add openrouter
+# 1. Browse available providers
+lc providers available
+
+# 2. Install a provider
+lc providers install anthropic
+
+# 3. Add API key
+lc keys add anthropic
+
+# 4. Verify installation
+lc providers list
+
+# 5. Test the provider
+lc -p anthropic -m claude-3-opus "Hello!"
 ```
 
-### Together AI
+### Managing Multiple Providers
 
 ```bash
-lc providers add together https://api.together.xyz/v1
-lc keys add together
+# Install multiple providers
+lc p i openai
+lc p i anthropic
+lc p i gemini
+
+# Add keys for each
+lc k a openai
+lc k a anthropic
+lc k a gemini
+
+# List all providers
+lc p l
+
+# Use different providers
+lc -p openai "Query for GPT"
+lc -p anthropic "Query for Claude"
+lc -p gemini "Query for Gemini"
 ```
 
-### GitHub Models
+### Custom Provider Configuration
 
 ```bash
-lc providers add github https://models.github.ai \
-  -m /catalog/models \
-  -c /inference/chat/completions
-lc keys add github
+# Add custom provider
+lc providers add internal https://llm.internal.com \
+  --models-path /api/models \
+  --chat-path /api/chat
+
+# Add authentication header
+lc providers headers internal add X-API-Key "internal-key"
+
+# Set provider variables
+lc providers vars internal set department "engineering"
+
+# Test the provider
+lc -p internal "Test query"
 ```
-
-### Local Ollama
-
-```bash
-lc providers add ollama http://localhost:11434/v1
-# No API key needed for local providers
-```
-
-### Hugging Face Router
-
-```bash
-lc providers add hf https://router.huggingface.co/v1
-lc keys add hf
-```
-### Google Vertex AI (Service Account JWT)
-
-Vertex AI on Google Cloud uses OAuth 2.0 with a Service Account (SA). lc supports first-class auth using the JWT Bearer flow with automatic token mint/refresh and path templating for `project/location/model`.
-
-Quickstart
-
-```bash
-# 1) Add Vertex AI provider (endpoint auto-detects google_sa_jwt)
-lc providers add vertex_google https://aiplatform.googleapis.com \
-  -c /v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent
-
-# 2) Provide project/location via provider vars
-lc providers vars vertex_google set project <your-project-id>
-lc providers vars vertex_google set location <your-location>   # e.g., us-central1 or global
-
-# 3) Add Service Account JSON (paste as base64; stored encrypted)
-lc keys add vertex_google
-# When prompted, paste the base64 version: cat sa.json | base64
-
-# 4) (Optional) Override token URL (defaults to https://oauth2.googleapis.com/token)
-lc providers token-url vertex_google https://oauth2.googleapis.com/token
-
-# 5) Use a Vertex model
-lc -p vertex_google -m gemini-2.5-pro "Hello from Vertex"
-```
-
-Notes
-
-- Service Account JSON must minimally include:
-  - type=service_account
-  - client_email
-  - private_key
-- lc mints an RS256-signed JWT with claims:
-  - iss=sub=client_email, aud=token_url, scope=https://www.googleapis.com/auth/cloud-platform
-  - iat, exp (~1 hour)
-- lc exchanges the assertion at the token URL for an access_token, caches it with a safety skew, and automatically refreshes when needed.
-- The chat path templates:
-  - `{project}`, `{location}` from provider vars
-  - `{model}` from the runtime -m flag
-- For Gemini API (non-Vertex) providers using x-goog-api-key, continue to use standard API key flows. Vertex AI flows use Bearer tokens obtained via the SA JWT exchange.
-
-Troubleshooting
-
-- "Missing provider vars"
-  - Set vars: lc providers vars vertex_google set project `<id>`; lc providers vars vertex_google set location `<loc>`
-  - List vars: lc providers vars vertex_google list
-- "Invalid service account JSON" or "Invalid base64 format"
-  - Re-run: lc keys add vertex_google and paste the base64 version: cat sa.json | base64
-- "Authentication failed"
-  - Ensure the Service Account has Vertex AI permissions (e.g., Vertex AI User) and the `project/location` are correct
-  - If using a VPC-SC or restricted org policy, confirm token audience and scopes are permitted
-
-## Provider Features
-
-### Custom Endpoints
-
-Some providers use non-standard paths for their endpoints:
-
-- **Models Path**: Where to fetch available models (default: `/models`)
-- **Chat Path**: Where to send chat requests (default: `/chat/completions`)
-
-### Response Format Support
-
-LLM Client automatically detects and handles multiple response formats:
-
-1. **OpenAI Format** (most providers)
-2. **Llama API Format** (Meta)
-3. **Cohere Format**
-4. **Anthropic Format** (Claude)
-
-### Special Provider: Hugging Face Router
-
-The HF router expands models with their available providers:
-
-```bash
-lc providers models hf
-# Output shows:
-# • Qwen/Qwen3-32B:groq
-# • Qwen/Qwen3-32B:hyperbolic
-# • meta-llama/Llama-3.3-70B-Instruct:together
-```
-
-Use the full `model:provider` format when prompting:
-
-```bash
-lc --provider hf -m "Qwen/Qwen3-32B:groq" "Hello"
-```
-
-## Troubleshooting
-
-### "Provider not found"
-
-- Check spelling: `lc providers list`
-- Ensure provider is added: `lc providers add <name> <url>`
-
-### "Invalid endpoint"
-
-- Verify URL includes protocol: `https://` or `http://`
-- Check if custom paths are needed: `-m` and `-c` flags
-
-### "Authentication failed"
-
-- Verify API key: `lc keys add <provider>`
-- Check if custom headers are needed
-- Some providers use `x-api-key` instead of `Authorization`
 
 ## See Also
 
-- [Keys Command](keys.md)
-- [Models Command](models.md)
-- [Chat Command](chat.md)
-
-## Next Steps
-
-- [API Key Management](/commands/keys) - Secure key storage
-- [Models Command](/commands/models) - Advanced model filtering
-- [Advanced Features](/advanced/vector-database) - Vector database and more
+- [`lc keys`](./keys.md) - Manage API keys
+- [`lc config`](./config.md) - General configuration
+- [Provider Management Guide](../advanced/provider-management.md) - Detailed provider management documentation

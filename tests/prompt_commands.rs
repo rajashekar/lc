@@ -40,6 +40,10 @@ fn create_comprehensive_config() -> Config {
         images_templates: None,
         embeddings_templates: None,
         models_templates: None,
+        audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
         },
     );
 
@@ -63,6 +67,10 @@ fn create_comprehensive_config() -> Config {
         images_templates: None,
         embeddings_templates: None,
         models_templates: None,
+        audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
         },
     );
 
@@ -304,6 +312,10 @@ mod prompt_model_resolution_tests {
         images_templates: None,
         embeddings_templates: None,
         models_templates: None,
+        audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
         },
         );
 
@@ -327,6 +339,10 @@ mod prompt_model_resolution_tests {
         images_templates: None,
         embeddings_templates: None,
         models_templates: None,
+        audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
         },
         );
 
@@ -749,6 +765,10 @@ mod prompt_error_handling_tests {
         images_templates: None,
         embeddings_templates: None,
         models_templates: None,
+        audio_path: None,
+                speech_path: None,
+                audio_templates: None,
+                speech_templates: None,
         },
         );
         config.default_provider = Some("test".to_string());

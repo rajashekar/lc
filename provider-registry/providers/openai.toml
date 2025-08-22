@@ -1,0 +1,26 @@
+# OpenAI Provider Configuration
+# Version: 1.0.0
+
+endpoint = "https://api.openai.com/v1"
+models = []
+models_path = "/models"
+chat_path = "/chat/completions"
+images_path = "/images/generations"
+embeddings_path = "/embeddings"
+
+[headers]
+
+[vars]
+
+# open-ai requires gpt-5 to have temperature as 1
+[chat_templates."gpt-5.*"]
+request = """
+{
+  "model": "{{ model }}",
+  "messages": {{ messages | json }}{% if max_tokens %},
+  "max_completion_tokens": {{ max_tokens }}{% endif %},
+  "temperature": 1{% if tools %},
+  "tools": {{ tools | json }}{% endif %}{% if stream %},
+  "stream": {{ stream }}{% endif %}
+}
+"""
