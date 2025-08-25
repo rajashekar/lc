@@ -4901,11 +4901,14 @@ pub async fn fetch_raw_models_response(
 
     // Only add Authorization header if no custom headers are present
     if !has_custom_headers {
-        req = req.header(
-            "Authorization",
-            format!("Bearer {}", provider_config.api_key.as_ref().unwrap()),
-        );
-        debug_log!("Added Authorization header with API key");
+        if let Some(api_key) = provider_config.api_key.as_ref() {
+            req = req.header("Authorization", format!("Bearer {}", api_key));
+            debug_log!("Added Authorization header with API key");
+        } else {
+            debug_log!("No API key configured and no custom headers provided; cannot add Authorization header");
+            // Return a clear error instead of panicking
+            anyhow::bail!("No API key configured and no custom headers set for models request");
+        }
     } else {
         debug_log!("Skipping Authorization header due to custom headers present");
     }

@@ -1,8 +1,4 @@
-- Make sure documentation works
-- Check images
-- Check audio
 - Support other web proxy chats
 - Support lc serve
 - Support other vector dbs like milvus, pinecone, qdrant
 - make sure package works with brew, linux, windows
-- clean up code

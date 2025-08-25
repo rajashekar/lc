@@ -308,7 +308,8 @@ impl UnifiedCache {
 
         // Load config and create client
         let config = Config::load()?;
-        let provider_config = config.get_provider(provider)?;
+        // Load provider with authentication (API key, headers, tokens) from centralized keys
+        let provider_config = config.get_provider_with_auth(provider)?;
 
         crate::debug_log!(
             "Creating authenticated client for provider '{}' with endpoint: {}",
@@ -333,7 +334,7 @@ impl UnifiedCache {
             "Making API request to fetch models from provider '{}'",
             provider
         );
-        let raw_response = crate::cli::fetch_raw_models_response(&client, provider_config).await?;
+        let raw_response = crate::cli::fetch_raw_models_response(&client, &provider_config).await?;
 
         crate::debug_log!(
             "Received raw response from provider '{}' ({} bytes)",
@@ -462,9 +463,13 @@ impl UnifiedCache {
 
         println!("Refreshing models cache for all providers...");
 
-        for (provider_name, provider_config) in &config.providers {
-            // Skip providers without API keys
-            if provider_config.api_key.is_none() {
+        for (provider_name, _provider_config) in &config.providers {
+            // Skip providers that have neither API key nor custom headers (after loading centralized auth)
+            let pc_auth = match config.get_provider_with_auth(provider_name) {
+                Ok(cfg) => cfg,
+                Err(_) => continue,
+            };
+            if pc_auth.api_key.is_none() && pc_auth.headers.is_empty() {
                 continue;
             }
 
