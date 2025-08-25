@@ -229,8 +229,19 @@ async fn main() -> Result<()> {
                 images,
             }),
         ) => {
+            // Merge subcommand-scoped flags with global flags so users can pass -m/-p before "chat"
+            let effective_provider = provider.or_else(|| cli.provider.clone());
+            let effective_model = model.or_else(|| cli.model.clone());
+
             cli::handle_chat_command(
-                model, provider, cid, tools, database, debug, images, cli.stream,
+                effective_model,
+                effective_provider,
+                cid,
+                tools,
+                database,
+                debug,
+                images,
+                cli.stream,
             )
             .await?;
         }

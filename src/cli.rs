@@ -39,11 +39,11 @@ pub struct Cli {
     pub prompt: Vec<String>,
 
     /// Provider to use for the prompt
-    #[arg(short = 'p', long = "provider")]
+    #[arg(short = 'p', long = "provider", global = true)]
     pub provider: Option<String>,
 
     /// Model to use for the prompt
-    #[arg(short = 'm', long = "model")]
+    #[arg(short = 'm', long = "model", global = true)]
     pub model: Option<String>,
 
     /// System prompt to use (when used with direct prompt)
