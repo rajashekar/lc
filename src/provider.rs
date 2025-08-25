@@ -384,7 +384,7 @@ impl OpenAIClient {
 
         // Create optimized HTTP client with connection pooling and keep-alive settings
         // This client keeps compression enabled for regular requests
-        let client = Client::builder()
+        let mut client_builder = Client::builder()
             .pool_max_idle_per_host(10) // Keep up to 10 idle connections per host
             .pool_idle_timeout(Duration::from_secs(90)) // Keep connections alive for 90 seconds
             .tcp_keepalive(Duration::from_secs(60)) // TCP keep-alive every 60 seconds
@@ -395,7 +395,14 @@ impl OpenAIClient {
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .default_headers(default_headers.clone())
+            .default_headers(default_headers.clone());
+        
+        // Disable certificate verification for development/debugging (e.g., with Proxyman)
+        if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
+        }
+        
+        let client = client_builder
             .build()
             .expect("Failed to create optimized HTTP client");
 
@@ -442,7 +449,7 @@ impl OpenAIClient {
 
         // Create optimized HTTP client with connection pooling and keep-alive settings
         // This client keeps compression enabled for regular requests
-        let client = Client::builder()
+        let mut client_builder = Client::builder()
             .pool_max_idle_per_host(10) // Keep up to 10 idle connections per host
             .pool_idle_timeout(Duration::from_secs(90)) // Keep connections alive for 90 seconds
             .tcp_keepalive(Duration::from_secs(60)) // TCP keep-alive every 60 seconds
@@ -453,14 +460,28 @@ impl OpenAIClient {
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .default_headers(default_headers.clone())
+            .default_headers(default_headers.clone());
+
+        // Disable certificate verification for development/debugging (e.g., with Proxyman)
+        if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
+        }
+        
+        let client = client_builder
             .build()
             .expect("Failed to create optimized HTTP client");
 
         // Create a separate streaming-optimized client
-        let streaming_client = Client::builder()
+        let mut streaming_client_builder = Client::builder()
             .timeout(Duration::from_secs(300)) // Longer timeout for streaming
-            .default_headers(default_headers)
+            .default_headers(default_headers);
+        
+        // Also disable certificate verification for streaming client
+        if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
+            streaming_client_builder = streaming_client_builder.danger_accept_invalid_certs(true);
+        }
+        
+        let streaming_client = streaming_client_builder
             .build()
             .expect("Failed to create streaming-optimized HTTP client");
 

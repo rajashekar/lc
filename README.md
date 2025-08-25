@@ -263,6 +263,46 @@ lc image "Space exploration" --debug
 
 **Note:** Image generation is currently supported by OpenAI-compatible providers. Generated images are automatically saved with timestamps and descriptive filenames.
 
+### TLS Configuration and Debugging
+
+`lc` uses secure HTTPS connections by default with proper certificate verification. For development and debugging scenarios, you may need to disable TLS verification:
+
+```bash
+# macOS/Linux/Unix - Disable TLS certificate verification for development/debugging
+# ⚠️  WARNING: Only use this for development with tools like Proxyman, Charles, etc.
+LC_DISABLE_TLS_VERIFY=1 lc -m openai:gpt-4 "Hello world"
+LC_DISABLE_TLS_VERIFY=1 lc embed -m openai:text-embedding-3-small "test text"
+LC_DISABLE_TLS_VERIFY=1 lc chat -m anthropic:claude-3.5-sonnet
+```
+
+```cmd
+REM Windows Command Prompt
+set LC_DISABLE_TLS_VERIFY=1
+lc -m openai:gpt-4 "Hello world"
+lc embed -m openai:text-embedding-3-small "test text"
+```
+
+```powershell
+# Windows PowerShell
+$env:LC_DISABLE_TLS_VERIFY="1"
+lc -m openai:gpt-4 "Hello world"
+# or inline:
+$env:LC_DISABLE_TLS_VERIFY=1; lc embed -m openai:text-embedding-3-small "test text"
+```
+
+**Common Use Cases:**
+- **HTTP Debugging Tools**: When using Proxyman, Charles, Wireshark, or similar tools that intercept HTTPS traffic
+- **Corporate Networks**: Behind corporate firewalls with custom certificates
+- **Development Environments**: Testing with self-signed certificates
+- **Local Development**: Working with local API servers without proper certificates
+
+**⚠️ Security Warning**: The `LC_DISABLE_TLS_VERIFY` environment variable should **NEVER** be used in production environments as it disables important security checks that protect against man-in-the-middle attacks.
+
+**Alternative Solutions**:
+- **Install Root Certificates**: Install your debugging tool's root certificate in the system keychain
+- **Bypass Specific Domains**: Configure your debugging tool to exclude specific APIs from interception
+- **Use System Certificates**: Ensure your system's certificate store is up to date
+
 ### Vision/Image Support
 
 `lc` supports image inputs for vision-capable models across multiple providers:

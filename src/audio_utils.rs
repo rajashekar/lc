@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::path::Path;
 
 /// Audio file data with metadata
+#[allow(dead_code)]
 pub struct AudioData {
     pub data: String, // Base64 encoded audio data
     pub filename: String,
