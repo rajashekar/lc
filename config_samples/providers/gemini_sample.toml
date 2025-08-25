@@ -75,7 +75,7 @@ request = '''
 '''
 response = """
 {
-  "content": {{ candidates[0].content.parts[0].text | json }}
+  "content": {% if candidates[0].content.parts and candidates[0].content.parts[0].text %}{{ candidates[0].content.parts[0].text | json }}{% elif candidates[0].finishReason == "MAX_TOKENS" %}"I apologize, but I reached the maximum token limit while processing your request. The response was truncated. Please try asking a more specific question or break down your request into smaller parts."{% else %}"No response content available."{% endif %}
 }
 """
 

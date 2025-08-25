@@ -105,6 +105,7 @@ impl TemplateProcessor {
         tera.register_filter("select_tool_calls", SelectToolCallsFilter);
         tera.register_filter("from_json", FromJsonFilter);
         tera.register_filter("selectattr", SelectAttrFilter);
+        tera.register_filter("base_messages", BaseMessagesFilter);
         
         Ok(Self { tera })
     }
@@ -530,6 +531,55 @@ impl Filter for SelectAttrFilter {
             Ok(Value::Array(filtered))
         } else {
             Ok(Value::Array(vec![]))
+        }
+    }
+}
+
+/// Filter to create base messages with only essential fields (role, content) for simple providers
+struct BaseMessagesFilter;
+
+impl Filter for BaseMessagesFilter {
+    fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
+        if let Some(array) = value.as_array() {
+            let cleaned: Vec<Value> = array.iter()
+                .map(|item| {
+                    if let Some(obj) = item.as_object() {
+                        let mut cleaned_obj = serde_json::Map::new();
+                        
+                        // Only include non-null, non-empty fields that are commonly supported
+                        for (key, value) in obj {
+                            match key.as_str() {
+                                "role" | "content" => {
+                                    // Always include role and content
+                                    cleaned_obj.insert(key.clone(), value.clone());
+                                }
+                                "tool_calls" => {
+                                    // Only include tool_calls if it's not null and not empty
+                                    if !value.is_null() && value.as_array().map_or(true, |arr| !arr.is_empty()) {
+                                        cleaned_obj.insert(key.clone(), value.clone());
+                                    }
+                                }
+                                "tool_call_id" => {
+                                    // Only include tool_call_id if it's not null and not empty
+                                    if !value.is_null() && value.as_str().map_or(false, |s| !s.is_empty()) {
+                                        cleaned_obj.insert(key.clone(), value.clone());
+                                    }
+                                }
+                                // Skip images and any other fields that might cause issues
+                                _ => {}
+                            }
+                        }
+                        
+                        Value::Object(cleaned_obj)
+                    } else {
+                        item.clone()
+                    }
+                })
+                .collect();
+                
+            Ok(Value::Array(cleaned))
+        } else {
+            Ok(value.clone())
         }
     }
 }
