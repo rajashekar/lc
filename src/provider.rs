@@ -829,7 +829,12 @@ impl OpenAIClient {
     }
 
     pub async fn embeddings(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse> {
-        let url = format!("{}/embeddings", self.base_url);
+        // Use provider config's get_embeddings_url method to handle model replacement
+        let url = if let Some(ref config) = self.provider_config {
+            config.get_embeddings_url(&request.model)
+        } else {
+            format!("{}/embeddings", self.base_url)
+        };
 
         let mut req = self
             .client
@@ -846,7 +851,39 @@ impl OpenAIClient {
             req = req.header(name, value);
         }
 
-        let response = req.json(request).send().await?;
+        // Check if we have a template for this provider/model/endpoint
+        let request_body = if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get template for embeddings endpoint
+                let template = config.get_endpoint_template("embeddings", &request.model);
+
+                if let Some(template_str) = template {
+                    // Clone the processor to avoid mutable borrow issues
+                    let mut processor_clone = processor.clone();
+                    // Use template to transform request
+                    match processor_clone.process_embeddings_request(request, &template_str, &config.vars) {
+                        Ok(json_value) => Some(json_value),
+                        Err(e) => {
+                            eprintln!("Warning: Failed to process embeddings request template: {}. Falling back to default.", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Send request with template-processed body or fall back to default logic
+        let response = if let Some(json_body) = request_body {
+            req.json(&json_body).send().await?
+        } else {
+            req.json(request).send().await?
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -858,7 +895,39 @@ impl OpenAIClient {
             );
         }
 
-        let embedding_response: EmbeddingResponse = response.json().await?;
+        // Get the response text first to handle different formats
+        let response_text = response.text().await?;
+
+        // Check if we have a response template for this provider/model/endpoint
+        if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get response template for embeddings endpoint
+                let template = config.get_endpoint_response_template("embeddings", &request.model);
+
+                if let Some(template_str) = template {
+                    // Parse response as JSON
+                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                        // Clone the processor to avoid mutable borrow issues
+                        let mut processor_clone = processor.clone();
+                        // Use template to transform response
+                        match processor_clone.process_response(&response_json, &template_str) {
+                            Ok(transformed) => {
+                                // Try to parse the transformed response as EmbeddingResponse
+                                if let Ok(embedding_response) = serde_json::from_value::<EmbeddingResponse>(transformed) {
+                                    return Ok(embedding_response);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Warning: Failed to process embeddings response template: {}. Falling back to default parsing.", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fall back to default parsing
+        let embedding_response: EmbeddingResponse = serde_json::from_str(&response_text)?;
         Ok(embedding_response)
     }
 

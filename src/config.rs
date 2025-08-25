@@ -249,6 +249,61 @@ impl ProviderConfig {
         }
     }
 
+    /// Get the embeddings URL, replacing {model_name} and template variables
+    pub fn get_embeddings_url(&self, model_name: &str) -> String {
+        if let Some(ref embeddings_path) = self.embeddings_path {
+            crate::debug_log!(
+                "ProviderConfig::get_embeddings_url called with model: {}",
+                model_name
+            );
+            crate::debug_log!("  embeddings_path: {}", embeddings_path);
+            crate::debug_log!("  vars: {:?}", self.vars);
+
+            if embeddings_path.starts_with("https://") {
+                // Full URL path - process template variables directly
+                let mut url = embeddings_path
+                    .replace("{model}", model_name)
+                    .replace("{model_name}", model_name);
+                crate::debug_log!("  after model replacement: {}", url);
+
+                // Interpolate known vars if present
+                for (k, v) in &self.vars {
+                    let old_url = url.clone();
+                    url = url.replace(&format!("{{{}}}", k), v);
+                    crate::debug_log!("  replaced {{{}}} with '{}': {} -> {}", k, v, old_url, url);
+                }
+                crate::debug_log!("  final URL: {}", url);
+                url
+            } else {
+                // Relative path - first process template variables in the path, then combine with endpoint
+                let mut processed_path = embeddings_path
+                    .replace("{model}", model_name)
+                    .replace("{model_name}", model_name);
+                crate::debug_log!("  after model replacement in path: {}", processed_path);
+
+                // Interpolate known vars in the path
+                for (k, v) in &self.vars {
+                    let old_path = processed_path.clone();
+                    processed_path = processed_path.replace(&format!("{{{}}}", k), v);
+                    crate::debug_log!(
+                        "  replaced {{{}}} with '{}' in path: {} -> {}",
+                        k,
+                        v,
+                        old_path,
+                        processed_path
+                    );
+                }
+
+                let url = format!("{}{}", self.endpoint.trim_end_matches('/'), processed_path);
+                crate::debug_log!("  final URL: {}", url);
+                url
+            }
+        } else {
+            // Default embeddings path
+            format!("{}/embeddings", self.endpoint.trim_end_matches('/'))
+        }
+    }
+
     /// Get template for a specific endpoint and model
     pub fn get_endpoint_template(&self, endpoint: &str, model_name: &str) -> Option<String> {
         let endpoint_templates = match endpoint {

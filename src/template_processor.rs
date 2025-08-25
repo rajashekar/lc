@@ -106,6 +106,8 @@ impl TemplateProcessor {
         tera.register_filter("from_json", FromJsonFilter);
         tera.register_filter("selectattr", SelectAttrFilter);
         tera.register_filter("base_messages", BaseMessagesFilter);
+        tera.register_filter("anthropic_messages", AnthropicMessagesFilter);
+        tera.register_filter("gemini_messages", GeminiMessagesFilter);
         
         Ok(Self { tera })
     }
@@ -284,6 +286,43 @@ impl TemplateProcessor {
         // Parse as JSON to validate
         let json_value: JsonValue = serde_json::from_str(&rendered)
             .context("Speech template did not produce valid JSON")?;
+
+        Ok(json_value)
+    }
+
+    /// Process an embeddings request using the provided template
+    pub fn process_embeddings_request(
+        &mut self,
+        request: &crate::provider::EmbeddingRequest,
+        template: &str,
+        provider_vars: &HashMap<String, String>,
+    ) -> Result<JsonValue> {
+        // Add template to Tera
+        self.tera
+            .add_raw_template("embeddings_request", template)
+            .context("Failed to parse embeddings request template")?;
+
+        // Build context from EmbeddingRequest
+        let mut context = TeraContext::new();
+        
+        // Add basic fields
+        context.insert("model", &request.model);
+        context.insert("input", &request.input);
+        context.insert("encoding_format", &request.encoding_format);
+        
+        // Add provider-specific variables
+        for (key, value) in provider_vars {
+            context.insert(key, value);
+        }
+
+        // Render template
+        let rendered = self.tera
+            .render("embeddings_request", &context)
+            .context("Failed to render embeddings request template")?;
+
+        // Parse as JSON to validate
+        let json_value: JsonValue = serde_json::from_str(&rendered)
+            .context("Embeddings template did not produce valid JSON")?;
 
         Ok(json_value)
     }
@@ -578,6 +617,202 @@ impl Filter for BaseMessagesFilter {
                 .collect();
                 
             Ok(Value::Array(cleaned))
+        } else {
+            Ok(value.clone())
+        }
+    }
+}
+
+/// Filter to convert messages to Anthropic's specific format with content arrays
+struct AnthropicMessagesFilter;
+
+impl Filter for AnthropicMessagesFilter {
+    fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
+        if let Some(array) = value.as_array() {
+            let converted: Vec<Value> = array.iter()
+                .map(|item| {
+                    if let Some(obj) = item.as_object() {
+                        let mut anthropic_msg = serde_json::Map::new();
+                        
+                        // Always include role
+                        if let Some(role) = obj.get("role") {
+                            anthropic_msg.insert("role".to_string(), role.clone());
+                        }
+                        
+                        // Convert content to Anthropic's format
+                        let mut content_parts = Vec::new();
+                        
+                        // Add text content if present
+                        if let Some(text_content) = obj.get("content") {
+                            if !text_content.is_null() && text_content.as_str().map_or(false, |s| !s.is_empty()) {
+                                let text_part = serde_json::json!({
+                                    "type": "text",
+                                    "text": text_content
+                                });
+                                content_parts.push(text_part);
+                            }
+                        }
+                        
+                        // Add image content if present
+                        if let Some(images) = obj.get("images") {
+                            if let Some(images_array) = images.as_array() {
+                                for image in images_array {
+                                    if let Some(image_obj) = image.as_object() {
+                                        if let (Some(data), Some(mime_type)) = (
+                                            image_obj.get("data").and_then(|v| v.as_str()),
+                                            image_obj.get("mime_type").and_then(|v| v.as_str())
+                                        ) {
+                                            if !data.is_empty() {
+                                                // Base64 image
+                                                let image_part = serde_json::json!({
+                                                    "type": "image",
+                                                    "source": {
+                                                        "type": "base64",
+                                                        "media_type": mime_type,
+                                                        "data": data
+                                                    }
+                                                });
+                                                content_parts.push(image_part);
+                                            }
+                                        } else if let Some(url) = image_obj.get("url").and_then(|v| v.as_str()) {
+                                            if !url.starts_with("data:") && !url.is_empty() {
+                                                // URL image
+                                                let image_part = serde_json::json!({
+                                                    "type": "image",
+                                                    "source": {
+                                                        "type": "url",
+                                                        "url": url
+                                                    }
+                                                });
+                                                content_parts.push(image_part);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Set content as array if we have parts, otherwise as string
+                        if content_parts.len() > 1 || (content_parts.len() == 1 && content_parts[0].get("type") == Some(&serde_json::Value::String("image".to_string()))) {
+                            anthropic_msg.insert("content".to_string(), serde_json::Value::Array(content_parts));
+                        } else if let Some(first_part) = content_parts.first() {
+                            if let Some(text) = first_part.get("text") {
+                                anthropic_msg.insert("content".to_string(), text.clone());
+                            }
+                        }
+                        
+                        // Include tool_calls if present and not empty
+                        if let Some(tool_calls) = obj.get("tool_calls") {
+                            if !tool_calls.is_null() && tool_calls.as_array().map_or(true, |arr| !arr.is_empty()) {
+                                anthropic_msg.insert("tool_calls".to_string(), tool_calls.clone());
+                            }
+                        }
+                        
+                        // Include tool_call_id if present and not empty
+                        if let Some(tool_call_id) = obj.get("tool_call_id") {
+                            if !tool_call_id.is_null() && tool_call_id.as_str().map_or(false, |s| !s.is_empty()) {
+                                anthropic_msg.insert("tool_call_id".to_string(), tool_call_id.clone());
+                            }
+                        }
+                        
+                        Value::Object(anthropic_msg)
+                    } else {
+                        item.clone()
+                    }
+                })
+                .collect();
+                
+            Ok(Value::Array(converted))
+        } else {
+            Ok(value.clone())
+        }
+    }
+}
+
+/// Filter to convert messages to Gemini's specific format with parts arrays
+struct GeminiMessagesFilter;
+
+impl Filter for GeminiMessagesFilter {
+    fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
+        if let Some(array) = value.as_array() {
+            let converted: Vec<Value> = array.iter()
+                .map(|item| {
+                    if let Some(obj) = item.as_object() {
+                        let mut gemini_msg = serde_json::Map::new();
+                        
+                        // Convert role to Gemini format
+                        if let Some(role) = obj.get("role").and_then(|v| v.as_str()) {
+                            let gemini_role = match role {
+                                "assistant" => "model",
+                                "system" => "user", // Gemini handles system as user
+                                other => other,
+                            };
+                            gemini_msg.insert("role".to_string(), serde_json::Value::String(gemini_role.to_string()));
+                        }
+                        
+                        // Convert content to Gemini's parts format
+                        let mut parts = Vec::new();
+                        
+                        // Add text content if present
+                        if let Some(text_content) = obj.get("content") {
+                            if !text_content.is_null() && text_content.as_str().map_or(false, |s| !s.is_empty()) {
+                                let text_part = serde_json::json!({
+                                    "text": text_content
+                                });
+                                parts.push(text_part);
+                            }
+                        }
+                        
+                        // Add image content if present
+                        if let Some(images) = obj.get("images") {
+                            if let Some(images_array) = images.as_array() {
+                                for image in images_array {
+                                    if let Some(image_obj) = image.as_object() {
+                                        if let (Some(data), Some(mime_type)) = (
+                                            image_obj.get("data").and_then(|v| v.as_str()),
+                                            image_obj.get("mime_type").and_then(|v| v.as_str())
+                                        ) {
+                                            if !data.is_empty() {
+                                                // Base64 image for Gemini
+                                                let image_part = serde_json::json!({
+                                                    "inlineData": {
+                                                        "mimeType": mime_type,
+                                                        "data": data
+                                                    }
+                                                });
+                                                parts.push(image_part);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Set parts array
+                        gemini_msg.insert("parts".to_string(), serde_json::Value::Array(parts));
+                        
+                        // Include tool_calls if present and not empty (for function calling)
+                        if let Some(tool_calls) = obj.get("tool_calls") {
+                            if !tool_calls.is_null() && tool_calls.as_array().map_or(true, |arr| !arr.is_empty()) {
+                                gemini_msg.insert("tool_calls".to_string(), tool_calls.clone());
+                            }
+                        }
+                        
+                        // Include tool_call_id if present and not empty
+                        if let Some(tool_call_id) = obj.get("tool_call_id") {
+                            if !tool_call_id.is_null() && tool_call_id.as_str().map_or(false, |s| !s.is_empty()) {
+                                gemini_msg.insert("tool_call_id".to_string(), tool_call_id.clone());
+                            }
+                        }
+                        
+                        Value::Object(gemini_msg)
+                    } else {
+                        item.clone()
+                    }
+                })
+                .collect();
+                
+            Ok(Value::Array(converted))
         } else {
             Ok(value.clone())
         }
