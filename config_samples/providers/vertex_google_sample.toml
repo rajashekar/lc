@@ -32,6 +32,9 @@ models_path = "/models"
 # API path for chat completions
 chat_path = "/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent"
 
+# API path for image generation (Vertex AI Imagen predict endpoint)
+images_path = "/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:predict"
+
 # URL to refresh authentication tokens
 token_url = "<your-jwt-token>"
 
@@ -118,4 +121,40 @@ response = """
   "content": {{ candidates[0].content.parts[0].text | json }}
 }
 
+"""
+
+# Images endpoint templates for Vertex AI Imagen
+[images_templates]
+
+# Default template for all Imagen models (e.g., imagen-3.0-generate-001)
+[images_templates.""]
+request = """
+{
+  "instances": [
+    {
+      "prompt": "{{ prompt }}"
+    }
+  ],
+  "parameters": {
+    {% if size %}"imageSize": "{{ size }}",{% endif %}
+    {% if n %}"sampleCount": {{ n }},{% endif %}
+    "mimeType": "image/png"
+  }
+}
+"""
+response = """
+{
+  "data": [
+    {% if predictions and predictions[0] and predictions[0].bytesBase64Encoded %}
+      {% for pred in predictions %}
+      { "b64_json": "{{ pred.bytesBase64Encoded }}" }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    {% elif predictions and predictions[0] and predictions[0].content and predictions[0].content[0] and predictions[0].content[0].b64 %}
+      {% for pred in predictions %}
+      { "b64_json": "{{ pred.content[0].b64 }}" }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    {% else %}
+    ]
+    {% endif %}
+}
 """

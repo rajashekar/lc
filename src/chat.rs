@@ -588,6 +588,30 @@ pub async fn create_authenticated_client(
     }
 
     // Regular authentication flow (API key or token URL)
+    // Special-case: if headers already contain resolved auth (e.g., x-goog-api-key), we don't need a token
+    let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
+        let k_l = k.to_lowercase();
+        // Heuristic: header name suggests auth AND value is not a placeholder and not empty
+        (k_l.contains("key") || k_l.contains("token") || k_l.contains("auth"))
+            && !v.trim().is_empty()
+            && !v.contains("${api_key}")
+    });
+    
+    if provider_config.api_key.is_none() && header_has_resolved_key {
+        // Header-based auth present (e.g., Gemini x-goog-api-key). No token retrieval needed.
+        // Pass empty api_key since Authorization won't be used when custom headers exist.
+        let client = OpenAIClient::new_with_provider_config(
+            provider_config.endpoint.clone(),
+            String::new(),
+            provider_config.models_path.clone(),
+            provider_config.chat_path.clone(),
+            provider_config.headers.clone(),
+            provider_config.clone(),
+        );
+        return Ok(client);
+    }
+    
+    // Fallback: API key in Authorization or token URL-based auth
     let temp_client = OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),
         provider_config.api_key.clone().unwrap_or_default(),
@@ -595,9 +619,9 @@ pub async fn create_authenticated_client(
         provider_config.chat_path.clone(),
         provider_config.headers.clone(),
     );
-
+    
     let auth_token = get_or_refresh_token(config, provider_name, &temp_client).await?;
-
+    
     let client = OpenAIClient::new_with_provider_config(
         provider_config.endpoint.clone(),
         auth_token,
@@ -606,7 +630,7 @@ pub async fn create_authenticated_client(
         provider_config.headers.clone(),
         provider_config.clone(),
     );
-
+    
     Ok(client)
 }
 

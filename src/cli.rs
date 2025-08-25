@@ -1840,8 +1840,14 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
             }
 
             println!("\n{}", "API Key Status:".bold().blue());
-            for (name, provider_config) in &config.providers {
-                let status = if provider_config.api_key.is_some() {
+            
+            // Load keys from centralized keys.toml
+            let keys = crate::keys::KeysConfig::load().unwrap_or_else(|_| crate::keys::KeysConfig::new());
+            
+            for (name, _provider_config) in &config.providers {
+                // Check if provider has authentication in centralized keys
+                let has_auth = keys.has_auth(name);
+                let status = if has_auth {
                     "✓ Configured".green()
                 } else {
                     "✗ Missing".red()
@@ -2862,8 +2868,15 @@ pub async fn handle_direct_prompt(
 
     // Get provider config with authentication from centralized keys
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-
-    if provider_config.api_key.is_none() {
+    
+    // Allow either API key or resolved custom auth headers (e.g., x-goog-api-key)
+    let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
+        let k_l = k.to_lowercase();
+        (k_l.contains("key") || k_l.contains("token") || k_l.contains("auth"))
+            && !v.trim().is_empty()
+            && !v.contains("${api_key}")
+    });
+    if provider_config.api_key.is_none() && !header_has_resolved_key {
         anyhow::bail!(
             "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
             provider_name,
@@ -3310,8 +3323,15 @@ pub async fn handle_direct_prompt_with_piped_input(
 
     // Get provider config with authentication from centralized keys
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-
-    if provider_config.api_key.is_none() {
+    
+    // Allow either API key or resolved custom auth headers (e.g., x-goog-api-key)
+    let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
+        let k_l = k.to_lowercase();
+        (k_l.contains("key") || k_l.contains("token") || k_l.contains("auth"))
+            && !v.trim().is_empty()
+            && !v.contains("${api_key}")
+    });
+    if provider_config.api_key.is_none() && !header_has_resolved_key {
         anyhow::bail!(
             "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
             provider_name,
@@ -3842,7 +3862,22 @@ pub async fn handle_chat_command(
 
         // Determine if streaming should be used (default to true for interactive chat)
         // CLI flag takes precedence, then config, then default to true for chat mode
-        let use_streaming = stream || config.stream.unwrap_or(true);
+        let mut use_streaming = stream || config.stream.unwrap_or(true);
+
+        // Heuristic: Disable streaming for providers that rely on templated request/response
+        // and don't support SSE-compatible streaming in our pipeline (e.g., Gemini).
+        // Non-streaming path uses provider templates for both request and response.
+        if use_streaming {
+            if let Ok(pcfg) = config.get_provider(&provider_name) {
+                let is_gemini_like = pcfg
+                    .endpoint
+                    .to_lowercase()
+                    .contains("generativelanguage.googleapis.com");
+                if is_gemini_like {
+                    use_streaming = false;
+                }
+            }
+        }
 
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Use tool execution loop when tools are available (tools don't support streaming yet)
@@ -5569,8 +5604,15 @@ pub async fn handle_embed_command(
 
     // Get provider config with authentication from centralized keys
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-
-    if provider_config.api_key.is_none() {
+    
+    // Allow either API key or resolved custom auth headers (e.g., x-goog-api-key)
+    let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
+        let k_l = k.to_lowercase();
+        (k_l.contains("key") || k_l.contains("token") || k_l.contains("auth"))
+            && !v.trim().is_empty()
+            && !v.contains("${api_key}")
+    });
+    if provider_config.api_key.is_none() && !header_has_resolved_key {
         anyhow::bail!(
             "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
             provider_name,
@@ -5870,8 +5912,15 @@ pub async fn handle_similar_command(
 
     // Get provider config with authentication from centralized keys
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-
-    if provider_config.api_key.is_none() {
+    
+    // Allow either API key or resolved custom auth headers (e.g., x-goog-api-key)
+    let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
+        let k_l = k.to_lowercase();
+        (k_l.contains("key") || k_l.contains("token") || k_l.contains("auth"))
+            && !v.trim().is_empty()
+            && !v.contains("${api_key}")
+    });
+    if provider_config.api_key.is_none() && !header_has_resolved_key {
         anyhow::bail!(
             "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
             provider_name,
@@ -6771,10 +6820,19 @@ pub async fn handle_image_command(
     // Resolve provider and model using the same logic as other commands
     let (provider_name, model_name) = resolve_model_and_provider(&config, provider, model)?;
 
+
+
     // Get provider config with authentication from centralized keys
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-
-    if provider_config.api_key.is_none() {
+    
+    // Allow either API key or resolved custom auth headers (e.g., x-goog-api-key)
+    let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
+        let k_l = k.to_lowercase();
+        (k_l.contains("key") || k_l.contains("token") || k_l.contains("auth"))
+            && !v.trim().is_empty()
+            && !v.contains("${api_key}")
+    });
+    if provider_config.api_key.is_none() && !header_has_resolved_key {
         anyhow::bail!(
             "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
             provider_name,
@@ -6997,8 +7055,15 @@ pub async fn handle_transcribe_command(
 
     // Get provider config with authentication
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-
-    if provider_config.api_key.is_none() {
+    
+    // Allow either API key or resolved custom auth headers (e.g., x-goog-api-key)
+    let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
+        let k_l = k.to_lowercase();
+        (k_l.contains("key") || k_l.contains("token") || k_l.contains("auth"))
+            && !v.trim().is_empty()
+            && !v.contains("${api_key}")
+    });
+    if provider_config.api_key.is_none() && !header_has_resolved_key {
         anyhow::bail!(
             "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
             provider_name,
@@ -7149,8 +7214,15 @@ pub async fn handle_tts_command(
 
     // Get provider config with authentication
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-
-    if provider_config.api_key.is_none() {
+    
+    // Allow either API key or resolved custom auth headers (e.g., x-goog-api-key)
+    let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
+        let k_l = k.to_lowercase();
+        (k_l.contains("key") || k_l.contains("token") || k_l.contains("auth"))
+            && !v.trim().is_empty()
+            && !v.contains("${api_key}")
+    });
+    if provider_config.api_key.is_none() && !header_has_resolved_key {
         anyhow::bail!(
             "No API key configured for provider '{}'. Add one with 'lc keys add {}'",
             provider_name,
@@ -7200,19 +7272,58 @@ pub async fn handle_tts_command(
         Ok(audio_bytes) => {
             print!("\r{}\r", " ".repeat(25)); // Clear "Generating speech..."
             
+            // Determine the appropriate file extension and format
+            let detected_extension = crate::audio_utils::get_audio_file_extension(&audio_bytes, Some(&format));
+            let is_pcm_conversion_needed = crate::audio_utils::is_likely_pcm(&audio_bytes) || format.to_lowercase() == "pcm";
+            
+            // Process audio data for better compatibility
+            let (final_audio_data, final_extension, conversion_info) = if is_pcm_conversion_needed {
+                // Convert PCM to WAV for better playability
+                let wav_data = crate::audio_utils::pcm_to_wav(&audio_bytes, None, None, None);
+                (wav_data, "wav", Some("Converted PCM to WAV for better compatibility"))
+            } else {
+                (audio_bytes, detected_extension, None)
+            };
+            
+            // Determine final output filename
+            let final_output = if output.ends_with(&format!(".{}", final_extension)) {
+                output
+            } else {
+                // Replace or add the correct extension
+                let path = std::path::Path::new(&output);
+                if let Some(stem) = path.file_stem() {
+                    if let Some(parent) = path.parent() {
+                        parent.join(format!("{}.{}", stem.to_string_lossy(), final_extension)).to_string_lossy().to_string()
+                    } else {
+                        format!("{}.{}", stem.to_string_lossy(), final_extension)
+                    }
+                } else {
+                    format!("{}.{}", output, final_extension)
+                }
+            };
+            
             // Save audio to file
-            std::fs::write(&output, audio_bytes)?;
+            std::fs::write(&final_output, &final_audio_data)?;
             
             println!(
                 "{} Speech generated successfully!",
                 "✅".green()
             );
-            println!("{} Saved to: {}", "💾".green(), output);
+            println!("{} Saved to: {}", "💾".green(), final_output);
+            
+            // Show conversion info if applicable
+            if let Some(info) = conversion_info {
+                println!("{} {}", "🔄".blue(), info);
+            }
             
             // Show file size
-            let metadata = std::fs::metadata(&output)?;
+            let metadata = std::fs::metadata(&final_output)?;
             let size_kb = metadata.len() as f64 / 1024.0;
             println!("{} File size: {:.2} KB", "📊".blue(), size_kb);
+            
+            // Show format info
+            println!("{} Format: {} ({})", "🎵".blue(), final_extension.to_uppercase(),
+                if is_pcm_conversion_needed { "24kHz, 16-bit, Mono" } else { "Original format" });
         }
         Err(e) => {
             print!("\r{}\r", " ".repeat(25)); // Clear "Generating speech..."

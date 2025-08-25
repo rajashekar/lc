@@ -139,6 +139,116 @@ impl ProviderConfig {
         }
     }
 
+    /// Get the images generation URL, replacing {model_name} and template variables
+    pub fn get_images_url(&self, model_name: &str) -> String {
+        if let Some(ref images_path) = self.images_path {
+            crate::debug_log!(
+                "ProviderConfig::get_images_url called with model: {}",
+                model_name
+            );
+            crate::debug_log!("  images_path: {}", images_path);
+            crate::debug_log!("  vars: {:?}", self.vars);
+
+            if images_path.starts_with("https://") {
+                // Full URL path - process template variables directly
+                let mut url = images_path
+                    .replace("{model}", model_name)
+                    .replace("{model_name}", model_name);
+                crate::debug_log!("  after model replacement: {}", url);
+
+                // Interpolate known vars if present
+                for (k, v) in &self.vars {
+                    let old_url = url.clone();
+                    url = url.replace(&format!("{{{}}}", k), v);
+                    crate::debug_log!("  replaced {{{}}} with '{}': {} -> {}", k, v, old_url, url);
+                }
+                crate::debug_log!("  final URL: {}", url);
+                url
+            } else {
+                // Relative path - first process template variables in the path, then combine with endpoint
+                let mut processed_path = images_path
+                    .replace("{model}", model_name)
+                    .replace("{model_name}", model_name);
+                crate::debug_log!("  after model replacement in path: {}", processed_path);
+
+                // Interpolate known vars in the path
+                for (k, v) in &self.vars {
+                    let old_path = processed_path.clone();
+                    processed_path = processed_path.replace(&format!("{{{}}}", k), v);
+                    crate::debug_log!(
+                        "  replaced {{{}}} with '{}' in path: {} -> {}",
+                        k,
+                        v,
+                        old_path,
+                        processed_path
+                    );
+                }
+
+                let url = format!("{}{}", self.endpoint.trim_end_matches('/'), processed_path);
+                crate::debug_log!("  final URL: {}", url);
+                url
+            }
+        } else {
+            // Default images path
+            format!("{}/images/generations", self.endpoint.trim_end_matches('/'))
+        }
+    }
+
+    /// Get the speech generation URL, replacing {model_name} and template variables
+    pub fn get_speech_url(&self, model_name: &str) -> String {
+        if let Some(ref speech_path) = self.speech_path {
+            crate::debug_log!(
+                "ProviderConfig::get_speech_url called with model: {}",
+                model_name
+            );
+            crate::debug_log!("  speech_path: {}", speech_path);
+            crate::debug_log!("  vars: {:?}", self.vars);
+
+            if speech_path.starts_with("https://") {
+                // Full URL path - process template variables directly
+                let mut url = speech_path
+                    .replace("{model}", model_name)
+                    .replace("{model_name}", model_name);
+                crate::debug_log!("  after model replacement: {}", url);
+
+                // Interpolate known vars if present
+                for (k, v) in &self.vars {
+                    let old_url = url.clone();
+                    url = url.replace(&format!("{{{}}}", k), v);
+                    crate::debug_log!("  replaced {{{}}} with '{}': {} -> {}", k, v, old_url, url);
+                }
+                crate::debug_log!("  final URL: {}", url);
+                url
+            } else {
+                // Relative path - first process template variables in the path, then combine with endpoint
+                let mut processed_path = speech_path
+                    .replace("{model}", model_name)
+                    .replace("{model_name}", model_name);
+                crate::debug_log!("  after model replacement in path: {}", processed_path);
+
+                // Interpolate known vars in the path
+                for (k, v) in &self.vars {
+                    let old_path = processed_path.clone();
+                    processed_path = processed_path.replace(&format!("{{{}}}", k), v);
+                    crate::debug_log!(
+                        "  replaced {{{}}} with '{}' in path: {} -> {}",
+                        k,
+                        v,
+                        old_path,
+                        processed_path
+                    );
+                }
+
+                let url = format!("{}{}", self.endpoint.trim_end_matches('/'), processed_path);
+                crate::debug_log!("  final URL: {}", url);
+                url
+            }
+        } else {
+            // Default speech path
+            format!("{}/audio/speech", self.endpoint.trim_end_matches('/'))
+        }
+    }
+
     /// Get template for a specific endpoint and model
     pub fn get_endpoint_template(&self, endpoint: &str, model_name: &str) -> Option<String> {
         let endpoint_templates = match endpoint {
@@ -490,7 +600,27 @@ impl Config {
         if let Some(auth) = crate::keys::get_provider_auth(name)? {
             match auth {
                 crate::keys::ProviderAuth::ApiKey(key) => {
-                    provider_config.api_key = Some(key);
+                    // Check if provider has custom headers with ${api_key} placeholder
+                    let mut has_custom_auth_header = false;
+                    for (_header_name, header_value) in &provider_config.headers {
+                        if header_value.contains("${api_key}") {
+                            has_custom_auth_header = true;
+                            break;
+                        }
+                    }
+                    
+                    if has_custom_auth_header {
+                        // Replace ${api_key} in headers
+                        let mut updated_headers = HashMap::new();
+                        for (header_name, header_value) in provider_config.headers.iter() {
+                            let processed_value = header_value.replace("${api_key}", &key);
+                            updated_headers.insert(header_name.clone(), processed_value);
+                        }
+                        provider_config.headers = updated_headers;
+                    } else {
+                        // Use standard Bearer token auth
+                        provider_config.api_key = Some(key);
+                    }
                 }
                 crate::keys::ProviderAuth::ServiceAccount(sa_json) => {
                     provider_config.api_key = Some(sa_json);

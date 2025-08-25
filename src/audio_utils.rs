@@ -1,145 +1,201 @@
 use anyhow::Result;
-use base64::{engine::general_purpose, Engine as _};
-use std::fs;
 use std::path::Path;
 
-/// Supported audio formats
-#[derive(Debug, Clone, Copy)]
-pub enum AudioFormat {
-    Mp3,
-    Mp4,
-    Mpeg,
-    Mpga,
-    M4a,
-    Wav,
-    Webm,
-    Ogg,
-    Flac,
+/// Audio file data with metadata
+pub struct AudioData {
+    pub data: String, // Base64 encoded audio data
+    pub filename: String,
+    pub mime_type: String,
 }
 
-impl AudioFormat {
-    /// Detect audio format from file extension
-    pub fn from_extension(ext: &str) -> Option<Self> {
-        match ext.to_lowercase().as_str() {
-            "mp3" => Some(AudioFormat::Mp3),
-            "mp4" => Some(AudioFormat::Mp4),
-            "mpeg" => Some(AudioFormat::Mpeg),
-            "mpga" => Some(AudioFormat::Mpga),
-            "m4a" => Some(AudioFormat::M4a),
-            "wav" => Some(AudioFormat::Wav),
-            "webm" => Some(AudioFormat::Webm),
-            "ogg" => Some(AudioFormat::Ogg),
-            "flac" => Some(AudioFormat::Flac),
-            _ => None,
-        }
-    }
-
-    /// Get MIME type for the audio format
-    pub fn mime_type(&self) -> &'static str {
-        match self {
-            AudioFormat::Mp3 => "audio/mpeg",
-            AudioFormat::Mp4 => "audio/mp4",
-            AudioFormat::Mpeg => "audio/mpeg",
-            AudioFormat::Mpga => "audio/mpeg",
-            AudioFormat::M4a => "audio/m4a",
-            AudioFormat::Wav => "audio/wav",
-            AudioFormat::Webm => "audio/webm",
-            AudioFormat::Ogg => "audio/ogg",
-            AudioFormat::Flac => "audio/flac",
-        }
-    }
-}
-
-/// Process an audio file and return a data URL for API consumption
-pub fn process_audio_file(path: &Path) -> Result<String> {
-    // Check if file exists
-    if !path.exists() {
-        anyhow::bail!("Audio file not found: {}", path.display());
-    }
-
-    // Detect audio format from extension
-    let extension = path
+/// Process an audio file and return base64 encoded data
+pub fn process_audio_file(file_path: &Path) -> Result<String> {
+    let audio_bytes = std::fs::read(file_path)?;
+    
+    // Encode to base64
+    use base64::{engine::general_purpose, Engine as _};
+    let base64_data = general_purpose::STANDARD.encode(&audio_bytes);
+    
+    // Create data URL with appropriate MIME type based on file extension
+    let extension = file_path
         .extension()
         .and_then(|ext| ext.to_str())
-        .ok_or_else(|| anyhow::anyhow!("No file extension found"))?;
-
-    let format = AudioFormat::from_extension(extension)
-        .ok_or_else(|| anyhow::anyhow!("Unsupported audio format: {}", extension))?;
-
-    // Read the audio file
-    let audio_data = fs::read(path)?;
-
-    // Check file size (limit to 25MB for most providers)
-    const MAX_SIZE: usize = 25 * 1024 * 1024; // 25MB
-    if audio_data.len() > MAX_SIZE {
-        anyhow::bail!(
-            "Audio file too large: {} bytes (max: {} bytes)",
-            audio_data.len(),
-            MAX_SIZE
-        );
-    }
-
-    // Encode to base64
-    let base64_data = general_purpose::STANDARD.encode(&audio_data);
-
-    // Create data URL
-    let data_url = format!("data:{};base64,{}", format.mime_type(), base64_data);
-
-    Ok(data_url)
+        .unwrap_or("")
+        .to_lowercase();
+    
+    let mime_type = match extension.as_str() {
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "flac" => "audio/flac",
+        "ogg" => "audio/ogg",
+        "m4a" | "mp4" => "audio/mp4",
+        "webm" => "audio/webm",
+        _ => "audio/wav", // Default to WAV
+    };
+    
+    Ok(format!("data:{};base64,{}", mime_type, base64_data))
 }
 
-/// Process an audio from a URL
+/// Process an audio URL and return base64 encoded data
 pub fn process_audio_url(url: &str) -> Result<String> {
-    // For now, just validate and return the URL
-    // In the future, we could download and process the audio
-    if !url.starts_with("http://") && !url.starts_with("https://") {
-        anyhow::bail!("Invalid audio URL: must start with http:// or https://");
-    }
-
+    // For now, just return the URL as-is
+    // In a full implementation, you might want to download and encode the audio
     Ok(url.to_string())
 }
 
-/// Process multiple audio inputs (files or URLs)
-#[allow(dead_code)]
-pub fn process_audio_files(paths: &[String]) -> Result<Vec<String>> {
-    let mut processed_audio = Vec::new();
+/// Generate a WAV header for PCM audio data
+/// 
+/// This creates a standard WAV file header for 16-bit PCM audio.
+/// Based on Gemini's audio format: 16-bit little-endian PCM at 24kHz sample rate, mono channel
+pub fn generate_wav_header(data_size: u32, sample_rate: u32, channels: u16, bits_per_sample: u16) -> Vec<u8> {
+    let mut header = Vec::with_capacity(44);
+    
+    // RIFF header
+    header.extend_from_slice(b"RIFF");
+    
+    // File size - 8 bytes (will be filled in later)
+    let file_size = 36 + data_size;
+    header.extend_from_slice(&file_size.to_le_bytes());
+    
+    // WAVE format
+    header.extend_from_slice(b"WAVE");
+    
+    // fmt subchunk
+    header.extend_from_slice(b"fmt ");
+    
+    // Subchunk1 size (16 for PCM)
+    header.extend_from_slice(&16u32.to_le_bytes());
+    
+    // Audio format (1 for PCM)
+    header.extend_from_slice(&1u16.to_le_bytes());
+    
+    // Number of channels
+    header.extend_from_slice(&channels.to_le_bytes());
+    
+    // Sample rate
+    header.extend_from_slice(&sample_rate.to_le_bytes());
+    
+    // Byte rate (sample_rate * channels * bits_per_sample / 8)
+    let byte_rate = sample_rate * channels as u32 * bits_per_sample as u32 / 8;
+    header.extend_from_slice(&byte_rate.to_le_bytes());
+    
+    // Block align (channels * bits_per_sample / 8)
+    let block_align = channels * bits_per_sample / 8;
+    header.extend_from_slice(&block_align.to_le_bytes());
+    
+    // Bits per sample
+    header.extend_from_slice(&bits_per_sample.to_le_bytes());
+    
+    // data subchunk
+    header.extend_from_slice(b"data");
+    
+    // Data size
+    header.extend_from_slice(&data_size.to_le_bytes());
+    
+    header
+}
 
-    for path_str in paths {
-        let processed = if path_str.starts_with("http://") || path_str.starts_with("https://") {
-            process_audio_url(path_str)?
-        } else {
-            let path = Path::new(path_str);
-            process_audio_file(path)?
+/// Convert PCM audio data to WAV format
+/// 
+/// This function takes raw PCM audio data and wraps it with a proper WAV header
+/// to make it playable by standard media players.
+/// 
+/// Default parameters are based on Gemini's audio format:
+/// - 24kHz sample rate
+/// - 16-bit depth
+/// - Mono channel
+pub fn pcm_to_wav(pcm_data: &[u8], sample_rate: Option<u32>, channels: Option<u16>, bits_per_sample: Option<u16>) -> Vec<u8> {
+    let sample_rate = sample_rate.unwrap_or(24000); // Default to 24kHz (Gemini's format)
+    let channels = channels.unwrap_or(1); // Default to mono
+    let bits_per_sample = bits_per_sample.unwrap_or(16); // Default to 16-bit
+    
+    let data_size = pcm_data.len() as u32;
+    let header = generate_wav_header(data_size, sample_rate, channels, bits_per_sample);
+    
+    let mut wav_data = Vec::with_capacity(header.len() + pcm_data.len());
+    wav_data.extend_from_slice(&header);
+    wav_data.extend_from_slice(pcm_data);
+    
+    wav_data
+}
+
+/// Detect if audio data is likely PCM format
+/// 
+/// This is a heuristic check - PCM data typically doesn't have recognizable headers
+/// and the data should be relatively uniform in distribution.
+pub fn is_likely_pcm(data: &[u8]) -> bool {
+    // Check if it's not a known audio format by looking for headers
+    if data.len() < 4 {
+        return false;
+    }
+    
+    // Check for common audio format headers
+    let header = &data[0..4];
+    
+    // WAV files start with "RIFF"
+    if header == b"RIFF" {
+        return false;
+    }
+    
+    // MP3 files often start with ID3 tag or sync frame
+    if header[0..3] == [0x49, 0x44, 0x33] || // ID3
+       (header[0] == 0xFF && (header[1] & 0xE0) == 0xE0) { // MP3 sync frame
+        return false;
+    }
+    
+    // FLAC files start with "fLaC"
+    if header == b"fLaC" {
+        return false;
+    }
+    
+    // OGG files start with "OggS"
+    if header == b"OggS" {
+        return false;
+    }
+    
+    // If we don't recognize the format and the data size is reasonable for audio, assume PCM
+    true
+}
+
+/// Get the appropriate file extension based on the detected or specified format
+pub fn get_audio_file_extension(data: &[u8], requested_format: Option<&str>) -> &'static str {
+    // If a specific format was requested, use that
+    if let Some(format) = requested_format {
+        return match format.to_lowercase().as_str() {
+            "mp3" => "mp3",
+            "wav" => "wav",
+            "flac" => "flac",
+            "ogg" => "ogg",
+            "aac" => "aac",
+            "opus" => "opus",
+            "pcm" => "wav", // Convert PCM to WAV for better compatibility
+            _ => "wav", // Default to WAV for unknown formats
         };
-
-        processed_audio.push(processed);
-    }
-
-    Ok(processed_audio)
-}
-
-/// Download audio from URL and save to file
-#[allow(dead_code)]
-pub async fn download_audio(url: &str, output_path: &Path) -> Result<()> {
-    let response = reqwest::get(url).await?;
-    
-    if !response.status().is_success() {
-        anyhow::bail!("Failed to download audio: HTTP {}", response.status());
     }
     
-    let bytes = response.bytes().await?;
-    fs::write(output_path, bytes)?;
-    
-    Ok(())
-}
-
-/// Save base64 audio data to file
-#[allow(dead_code)]
-pub fn save_base64_audio(b64_data: &str, filepath: &Path) -> Result<()> {
-    let audio_bytes = general_purpose::STANDARD.decode(b64_data)?;
-    fs::write(filepath, audio_bytes)?;
-    
-    Ok(())
+    // Auto-detect based on data
+    if is_likely_pcm(data) {
+        "wav" // Convert PCM to WAV
+    } else {
+        // Try to detect format from header
+        if data.len() >= 4 {
+            let header = &data[0..4];
+            if header == b"RIFF" {
+                "wav"
+            } else if header[0..3] == [0x49, 0x44, 0x33] || 
+                     (header[0] == 0xFF && (header[1] & 0xE0) == 0xE0) {
+                "mp3"
+            } else if header == b"fLaC" {
+                "flac"
+            } else if header == b"OggS" {
+                "ogg"
+            } else {
+                "wav" // Default to WAV
+            }
+        } else {
+            "wav" // Default to WAV
+        }
+    }
 }
 
 #[cfg(test)]
@@ -147,31 +203,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_audio_format_detection() {
-        assert!(matches!(
-            AudioFormat::from_extension("mp3"),
-            Some(AudioFormat::Mp3)
-        ));
-        assert!(matches!(
-            AudioFormat::from_extension("WAV"),
-            Some(AudioFormat::Wav)
-        ));
-        assert!(matches!(
-            AudioFormat::from_extension("ogg"),
-            Some(AudioFormat::Ogg)
-        ));
-        assert!(matches!(
-            AudioFormat::from_extension("flac"),
-            Some(AudioFormat::Flac)
-        ));
-        assert!(AudioFormat::from_extension("txt").is_none());
+    fn test_wav_header_generation() {
+        let header = generate_wav_header(1000, 44100, 2, 16);
+        assert_eq!(header.len(), 44);
+        assert_eq!(&header[0..4], b"RIFF");
+        assert_eq!(&header[8..12], b"WAVE");
+        assert_eq!(&header[12..16], b"fmt ");
     }
 
     #[test]
-    fn test_mime_types() {
-        assert_eq!(AudioFormat::Mp3.mime_type(), "audio/mpeg");
-        assert_eq!(AudioFormat::Wav.mime_type(), "audio/wav");
-        assert_eq!(AudioFormat::Ogg.mime_type(), "audio/ogg");
-        assert_eq!(AudioFormat::Flac.mime_type(), "audio/flac");
+    fn test_pcm_to_wav_conversion() {
+        let pcm_data = vec![0u8; 1000]; // 1000 bytes of silence
+        let wav_data = pcm_to_wav(&pcm_data, Some(44100), Some(2), Some(16));
+        
+        // Should have WAV header (44 bytes) + PCM data
+        assert_eq!(wav_data.len(), 44 + 1000);
+        assert_eq!(&wav_data[0..4], b"RIFF");
+        assert_eq!(&wav_data[8..12], b"WAVE");
+    }
+
+    #[test]
+    fn test_pcm_detection() {
+        // Test with WAV header - should not be detected as PCM
+        let wav_header = b"RIFF\x24\x08\x00\x00WAVE";
+        assert!(!is_likely_pcm(wav_header));
+        
+        // Test with random data - should be detected as PCM
+        let pcm_data = vec![0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC];
+        assert!(is_likely_pcm(&pcm_data));
+    }
+
+    #[test]
+    fn test_file_extension_detection() {
+        // Test PCM detection
+        let pcm_data = vec![0x12, 0x34, 0x56, 0x78];
+        assert_eq!(get_audio_file_extension(&pcm_data, None), "wav");
+        
+        // Test WAV detection
+        let wav_data = b"RIFF\x24\x08\x00\x00WAVE";
+        assert_eq!(get_audio_file_extension(wav_data, None), "wav");
+        
+        // Test requested format override
+        assert_eq!(get_audio_file_extension(&pcm_data, Some("mp3")), "mp3");
+        assert_eq!(get_audio_file_extension(&pcm_data, Some("pcm")), "wav");
     }
 }

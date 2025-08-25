@@ -88,6 +88,46 @@ This directory contains sanitized sample configuration files for the `lc` tool.
     └── other_providers.toml # Other providers
 ```
 
+## Authentication Headers
+
+Providers can use custom authentication headers instead of the standard `Authorization: Bearer` format. This is useful for providers like Google Gemini that require specific header names.
+
+### How It Works
+
+In a provider configuration file, you can specify custom headers with the `${api_key}` placeholder:
+
+```toml
+# Example: gemini.toml
+[headers]
+x-goog-api-key = "${api_key}"
+```
+
+The `${api_key}` placeholder will be automatically replaced with the actual API key from `keys.toml` when the provider is used.
+
+### Examples
+
+**Standard Authentication (OpenAI):**
+```toml
+# No custom headers needed - uses Authorization: Bearer automatically
+endpoint = "https://api.openai.com/v1"
+```
+
+**Custom Header (Gemini):**
+```toml
+endpoint = "https://generativelanguage.googleapis.com"
+[headers]
+x-goog-api-key = "${api_key}"
+```
+
+**Multiple Custom Headers:**
+```toml
+[headers]
+x-api-key = "${api_key}"
+x-api-version = "2024-01"
+```
+
+See `providers/gemini_sample.toml` for a complete example.
+
 ## Security Note
 
 ⚠️ **Never commit actual API keys or credentials to version control!**

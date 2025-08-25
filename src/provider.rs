@@ -468,7 +468,8 @@ impl OpenAIClient {
         let template_processor = if provider_config.chat_templates.is_some()
             || provider_config.images_templates.is_some()
             || provider_config.embeddings_templates.is_some()
-            || provider_config.models_templates.is_some() {
+            || provider_config.models_templates.is_some()
+            || provider_config.speech_templates.is_some() {
             match TemplateProcessor::new() {
                 Ok(processor) => Some(processor),
                 Err(e) => {
@@ -865,9 +866,10 @@ impl OpenAIClient {
         &self,
         request: &ImageGenerationRequest,
     ) -> Result<ImageGenerationResponse> {
-        // Use provider config's images path if available, otherwise default
+        // Use provider config's get_images_url method to handle model replacement
         let url = if let Some(ref config) = self.provider_config {
-            format!("{}{}", self.base_url, config.images_path.as_deref().unwrap_or("/images/generations"))
+            let model_name = request.model.as_deref().unwrap_or("");
+            config.get_images_url(model_name)
         } else {
             format!("{}/images/generations", self.base_url)
         };
@@ -1113,9 +1115,9 @@ pub async fn transcribe_audio(
         &self,
         request: &AudioSpeechRequest,
     ) -> Result<Vec<u8>> {
-        // Use provider config's speech path if available, otherwise default
+        // Use provider config's get_speech_url method to handle model replacement
         let url = if let Some(ref config) = self.provider_config {
-            format!("{}{}", self.base_url, config.speech_path.as_deref().unwrap_or("/audio/speech"))
+            config.get_speech_url(&request.model)
         } else {
             format!("{}/audio/speech", self.base_url)
         };
@@ -1179,9 +1181,55 @@ pub async fn transcribe_audio(
             );
         }
 
-        // Speech API returns raw audio bytes
-        let audio_bytes = response.bytes().await?;
-        Ok(audio_bytes.to_vec())
+        // Get the response text first to handle different formats
+        let response_text = response.text().await?;
+
+        // Check if we have a response template for this provider/model/endpoint
+        if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get response template for speech endpoint
+                let template = config.get_endpoint_response_template("speech", &request.model);
+
+                if let Some(template_str) = template {
+                    // Parse response as JSON
+                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                        // Clone the processor to avoid mutable borrow issues
+                        let mut processor_clone = processor.clone();
+                        // Use template to extract base64 data
+                        match processor_clone.process_response(&response_json, &template_str) {
+                            Ok(extracted) => {
+                                // The template should return the base64 string directly
+                                if let Some(base64_data) = extracted.as_str() {
+                                    // Decode base64 to bytes
+                                    use base64::Engine;
+                                    match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+                                        Ok(audio_bytes) => return Ok(audio_bytes),
+                                        Err(e) => {
+                                            eprintln!("Warning: Failed to decode base64 audio data: {}. Falling back to default parsing.", e);
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Warning: Failed to process speech response template: {}. Falling back to default parsing.", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fall back to default parsing - assume response is raw audio bytes
+        // Try to parse as base64 first (for providers that return base64 in plain text)
+        if response_text.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=') {
+            use base64::Engine;
+            if let Ok(audio_bytes) = base64::engine::general_purpose::STANDARD.decode(&response_text) {
+                return Ok(audio_bytes);
+            }
+        }
+
+        // If not base64, treat as raw bytes
+        Ok(response_text.into_bytes())
     }
 
     pub async fn chat_stream(&self, request: &ChatRequest) -> Result<()> {
@@ -1211,15 +1259,45 @@ pub async fn transcribe_audio(
         for (name, value) in &self.custom_headers {
             req = req.header(name, value);
         }
-
+ 
+        // Build request body using template if available (same logic as non-streaming chat)
+        let request_body = if let Some(ref config) = &self.provider_config {
+            if let Some(ref processor) = &self.template_processor {
+                // Get template for chat endpoint
+                let template = config.get_endpoint_template("chat", &request.model);
+ 
+                if let Some(template_str) = template {
+                    // Clone the processor to avoid mutable borrow issues
+                    let mut processor_clone = processor.clone();
+                    // Use template to transform request
+                    match processor_clone.process_request(request, &template_str, &config.vars) {
+                        Ok(json_value) => Some(json_value),
+                        Err(e) => {
+                            eprintln!("Warning: Failed to process request template: {}. Falling back to default.", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+ 
         // Check if we should exclude model from payload (when model is in URL path)
         let should_exclude_model = if let Some(ref config) = self.provider_config {
             config.chat_path.contains("{model}")
         } else {
             self.chat_path.contains("{model}")
         };
-
-        let response = if should_exclude_model {
+ 
+        // Send request with template-processed body or fall back to default logic
+        let response = if let Some(json_body) = request_body {
+            req.json(&json_body).send().await?
+        } else if should_exclude_model {
             // Use ChatRequestWithoutModel for providers that specify model in URL
             let request_without_model = ChatRequestWithoutModel::from(request);
             req.json(&request_without_model).send().await?

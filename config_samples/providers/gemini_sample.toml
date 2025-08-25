@@ -1,35 +1,23 @@
-# Sample configuration file for gemini.toml
-# This is a sanitized version with sensitive values masked
-# Replace <your-*> placeholders with your actual values
-# Comments below explain what each setting does
+# Google Gemini Provider Configuration
+# Version: 1.0.0
 
-# API endpoint URL for this provider
 endpoint = "https://generativelanguage.googleapis.com"
-
-# API key for authentication - replace with your actual key
-api_key = "<your-api-key>"
-
-# List of available models (auto-populated by the tool)
 models = []
-
-# API path to fetch available models
 models_path = "/v1beta/models/"
-
-# API path for chat completions
 chat_path = "/v1beta/models/{model}:generateContent"
+images_path = "/v1beta/models/{model}:generateContent"
+speech_path = "/v1beta/models/{model}:generateContent"
 
-
+# Custom authentication header for Gemini
+# The ${api_key} placeholder will be replaced with the actual API key from keys.toml
 [headers]
-# API key header - replace with your actual key
-x-goog-api-key = "<your-api-key>"
-
+x-goog-api-key = "${api_key}"
 
 [vars]
 
-[chat_templates]
-
+# Template configuration for Gemini's specific request/response format
 [chat_templates.""]
-request = """
+request = '''
 {
   "contents": [
     {%- for message in messages %}
@@ -84,11 +72,65 @@ request = """
     {%- endif %}
   }
 }
-
-"""
+'''
 response = """
 {
   "content": {{ candidates[0].content.parts[0].text | json }}
 }
+"""
 
+# Speech endpoint templates for Gemini text-to-speech via generateContent
+[speech_templates.""]
+request = """
+{
+  "contents": [
+    {
+      "parts": [
+        { "text": "{{ input | replace(from='"', to='\\"') }}" }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "responseModalities": ["AUDIO"],
+    "speechConfig": {
+      "voiceConfig": {
+        "prebuiltVoiceConfig": {
+          "voiceName": "{{ voice | default(value="Kore") }}"
+        }
+      }
+    }
+  }
+}
+"""
+response = """
+{{ candidates[0].content.parts[0].inlineData.data }}
+"""
+
+# Images endpoint templates for Gemini image generation via generateContent
+[images_templates.""]
+request = """
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "{{ prompt | replace(from='"', to='\\"') }}" }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "responseModalities": ["TEXT","IMAGE"]{% if n %}, "candidateCount": {{ n }}{% endif %}
+  }
+}
+"""
+response = """
+{
+  "data": [
+    {% for part in candidates[0].content.parts %}
+      {% if part.inlineData and part.inlineData.data %}
+        { "b64_json": "{{ part.inlineData.data }}" }{% if not loop.last %},{% endif %}
+      {% endif %}
+    {% endfor %}
+  ]
+}
 """
