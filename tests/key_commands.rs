@@ -84,12 +84,11 @@ mod key_list_tests {
             .set_api_key(openai_name.clone(), "sk-openai-123".to_string())
             .unwrap();
 
-        // Check which providers have keys
-        let openai_provider = config.get_provider(&openai_name).unwrap();
-        let anthropic_provider = config.get_provider(&anthropic_name).unwrap();
-
-        assert!(openai_provider.api_key.is_some());
-        assert!(anthropic_provider.api_key.is_some()); // From test setup
+        // Check which providers have keys from centralized keys.toml
+        let keys = lc::keys::KeysConfig::load().unwrap();
+        
+        assert!(keys.has_auth(&openai_name));
+        assert!(keys.has_auth(&anthropic_name)); // From test setup
     }
 
     #[test]
@@ -98,22 +97,20 @@ mod key_list_tests {
         let openai_name = get_test_provider_name("openai");
         let anthropic_name = get_test_provider_name("anthropic");
 
-        // Remove API key from one provider
-        if let Some(provider_config) = config.providers.get_mut(&anthropic_name) {
-            provider_config.api_key = None;
-        }
+        // Remove API key from one provider via centralized keys.toml
+        let mut keys = lc::keys::KeysConfig::load().unwrap();
+        keys.remove_api_key(&anthropic_name).unwrap();
 
         // Set API key for another
         config
             .set_api_key(openai_name.clone(), "sk-openai-123".to_string())
             .unwrap();
 
-        // Check status
-        let openai_provider = config.get_provider(&openai_name).unwrap();
-        let anthropic_provider = config.get_provider(&anthropic_name).unwrap();
-
-        assert!(openai_provider.api_key.is_some());
-        assert!(anthropic_provider.api_key.is_none());
+        // Check status from centralized keys.toml
+        let keys = lc::keys::KeysConfig::load().unwrap();
+        
+        assert!(keys.has_auth(&openai_name));
+        assert!(!keys.has_auth(&anthropic_name));
     }
 }
 
@@ -130,8 +127,8 @@ mod key_get_tests {
             .set_api_key(openai_name.clone(), "sk-test-key".to_string())
             .unwrap();
 
-        let provider = config.get_provider(&openai_name).unwrap();
-        assert_eq!(provider.api_key.as_ref().unwrap(), "sk-test-key");
+        let keys = lc::keys::KeysConfig::load().unwrap();
+        assert_eq!(keys.get_api_key(&openai_name).unwrap(), "sk-test-key");
     }
 
     #[test]
@@ -145,16 +142,15 @@ mod key_get_tests {
 
     #[test]
     fn test_key_get_provider_without_key() {
-        let mut config = create_config_with_providers();
+        let _config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
 
-        // Remove API key
-        if let Some(provider_config) = config.providers.get_mut(&openai_name) {
-            provider_config.api_key = None;
-        }
+        // Remove API key via centralized keys.toml
+        let mut keys = lc::keys::KeysConfig::load().unwrap();
+        keys.remove_api_key(&openai_name).unwrap();
 
-        let provider = config.get_provider(&openai_name).unwrap();
-        assert!(provider.api_key.is_none());
+        let keys = lc::keys::KeysConfig::load().unwrap();
+        assert!(!keys.has_auth(&openai_name));
     }
 }
 
@@ -174,14 +170,13 @@ mod key_remove_tests {
         // Verify key exists
         assertions::assert_provider_has_api_key(&config, &openai_name);
 
-        // Remove key
-        if let Some(provider_config) = config.providers.get_mut(&openai_name) {
-            provider_config.api_key = None;
-        }
+        // Remove key via centralized keys.toml
+        let mut keys = lc::keys::KeysConfig::load().unwrap();
+        keys.remove_api_key(&openai_name).unwrap();
 
         // Verify key is removed
-        let provider = config.get_provider(&openai_name).unwrap();
-        assert!(provider.api_key.is_none());
+        let keys = lc::keys::KeysConfig::load().unwrap();
+        assert!(!keys.has_auth(&openai_name));
     }
 
     #[test]
@@ -195,24 +190,23 @@ mod key_remove_tests {
 
     #[test]
     fn test_key_remove_already_empty() {
-        let mut config = create_config_with_providers();
+        let _config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
 
-        // Remove API key first
-        if let Some(provider_config) = config.providers.get_mut(&openai_name) {
-            provider_config.api_key = None;
-        }
+        // Remove API key first via centralized keys.toml
+        let mut keys = lc::keys::KeysConfig::load().unwrap();
+        keys.remove_api_key(&openai_name).unwrap();
 
-        // Verify it's already None
-        let provider = config.get_provider(&openai_name).unwrap();
-        assert!(provider.api_key.is_none());
+        // Verify it's already removed
+        let keys = lc::keys::KeysConfig::load().unwrap();
+        assert!(!keys.has_auth(&openai_name));
 
         // "Remove" again (should be idempotent)
-        if let Some(provider_config) = config.providers.get_mut(&openai_name) {
-            provider_config.api_key = None;
-        }
+        let mut keys = lc::keys::KeysConfig::load().unwrap();
+        let removed_again = keys.remove_api_key(&openai_name).unwrap();
+        assert!(!removed_again); // Should return false as nothing was removed
 
-        let provider = config.get_provider(&openai_name).unwrap();
-        assert!(provider.api_key.is_none());
+        let keys = lc::keys::KeysConfig::load().unwrap();
+        assert!(!keys.has_auth(&openai_name));
     }
 }

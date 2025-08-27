@@ -138,7 +138,7 @@ pub fn verify_test_isolation() {
 pub fn create_test_provider_config(endpoint: &str) -> ProviderConfig {
     ProviderConfig {
         endpoint: endpoint.to_string(),
-        api_key: Some("test-api-key".to_string()),
+        api_key: None, // Keys are now stored centrally in keys.toml
         models: vec!["test-model-1".to_string(), "test-model-2".to_string()],
         models_path: "/models".to_string(),
         chat_path: "/chat/completions".to_string(),
@@ -189,7 +189,12 @@ pub fn create_config_with_providers() -> Config {
         create_test_provider_config("https://api.anthropic.com"),
     );
 
-    config.default_provider = Some(openai_name);
+    config.default_provider = Some(openai_name.clone());
+
+    // Set up API keys in centralized keys.toml for test setup
+    let mut keys = lc::keys::KeysConfig::load().unwrap_or_default();
+    keys.set_api_key(openai_name.clone(), "test-api-key".to_string()).unwrap();
+    keys.set_api_key(anthropic_name.clone(), "test-api-key".to_string()).unwrap();
 
     config
 }
@@ -249,20 +254,23 @@ pub mod assertions {
     }
 
     #[allow(dead_code)]
-    pub fn assert_provider_has_api_key(config: &Config, name: &str) {
-        let provider = config.get_provider(name).expect("Provider should exist");
+    pub fn assert_provider_has_api_key(_config: &Config, name: &str) {
+        // Load keys from centralized keys.toml
+        let keys = lc::keys::KeysConfig::load().expect("Should load keys config");
         assert!(
-            provider.api_key.is_some(),
+            keys.has_auth(name),
             "Provider '{}' should have an API key",
             name
         );
     }
 
     #[allow(dead_code)]
-    pub fn assert_provider_api_key(config: &Config, name: &str, expected_key: &str) {
-        let provider = config.get_provider(name).expect("Provider should exist");
+    pub fn assert_provider_api_key(_config: &Config, name: &str, expected_key: &str) {
+        // Load keys from centralized keys.toml
+        let keys = lc::keys::KeysConfig::load().expect("Should load keys config");
+        let actual_key = keys.get_api_key(name).expect("Provider should have an API key");
         assert_eq!(
-            provider.api_key.as_ref().unwrap(),
+            actual_key,
             expected_key,
             "Provider '{}' API key should be '{}'",
             name,
