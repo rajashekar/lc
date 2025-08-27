@@ -60,6 +60,17 @@ const sidebars = {
     },
     {
       type: 'category',
+      label: 'Library Usage',
+      items: [
+        'library-usage/overview',
+        'library-usage/installation',
+        'library-usage/basic-usage',
+        'library-usage/configuration',
+        'library-usage/advanced-features'
+      ]
+    },
+    {
+      type: 'category',
       label: 'Providers',
       items: [
         'providers/openai',

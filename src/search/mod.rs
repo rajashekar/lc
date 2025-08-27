@@ -7,6 +7,7 @@ pub mod providers;
 pub mod search_result;
 pub mod serpapi;
 pub mod serper;
+pub mod tavily;
 
 use anyhow::Result;
 
@@ -42,6 +43,7 @@ impl SearchEngine {
                 duckduckgo::search(provider_config, query, count).await
             }
             SearchProviderType::Jina => jina::search(provider_config, query, count).await,
+            SearchProviderType::Tavily => tavily::search(provider_config, query, count).await,
         }
     }
 

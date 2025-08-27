@@ -10,6 +10,7 @@ pub enum SearchProviderType {
     SerpApi,
     DuckDuckGo,
     Jina,
+    Tavily,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -48,6 +49,8 @@ impl SearchProviderType {
             Ok(SearchProviderType::DuckDuckGo)
         } else if url_lower.contains("jina.ai") || url_lower.contains("s.jina.ai") {
             Ok(SearchProviderType::Jina)
+        } else if url_lower.contains("api.tavily.com") || url_lower.contains("tavily.com") {
+            Ok(SearchProviderType::Tavily)
         } else {
             anyhow::bail!(
                 "Cannot auto-detect provider type from URL '{}'. \
@@ -57,7 +60,8 @@ impl SearchProviderType {
                 - Serper: google.serper.dev\n\
                 - SerpApi: serpapi.com\n\
                 - DuckDuckGo: api.duckduckgo.com\n\
-                - Jina: s.jina.ai",
+                - Jina: s.jina.ai\n\
+                - Tavily: api.tavily.com",
                 url
             )
         }
@@ -72,6 +76,7 @@ impl SearchProviderType {
             SearchProviderType::SerpApi => "api_key",
             SearchProviderType::DuckDuckGo => "", // No API key required
             SearchProviderType::Jina => "Authorization",
+            SearchProviderType::Tavily => "Authorization",
         }
     }
 }

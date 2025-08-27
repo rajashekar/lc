@@ -138,37 +138,6 @@ Anthropic, Gemini, and Amazon Bedrock also supported.
   - venice - https://api.venice.ai/api/v1 (API Key: ✓)
   - vercel - https://ai-gateway.vercel.sh/v1 (API Key: ✓)
 
-### Amazon Bedrock Setup
-
-Amazon Bedrock requires a special configuration due to its different endpoints for model listing and chat completions:
-
-```bash
-# Add Bedrock provider with different endpoints
-lc providers add bedrock https://bedrock-runtime.us-east-1.amazonaws.com \
-  -m /foundation-models \
-  -c "https://bedrock-runtime.us-east-1.amazonaws.com/model/{model_name}/converse"
-
-# Set your AWS Bearer Token
-lc keys add bedrock
-
-# List available models
-lc providers models bedrock
-
-# Use Bedrock models
-lc -m bedrock:amazon.nova-pro-v1:0 "Hello, how are you?"
-
-# Interactive chat with Bedrock
-lc chat -m bedrock:amazon.nova-pro-v1:0
-```
-
-**Key differences for Bedrock:**
-- **Models endpoint**: Uses `https://bedrock.us-east-1.amazonaws.com/foundation-models`
-- **Chat endpoint**: Uses `https://bedrock-runtime.us-east-1.amazonaws.com/model/{model_name}/converse`
-- **Authentication**: Requires AWS Bearer Token for Bedrock
-- **Model names**: Use full Bedrock model identifiers (e.g., `amazon.nova-pro-v1:0`)
-
-The `{model_name}` placeholder in the chat URL is automatically replaced with the actual model name when making requests.
-
 ## Example Usage
 
 ```bash
