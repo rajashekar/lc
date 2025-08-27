@@ -58,6 +58,17 @@ const sidebars = {
         'advanced/vision'
       ],
     },
+    {
+      type: 'category',
+      label: 'Providers',
+      items: [
+        'providers/openai',
+        'providers/anthropic',
+        'providers/gemini',
+        'providers/vertex-ai',
+        'providers/vertex-ai-llama'
+      ]
+    },
     'troubleshooting',
     'faq',
   ],

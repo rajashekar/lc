@@ -1825,9 +1825,20 @@ pub async fn handle_key_command(command: KeyCommands) -> Result<()> {
                 anyhow::bail!("Provider '{}' not found", name);
             }
 
-            let provider_config = config.get_provider(&name)?;
-            if let Some(api_key) = &provider_config.api_key {
-                println!("{}", api_key);
+            // Use centralized keys instead of provider config
+            let keys = crate::keys::KeysConfig::load()?;
+            if let Some(auth) = keys.get_auth(&name) {
+                match auth {
+                    crate::keys::ProviderAuth::ApiKey(key) => println!("{}", key),
+                    crate::keys::ProviderAuth::ServiceAccount(sa_json) => println!("{}", sa_json),
+                    crate::keys::ProviderAuth::Token(token) => println!("{}", token),
+                    crate::keys::ProviderAuth::OAuthToken(oauth) => println!("{}", oauth),
+                    crate::keys::ProviderAuth::Headers(headers) => {
+                        for (k, v) in headers {
+                            println!("{}={}", k, v);
+                        }
+                    }
+                }
             } else {
                 anyhow::bail!("No API key configured for provider '{}'", name);
             }

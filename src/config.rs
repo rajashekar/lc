@@ -512,13 +512,25 @@ impl Config {
                         Ok(config) => {
                             providers.insert(provider_name.to_string(), config);
                         }
-                        Err(_flat_error) => {
-                            // Fall back to old nested format for backward compatibility
-                            let provider_data: HashMap<String, HashMap<String, ProviderConfig>> = toml::from_str(&content)?;
+                        Err(flat_error) => {
+                            crate::debug_log!("Failed to parse {} as flat format: {}", provider_name, flat_error);
                             
-                            if let Some(providers_section) = provider_data.get("providers") {
-                                for (name, config) in providers_section {
-                                    providers.insert(name.clone(), config.clone());
+                            // Try to parse as old nested format for backward compatibility
+                            match toml::from_str::<HashMap<String, HashMap<String, ProviderConfig>>>(&content) {
+                                Ok(provider_data) => {
+                                    if let Some(providers_section) = provider_data.get("providers") {
+                                        for (name, config) in providers_section {
+                                            providers.insert(name.clone(), config.clone());
+                                        }
+                                    }
+                                }
+                                Err(nested_error) => {
+                                    crate::debug_log!("Failed to parse {} as nested format: {}", provider_name, nested_error);
+                                    eprintln!("Warning: Failed to parse provider config file '{}': {}",
+                                        path.display(), flat_error);
+                                    eprintln!("  Also failed as nested format: {}", nested_error);
+                                    // Skip this provider file instead of failing entirely
+                                    continue;
                                 }
                             }
                         }
@@ -531,14 +543,10 @@ impl Config {
     }
 
     fn parse_flat_provider_config(content: &str) -> Result<ProviderConfig> {
-        #[derive(Deserialize)]
-        struct FlatProviderConfig {
-            #[serde(flatten)]
-            config: ProviderConfig,
-        }
-
-        let flat_config: FlatProviderConfig = toml::from_str(content)?;
-        Ok(flat_config.config)
+        // Directly deserialize the ProviderConfig without the wrapper struct
+        let config: ProviderConfig = toml::from_str(content)
+            .map_err(|e| anyhow::anyhow!("TOML parse error: {}", e))?;
+        Ok(config)
     }
 
     fn migrate_providers_to_separate_files(config: &mut Config) -> Result<()> {
