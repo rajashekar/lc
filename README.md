@@ -37,6 +37,20 @@ lc config set model gpt-4
 lc "What is the capital of France?"
 ```
 
+
+## System Requirements
+
+**Before building from source**, ensure you have the required system dependencies:
+
+- **Linux (Ubuntu/Debian)**: `sudo apt install -y pkg-config libssl-dev build-essential`
+- **Linux (RHEL/CentOS/Fedora)**: `sudo yum install -y pkgconfig openssl-devel gcc` (or `dnf`)
+- **macOS**: `xcode-select --install` (+ Homebrew if needed: `brew install pkg-config openssl@3`)
+- **Windows**: Visual Studio Build Tools with C++ support
+
+These dependencies are required for Rust crates that link against OpenSSL and native libraries.
+
+📖 **Full installation instructions**: [Installation Guide](https://lc.viwq.dev/getting-started/installation)
+🔧 **Having build issues?** See [Troubleshooting Guide](https://lc.viwq.dev/troubleshooting)
 ## Key Features
 
 - 🚀 **Lightning Fast** - ~3ms cold start (50x faster than Python alternatives)

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- System dependencies documentation and build requirements for pkg-config, OpenSSL
+- Comprehensive troubleshooting guide for OpenSSL and pkg-config build errors
+- Automated system dependency installation in GitHub Actions workflows for reliable CI/CD
 - Package distribution through major package managers (Homebrew, Scoop, APT, etc.)
 - Comprehensive documentation website at https://lc.viwq.dev
 - GitHub Actions workflows for automated releases
@@ -32,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2025-01-XX
 
 ### Added
+- System dependencies documentation and build requirements for pkg-config, OpenSSL
+- Comprehensive troubleshooting guide for OpenSSL and pkg-config build errors
+- Automated system dependency installation in GitHub Actions workflows for reliable CI/CD
 - Initial release of LLM Client
 - Core features:
   - Provider management for any OpenAI-compatible API

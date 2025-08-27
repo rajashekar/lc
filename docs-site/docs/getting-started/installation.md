@@ -10,6 +10,63 @@ LLM Client can be installed from source or using pre-built binaries. Choose the 
 
 ## Prerequisites
 
+### System Dependencies
+
+Before installing LLM Client, you need to install system dependencies required for building Rust applications that use OpenSSL and native libraries.
+
+#### Linux
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install -y pkg-config libssl-dev build-essential
+```
+
+**RHEL/CentOS/Fedora:**
+```bash
+# RHEL/CentOS
+sudo yum install -y pkgconfig openssl-devel gcc
+
+# Fedora
+sudo dnf install -y pkgconf-devel openssl-devel gcc
+```
+
+**Alpine Linux:**
+```bash
+sudo apk add pkgconf openssl-dev build-base
+```
+
+#### macOS
+
+On macOS, Xcode Command Line Tools usually provide the necessary dependencies:
+
+```bash
+xcode-select --install
+```
+
+If you encounter OpenSSL-related build errors, install additional dependencies via Homebrew:
+
+```bash
+brew install pkg-config openssl@3
+```
+
+#### Windows
+
+On Windows, Rust typically bundles OpenSSL statically, so no additional system packages are required. However, you'll need:
+
+- **Visual Studio Build Tools** or **Visual Studio Community** with C++ support
+- **Windows SDK**
+
+You can install these via the [Visual Studio Installer](https://visualstudio.microsoft.com/downloads/).
+
+#### Why These Dependencies?
+
+LLM Client uses several Rust crates that require native system libraries:
+
+- **pkg-config**: Helps the build system locate installed libraries and their configuration
+- **OpenSSL development libraries**: Required for HTTPS/TLS connections to AI providers
+- **Build tools**: C compiler and linker for compiling native dependencies
+
 ### Install Rust
 
 LLM Client is written in Rust, so you'll need the Rust toolchain installed:
@@ -196,6 +253,10 @@ cargo build --release --no-default-features
 Now that you have `lc` installed, proceed to the [Quick Start Guide](/getting-started/quick-start) to configure your first provider and start using the tool.
 
 ## Troubleshooting
+
+### System Dependencies Issues
+
+If you encounter build errors related to OpenSSL or pkg-config, ensure you have installed the system dependencies listed above. See the [Troubleshooting Guide](/troubleshooting) for detailed solutions.
 
 ### Rust Installation Issues
 

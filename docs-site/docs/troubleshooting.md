@@ -54,6 +54,98 @@ Common issues and their solutions when using LLM Client.
 
 3. Check for missing dependencies in error messages
 
+### OpenSSL & pkg-config Build Errors
+
+**Problem**: Build fails with OpenSSL-related errors
+
+**Common Error Messages**:
+- `Could not find directory of OpenSSL installation`
+- `failed to run custom build command for 'openssl-sys'`
+- `Could not find openssl via pkg-config`
+- `The pkg-config command could not be found`
+
+**Quick Solutions by Platform**:
+
+#### Linux (Ubuntu/Debian)
+```bash
+sudo apt update
+sudo apt install -y pkg-config libssl-dev build-essential
+```
+
+#### Linux (RHEL/CentOS)
+```bash
+# RHEL/CentOS
+sudo yum install -y pkgconfig openssl-devel gcc
+
+# Fedora
+sudo dnf install -y pkgconf-devel openssl-devel gcc
+```
+
+#### Linux (Alpine)
+```bash
+sudo apk add pkgconf openssl-dev build-base
+```
+
+#### macOS
+```bash
+# Install Xcode Command Line Tools first
+xcode-select --install
+
+# If still having issues, install via Homebrew
+brew install pkg-config openssl@3
+```
+
+#### Windows
+- Install Visual Studio Build Tools with C++ support
+- Rust usually bundles OpenSSL statically, so system packages aren't needed
+- If issues persist, try using `openssl-src` feature or static linking
+
+**Verification Steps**:
+
+1. Check if pkg-config can find OpenSSL:
+   ```bash
+   pkg-config --exists openssl && echo "OpenSSL found"
+   pkg-config --libs --cflags openssl
+   ```
+
+2. Test a simple Rust build with OpenSSL dependency:
+   ```bash
+   cargo new test_openssl
+   cd test_openssl
+   # Add openssl to Cargo.toml dependencies
+   echo 'openssl = "0.10"' >> Cargo.toml
+   cargo build
+   ```
+
+**Advanced Solutions**:
+
+1. **Manual OpenSSL path** (if installed in non-standard location):
+   ```bash
+   export OPENSSL_DIR=/usr/local/ssl
+   export PKG_CONFIG_PATH=/usr/local/ssl/lib/pkgconfig:$PKG_CONFIG_PATH
+   cargo build --release
+   ```
+
+2. **Use vendored OpenSSL** (if system OpenSSL is problematic):
+   ```bash
+   # Add to Cargo.toml
+   [dependencies.openssl]
+   version = "0.10"
+   features = ["vendored"]
+   ```
+
+3. **Cross-compilation issues**:
+   ```bash
+   # For cross-compilation, ensure target has required libraries
+   sudo apt install gcc-aarch64-linux-gnu
+   export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+   cargo build --target aarch64-unknown-linux-gnu --release
+   ```
+
+**References**:
+- [Rust OpenSSL crate documentation](https://docs.rs/openssl/latest/openssl/)
+- [openssl-sys build instructions](https://docs.rs/openssl-sys/latest/openssl_sys/)
+
 ## Provider Issues
 
 ### "No providers configured"
@@ -481,3 +573,5 @@ If you're still having issues:
 | "Rate limit exceeded" | Too many requests | Wait and retry |
 | "Invalid API key" | Wrong or expired key | Update API key |
 | "Context length exceeded" | Input too long | Use shorter input or larger model |
+| "Could not find OpenSSL" | Missing system dependencies | Install pkg-config and libssl-dev |
+| "pkg-config not found" | Missing build tool | Install pkg-config package |

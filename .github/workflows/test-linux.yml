@@ -15,6 +15,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev build-essential
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -30,6 +35,22 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+
+      - name: Cache system packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            /var/cache/apt
+            /var/lib/apt
+          key: ${{ runner.os }}-apt-${{ hashFiles('/etc/apt/sources.list') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
+      - name: Verify system dependencies
+        run: |
+          pkg-config --version
+          pkg-config --exists openssl && echo "OpenSSL found via pkg-config"
+          pkg-config --libs --cflags openssl
 
       - name: Check compilation (with all features)
         run: cargo check --all-features --verbose
