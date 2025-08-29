@@ -1,4 +1,5 @@
 #![deny(warnings)]
+#[cfg_attr(not(all(unix, feature = "unix-sockets")), allow(unused_imports))]
 
 // Import everything from the library crate
 extern crate lc;
