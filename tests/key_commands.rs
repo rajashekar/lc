@@ -7,6 +7,7 @@ mod common;
 
 use common::{assertions, create_config_with_providers, get_test_provider_name};
 use lc::config::Config;
+use serial_test::serial;
 use std::collections::HashMap;
 
 #[cfg(test)]
@@ -14,6 +15,7 @@ mod key_add_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_key_add_for_existing_provider() {
         let mut config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
@@ -26,6 +28,7 @@ mod key_add_tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_add_for_nonexistent_provider() {
         let mut config = create_config_with_providers();
 
@@ -37,6 +40,7 @@ mod key_add_tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_add_multiple_providers() {
         let mut config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
@@ -57,6 +61,7 @@ mod key_list_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_key_list_empty() {
         let config = Config {
             providers: HashMap::new(),
@@ -74,6 +79,7 @@ mod key_list_tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_list_with_keys() {
         let mut config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
@@ -92,6 +98,7 @@ mod key_list_tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_list_mixed_providers() {
         let mut config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
@@ -119,6 +126,7 @@ mod key_get_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_key_get_existing() {
         let mut config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
@@ -132,6 +140,7 @@ mod key_get_tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_get_nonexistent_provider() {
         let config = create_config_with_providers();
 
@@ -141,6 +150,7 @@ mod key_get_tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_get_provider_without_key() {
         let _config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
@@ -159,6 +169,7 @@ mod key_remove_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_key_remove_existing() {
         let mut config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
@@ -180,6 +191,7 @@ mod key_remove_tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_remove_nonexistent_provider() {
         let config = create_config_with_providers();
 
@@ -189,6 +201,7 @@ mod key_remove_tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_remove_already_empty() {
         let _config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");

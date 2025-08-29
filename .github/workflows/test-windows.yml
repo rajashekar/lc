@@ -31,11 +31,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Check compilation (without S3 to avoid AWS LC issues)
-        run: cargo check --no-default-features --features "pdf unix-sockets" --verbose
+      - name: Check compilation (without unix-sockets for Windows)
+        run: cargo check --no-default-features --features "pdf" --verbose
 
-      - name: Run tests (without S3 to avoid AWS LC issues)
-        run: cargo test --no-default-features --features "pdf unix-sockets" --verbose
+      - name: Run tests (without unix-sockets for Windows)
+        run: cargo test --no-default-features --features "pdf" --verbose
 
-      - name: Build release (without S3 to avoid AWS LC issues)
-        run: cargo build --release --no-default-features --features "pdf unix-sockets" --verbose
+      - name: Build release (without unix-sockets for Windows)
+        run: cargo build --release --no-default-features --features "pdf" --verbose

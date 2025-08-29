@@ -287,8 +287,10 @@ mod tests {
     use super::*;
     use std::env;
     use tempfile::TempDir;
+    use serial_test::serial;
     
     #[test]
+    #[serial]
     fn test_keys_config_save_load() {
         // Create a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
@@ -312,6 +314,7 @@ mod tests {
     }
     
     #[test]
+    #[serial]
     fn test_provider_auth_types() {
         let temp_dir = TempDir::new().unwrap();
         env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());

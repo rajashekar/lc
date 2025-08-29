@@ -9,6 +9,7 @@ use chrono::Utc;
 use common::{assertions, create_config_with_providers, test_data};
 use lc::test_utils::get_test_provider_name;
 use lc::config::Config;
+use serial_test::serial;
 use std::collections::HashMap;
 
 // Import test utilities
@@ -19,6 +20,7 @@ mod provider_add_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_provider_add_basic() {
         let mut config = Config {
             providers: HashMap::new(),
@@ -51,6 +53,7 @@ mod provider_add_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_add_with_custom_paths() {
         let mut config = Config {
             providers: HashMap::new(),
@@ -82,6 +85,7 @@ mod provider_add_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_add_multiple_providers() {
         let mut config = Config {
             providers: HashMap::new(),
@@ -111,6 +115,7 @@ mod provider_add_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_add_second_provider_doesnt_change_default() {
         let mut config = create_config_with_providers();
         let original_default = config.default_provider.clone();
@@ -133,6 +138,7 @@ mod provider_update_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_provider_update_existing() {
         let mut config = create_config_with_providers();
 
@@ -148,6 +154,7 @@ mod provider_update_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_update_preserves_provider_count() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -171,6 +178,7 @@ mod provider_remove_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_provider_remove_existing() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -184,6 +192,7 @@ mod provider_remove_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_remove_nonexistent() {
         let config = create_config_with_providers();
 
@@ -194,6 +203,7 @@ mod provider_remove_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_remove_all() {
         let mut config = create_config_with_providers();
         let provider_names: Vec<String> = config.providers.keys().cloned().collect();
@@ -213,6 +223,7 @@ mod provider_list_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_provider_list_empty() {
         let config = Config {
             providers: HashMap::new(),
@@ -230,6 +241,7 @@ mod provider_list_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_list_with_providers() {
         test_with_cleanup!({
             let config = create_config_with_providers();
@@ -243,6 +255,7 @@ mod provider_list_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_list_ordering() {
         let mut config = Config {
             providers: HashMap::new(),
@@ -288,6 +301,7 @@ mod provider_api_key_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_provider_api_key_management() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -306,6 +320,8 @@ mod provider_api_key_tests {
     }
 
     #[test]
+    #[serial]
+    #[serial]
     fn test_provider_api_key_update() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -326,6 +342,7 @@ mod provider_api_key_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_api_key_removal() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -353,6 +370,7 @@ mod provider_headers_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_provider_headers_management() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -391,6 +409,7 @@ mod provider_headers_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_multiple_headers() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -412,6 +431,7 @@ mod provider_headers_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_headers_isolation() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -452,6 +472,7 @@ mod provider_token_url_tests {
     use super::*;
 
     #[test]
+    #[serial]
     fn test_provider_token_url_management() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -479,6 +500,7 @@ mod provider_token_url_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_cached_token_management() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();
@@ -507,6 +529,7 @@ mod provider_token_url_tests {
     }
 
     #[test]
+    #[serial]
     fn test_provider_token_url_clears_cached_token() {
         test_with_cleanup!({
             let mut config = create_config_with_providers();

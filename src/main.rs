@@ -1,10 +1,9 @@
 #![deny(warnings)]
-#[allow(unused_imports)]
-#[cfg_attr(not(all(unix, feature = "unix-sockets")), allow(unused_imports))]
 
 // Import everything from the library crate
 extern crate lc;
 
+#[allow(unused_imports)]
 use lc::{
     // Core modules
     chat, 
