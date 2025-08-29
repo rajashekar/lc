@@ -1,14 +1,21 @@
+<div align="center">
+
 [![Documentation](https://img.shields.io/badge/docs-lc.viwq.dev-blue)](https://lc.viwq.dev)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.88%2B-orange)](https://www.rust-lang.org)
+[![CI](https://github.com/rajashekar/lc/workflows/Test%20Linux%20Build/badge.svg)](https://github.com/rajashekar/lc/actions)
+[![Crates.io](https://img.shields.io/crates/v/lc-cli.svg)](https://crates.io/crates/lc-cli)
+[![Downloads](https://img.shields.io/crates/d/lc-cli.svg)](https://crates.io/crates/lc-cli)
+[![GitHub release](https://img.shields.io/github/release/rajashekar/lc.svg)](https://github.com/rajashekar/lc/releases)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)](https://github.com/rajashekar/lc)
 
-<p align="center">
-<h1>LLM Client (lc)</h1>
+# LLM Client (lc)
+
 <img src="docs-site/static/img/social-card.png" alt="LLM Client" width="450" />
-</p>
 
+A fast, Rust-based command-line tool for interacting with Large Language Models.
 
-A fast, Rust-based command-line tool for interacting with Large Language Models. 
+</div>
 
 ## Quick Start
 

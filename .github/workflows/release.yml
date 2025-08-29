@@ -158,7 +158,7 @@ jobs:
           pkg-config --libs --cflags openssl
       
       - name: Build (native)
-        if: '!matrix.use_cross && matrix.os != "windows-2019"'
+        if: ${{ !matrix.use_cross && matrix.os != 'windows-2019' }}
         run: cargo build --release --target ${{ matrix.target }}
       
       - name: Build Windows (without S3 to avoid AWS LC issues)
