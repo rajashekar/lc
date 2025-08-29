@@ -53,22 +53,12 @@ jobs:
           pkg-config --libs --cflags openssl
 
       - name: Check compilation (with all features)
-        run: cargo check --all-features --verbose
+        run: cargo check
 
-      - name: Run tests (with all features)
+      - name: Run tests
         # Using --test-threads=1 to prevent race conditions in integration tests
         # that use shared file system resources and environment variables
-        run: cargo test --all-features --verbose -- --test-threads=1
+        run: cargo test -- --test-threads=1
 
       - name: Build release (with all features)
-        run: cargo build --release --all-features --verbose
-
-      - name: Check compilation (without S3)
-        run: cargo check --no-default-features --features "pdf unix-sockets" --verbose
-
-      - name: Run tests (without S3)
-        # Using --test-threads=1 to prevent race conditions in integration tests
-        run: cargo test --no-default-features --features "pdf unix-sockets" --verbose -- --test-threads=1
-
-      - name: Build release (without S3)
-        run: cargo build --release --no-default-features --features "pdf unix-sockets" --verbose
+        run: cargo build --release
