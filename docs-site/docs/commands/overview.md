@@ -27,6 +27,7 @@ lc [COMMAND] [SUBCOMMAND] [OPTIONS] [ARGS]
 | `lc keys` | `lc k` | Manage API keys |
 | `lc config` | `lc co` | Configure defaults |
 | `lc logs` | `lc l` | View and manage chat history |
+| `lc completions` | - | Generate shell completion scripts |
 
 ### Audio Commands
 
@@ -238,6 +239,24 @@ lc "Summarize this meeting" --audio meeting_recording.mp3
 lc c -m gpt-4 --audio interview.wav
 ```
 
+### Shell Completions Setup
+
+```bash
+# Setup completions for your shell
+lc completions zsh >> ~/.zshrc      # Zsh
+lc completions bash >> ~/.bashrc    # Bash  
+lc completions fish > ~/.config/fish/completions/lc.fish  # Fish
+
+# Or use eval for dynamic completions (recommended)
+echo 'eval "$(lc completions zsh)"' >> ~/.zshrc
+source ~/.zshrc
+
+# Now enjoy tab completion!
+lc -p <TAB>           # Shows your configured providers
+lc -m <TAB>           # Shows available models
+lc providers <TAB>    # Shows: add, remove, list, models
+```
+
 ## Getting Help
 
 Every command has built-in help:
@@ -261,8 +280,9 @@ Explore specific command documentation:
 
 - [Providers Commands](/commands/providers)
 - [Models Commands](/commands/models)
-- [MCP Commands](/commands/mcp)
 - [Chat Commands](/commands/chat)
+- [Shell Completions](/commands/completions)
+- [MCP Commands](/commands/mcp)
 - [Audio Commands](/commands/audio)
 - [Embedding Commands](/commands/embed)
 - [Vector Commands](/commands/vectors)
