@@ -99,7 +99,7 @@ mod chat_model_resolution_tests {
         let config = create_test_config_with_providers();
 
         // Test using defaults
-        let result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");
@@ -112,7 +112,7 @@ mod chat_model_resolution_tests {
 
         // Test with provider override
         let result =
-            lc::cli::resolve_model_and_provider(&config, Some("anthropic".to_string()), None);
+            lc::utils::resolve_model_and_provider(&config, Some("anthropic".to_string()), None);
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "anthropic");
@@ -120,14 +120,14 @@ mod chat_model_resolution_tests {
 
         // Test with model override
         let result =
-            lc::cli::resolve_model_and_provider(&config, None, Some("gpt-3.5-turbo".to_string()));
+            lc::utils::resolve_model_and_provider(&config, None, Some("gpt-3.5-turbo".to_string()));
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai"); // Uses default provider
         assert_eq!(model, "gpt-3.5-turbo");
 
         // Test with both overrides
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             Some("anthropic".to_string()),
             Some("claude-3-sonnet".to_string()),
@@ -143,7 +143,7 @@ mod chat_model_resolution_tests {
         let config = create_test_config_with_providers();
 
         // Test provider:model format
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             None,
             Some("anthropic:claude-3-sonnet".to_string()),
@@ -154,7 +154,7 @@ mod chat_model_resolution_tests {
         assert_eq!(model, "claude-3-sonnet");
 
         // Test with explicit provider override (should ignore provider in model string)
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             Some("openai".to_string()),
             Some("anthropic:claude-3-sonnet".to_string()),
@@ -170,13 +170,13 @@ mod chat_model_resolution_tests {
         let config = create_test_config_with_providers();
 
         // Test alias resolution
-        let result = lc::cli::resolve_model_and_provider(&config, None, Some("gpt4".to_string()));
+        let result = lc::utils::resolve_model_and_provider(&config, None, Some("gpt4".to_string()));
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");
         assert_eq!(model, "gpt-4");
 
-        let result = lc::cli::resolve_model_and_provider(&config, None, Some("claude".to_string()));
+        let result = lc::utils::resolve_model_and_provider(&config, None, Some("claude".to_string()));
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "anthropic");
@@ -189,11 +189,11 @@ mod chat_model_resolution_tests {
 
         // Test non-existent provider
         let result =
-            lc::cli::resolve_model_and_provider(&config, Some("nonexistent".to_string()), None);
+            lc::utils::resolve_model_and_provider(&config, Some("nonexistent".to_string()), None);
         assert!(result.is_err());
 
         // Test non-existent provider in model string
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             None,
             Some("nonexistent:model".to_string()),
@@ -205,7 +205,7 @@ mod chat_model_resolution_tests {
         config_no_defaults.default_provider = None;
         config_no_defaults.default_model = None;
 
-        let result = lc::cli::resolve_model_and_provider(&config_no_defaults, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config_no_defaults, None, None);
         assert!(result.is_err());
     }
 }
@@ -640,7 +640,7 @@ mod chat_attachment_handling_tests {
             file2_path.to_string_lossy().to_string(),
         ];
 
-        let result = lc::cli::read_and_format_attachments(&attachments);
+        let result = lc::utils::read_and_format_attachments(&attachments);
         assert!(result.is_ok());
 
         let formatted = result.unwrap();
@@ -659,7 +659,7 @@ mod chat_attachment_handling_tests {
 
         for ext in code_extensions {
             assert!(
-                lc::cli::is_code_file(ext),
+                lc::utils::is_code_file(ext),
                 "Extension '{}' should be detected as code",
                 ext
             );
@@ -669,7 +669,7 @@ mod chat_attachment_handling_tests {
 
         for ext in non_code_extensions {
             assert!(
-                !lc::cli::is_code_file(ext),
+                !lc::utils::is_code_file(ext),
                 "Extension '{}' should not be detected as code",
                 ext
             );
@@ -678,7 +678,7 @@ mod chat_attachment_handling_tests {
 
     #[test]
     fn test_empty_attachments() {
-        let result = lc::cli::read_and_format_attachments(&[]);
+        let result = lc::utils::read_and_format_attachments(&[]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "");
     }
@@ -686,7 +686,7 @@ mod chat_attachment_handling_tests {
     #[test]
     fn test_nonexistent_file_attachment() {
         let attachments = vec!["nonexistent_file.txt".to_string()];
-        let result = lc::cli::read_and_format_attachments(&attachments);
+        let result = lc::utils::read_and_format_attachments(&attachments);
         assert!(result.is_err());
     }
 }
@@ -783,12 +783,12 @@ mod chat_error_handling_tests {
         };
 
         // Test with no providers configured
-        let result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(result.is_err());
 
         // Test with invalid provider
         let result =
-            lc::cli::resolve_model_and_provider(&config, Some("invalid".to_string()), None);
+            lc::utils::resolve_model_and_provider(&config, Some("invalid".to_string()), None);
         assert!(result.is_err());
     }
 
@@ -839,7 +839,7 @@ mod chat_error_handling_tests {
             .insert("invalid_alias".to_string(), "just-a-model".to_string());
 
         let result =
-            lc::cli::resolve_model_and_provider(&config, None, Some("invalid_alias".to_string()));
+            lc::utils::resolve_model_and_provider(&config, None, Some("invalid_alias".to_string()));
         assert!(result.is_err());
     }
 
@@ -930,7 +930,7 @@ mod chat_integration_tests {
         let prompt = "Hello, how are you?";
 
         // Test model resolution
-        let result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");
@@ -1029,7 +1029,7 @@ mod chat_integration_tests {
         );
 
         // Test using alias for model resolution
-        let result = lc::cli::resolve_model_and_provider(&config, None, Some("gpt4".to_string()));
+        let result = lc::utils::resolve_model_and_provider(&config, None, Some("gpt4".to_string()));
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");
@@ -1059,7 +1059,7 @@ mod chat_integration_tests {
         let attachments = vec![file_path.to_string_lossy().to_string()];
 
         // Test attachment reading
-        let result = lc::cli::read_and_format_attachments(&attachments);
+        let result = lc::utils::read_and_format_attachments(&attachments);
         assert!(result.is_ok());
 
         let formatted = result.unwrap();
@@ -1132,7 +1132,7 @@ mod chat_integration_tests {
         };
 
         // Test error when no providers configured
-        let result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(result.is_err());
 
         // Add provider and test recovery
@@ -1166,7 +1166,7 @@ mod chat_integration_tests {
         config.default_model = Some("gpt-4".to_string());
 
         // Now it should work
-        let result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");

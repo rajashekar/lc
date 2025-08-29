@@ -382,7 +382,7 @@ async fn handle_kagi_models_request(
         Ok(kagi_models) => {
             let current_time = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or(std::time::Duration::from_secs(0))
                 .as_secs();
 
             let models: Vec<ModelInfo> = kagi_models
@@ -482,7 +482,7 @@ async fn handle_kagi_request(
     // Create OpenAI-compatible response
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or(std::time::Duration::from_secs(0))
         .as_secs();
 
     let openai_response = ChatCompletionResponse {

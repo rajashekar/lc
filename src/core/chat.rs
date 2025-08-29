@@ -361,7 +361,6 @@ async fn get_model_metadata(
     provider_name: &str,
     model_name: &str,
 ) -> Option<crate::model_metadata::ModelMetadata> {
-    use std::fs;
 
     let filename = format!("models/{}.json", provider_name);
 
@@ -369,7 +368,7 @@ async fn get_model_metadata(
         return None;
     }
 
-    match fs::read_to_string(&filename) {
+    match tokio::fs::read_to_string(&filename).await {
         Ok(json_content) => {
             match MetadataExtractor::extract_from_provider(provider_name, &json_content) {
                 Ok(models) => models.into_iter().find(|m| m.id == model_name),

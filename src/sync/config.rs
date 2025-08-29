@@ -187,6 +187,25 @@ pub async fn handle_sync_configure(
                 );
             }
         }
+        Some(ConfigureCommands::Provider { provider }) => {
+            println!("Setting cloud provider to: {}", provider);
+            // TODO: Implement provider configuration
+        }
+        Some(ConfigureCommands::S3 { bucket, region, endpoint }) => {
+            println!("Setting S3 bucket to: {}", bucket);
+            println!("Setting S3 region to: {}", region);
+            if let Some(endpoint_url) = endpoint {
+                println!("Setting S3 endpoint to: {}", endpoint_url);
+            }
+            // TODO: Implement S3 configuration
+        }
+        Some(ConfigureCommands::Gcs { bucket, key_file }) => {
+            println!("Setting GCS bucket to: {}", bucket);
+            if let Some(key_path) = key_file {
+                println!("Setting GCS key file to: {}", key_path);
+            }
+            // TODO: Implement GCS configuration
+        }
     }
 
     Ok(())

@@ -87,45 +87,156 @@ let gemini_config = ProviderConfig {
 };
 ```
 
-## Configuration File Format
+## Configuration Directory Structure
 
-Create a `config.toml` file with your provider settings:
+LC uses a per-provider configuration system with separate files for each provider:
+
+### Configuration Directory Locations
+
+- **macOS**: `~/Library/Application Support/lc/`
+- **Linux**: `~/.local/share/lc/`
+- **Windows**: `%LOCALAPPDATA%/lc/`
+
+### Directory Structure
+
+```
+lc/
+├── config.toml              # Main config (defaults, aliases, templates)
+├── keys.toml                # Centralized API keys and auth
+├── providers/               # Individual provider configurations
+│   ├── openai.toml
+│   ├── anthropic.toml
+│   └── gemini.toml
+└── logs.db                  # Chat history database
+```
+
+### Main Config File (`config.toml`)
 
 ```toml
 default_provider = "openai"
+default_model = "gpt-4"
 
-[providers.openai]
-api_key = "sk-your-openai-key"
-base_url = "https://api.openai.com/v1"
-model = "gpt-4"
+# Global defaults
 max_tokens = 2000
 temperature = 0.7
+stream = false
 
-[providers.anthropic]
-api_key = "your-anthropic-key"
-base_url = "https://api.anthropic.com"
-model = "claude-3-sonnet-20240229"
-max_tokens = 4000
-temperature = 0.3
+# Aliases for quick access
+[aliases]
+fast = "openai:gpt-3.5-turbo"
+smart = "anthropic:claude-3-sonnet-20240229"
 
-[providers.gemini]
-api_key = "your-gemini-key"
-base_url = "https://generativelanguage.googleapis.com/v1beta"
-model = "gemini-pro"
+# Templates for reusable prompts
+[templates]
+code_review = "Review this code for best practices and potential issues:"
+summarize = "Provide a concise summary of the following:"
 ```
 
-## Environment Variables
+### Provider Config Files (`providers/provider_name.toml`)
 
-You can also use environment variables for sensitive data:
+Each provider has its own configuration file:
+
+**`providers/openai.toml`**:
+```toml
+endpoint = "https://api.openai.com/v1"
+models_path = "/models"
+chat_path = "/chat/completions"
+images_path = "/images/generations"
+embeddings_path = "/embeddings"
+speech_path = "/audio/speech"
+models = ["gpt-4", "gpt-3.5-turbo"]
+```
+
+**`providers/anthropic.toml`**:
+```toml
+endpoint = "https://api.anthropic.com"
+models_path = "/v1/models"
+chat_path = "/v1/messages"
+models = ["claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
+```
+
+### API Keys (`keys.toml`)
+
+API keys are stored separately for security:
+
+```toml
+[api_keys]
+openai = "sk-your-openai-key"
+anthropic = "your-anthropic-key"
+gemini = "your-gemini-key"
+
+# Custom headers for authentication
+[custom_headers.some_provider]
+"X-API-Key" = "your-custom-key"
+"Authorization" = "Bearer your-token"
+```
+
+## Using Configuration in Library Code
+
+### Loading Configuration
 
 ```rust
-use std::env;
-use lc_cli::ProviderConfig;
+use lc_cli::Config;
 
-let openai_config = ProviderConfig {
-    api_key: env::var("OPENAI_API_KEY").ok(),
-    base_url: Some("https://api.openai.com/v1".to_string()),
-    model: Some("gpt-4".to_string()),
+// Load all configuration (main config + providers + keys)
+let config = Config::load()?;
+
+// Access configuration
+println!("Default provider: {:?}", config.default_provider);
+println!("Available providers: {:?}", config.providers.keys().collect::<Vec<_>>());
+
+// Check if a provider exists
+if config.has_provider("openai") {
+    println!("OpenAI is configured");
+}
+```
+
+### Working with Provider Configurations
+
+```rust
+use lc_cli::{Config, chat};
+
+// Get provider with authentication (combines provider config + API keys)
+let mut config = Config::load()?;
+let provider_config = config.get_provider_with_auth("openai")?;
+
+// Create authenticated client
+let client = chat::create_authenticated_client(&mut config, "openai").await?;
+```
+
+### Environment Variables
+
+You can override API keys using environment variables:
+
+```bash
+# These will be used instead of keys.toml
+export OPENAI_API_KEY="sk-your-key"
+export ANTHROPIC_API_KEY="your-key"
+export GEMINI_API_KEY="your-key"
+```
+
+### Programmatic Configuration
+
+For library usage, you can also create configurations programmatically:
+
+```rust
+use lc_cli::{Config, ProviderConfig};
+use std::collections::HashMap;
+
+// Create a minimal config programmatically
+let mut providers = HashMap::new();
+providers.insert("openai".to_string(), ProviderConfig {
+    endpoint: "https://api.openai.com/v1".to_string(),
+    api_key: Some(std::env::var("OPENAI_API_KEY")?),
+    models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
+    models_path: "/models".to_string(),
+    chat_path: "/chat/completions".to_string(),
+    ..Default::default()
+});
+
+let config = Config {
+    providers,
+    default_provider: Some("openai".to_string()),
     ..Default::default()
 };
 ```

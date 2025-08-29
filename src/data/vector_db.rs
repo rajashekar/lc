@@ -1,3 +1,4 @@
+use crate::debug_log;  // Import debug_log macro
 use anyhow::Result;
 use dashmap::DashMap;
 use hnsw_rs::prelude::*;
@@ -315,7 +316,7 @@ impl VectorDatabase {
                 if let Some(entry) = first_entry {
                     let stored_dimension = entry.vector.len();
                     if query_vector.len() != stored_dimension {
-                        crate::debug_log!("Dimension mismatch: query={}, stored={}, falling back to linear search",
+                        debug_log!("Dimension mismatch: query={}, stored={}, falling back to linear search",
                                         query_vector.len(), stored_dimension);
                         return self.find_similar_linear_optimized(query_vector, limit);
                     }
@@ -342,7 +343,7 @@ impl VectorDatabase {
 
             // If HNSW didn't return enough results, fall back to linear search
             if results.len() < limit && results.len() < self.vector_cache.len() {
-                crate::debug_log!(
+                debug_log!(
                     "HNSW returned only {} results, falling back to linear search",
                     results.len()
                 );
@@ -409,7 +410,7 @@ impl VectorDatabase {
 
     /// Rebuild the HNSW index from all vectors
     fn rebuild_index(&self) -> Result<()> {
-        crate::debug_log!("Rebuilding HNSW index...");
+        debug_log!("Rebuilding HNSW index...");
 
         // Load all vectors if cache is empty
         if self.vector_cache.is_empty() {
@@ -441,7 +442,7 @@ impl VectorDatabase {
             *self.hnsw_index.write() = Some(hnsw);
             *self.index_dirty.write() = false;
 
-            crate::debug_log!(
+            debug_log!(
                 "HNSW index rebuilt with {} vectors",
                 self.vector_cache.len()
             );
@@ -462,7 +463,7 @@ impl VectorDatabase {
 // Optimized cosine similarity calculation with manual vectorization
 pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     if a.len() != b.len() {
-        crate::debug_log!(
+        debug_log!(
             "Vector dimension mismatch: query={}, stored={}",
             a.len(),
             b.len()
@@ -593,7 +594,7 @@ impl FileProcessor {
         let mut files = Vec::new();
 
         for pattern in patterns {
-            crate::debug_log!("Processing file pattern: {}", pattern);
+            debug_log!("Processing file pattern: {}", pattern);
 
             match glob(pattern) {
                 Ok(paths) => {
@@ -601,12 +602,12 @@ impl FileProcessor {
                         match path_result {
                             Ok(path) => {
                                 if path.is_file() && Self::is_text_file(&path) {
-                                    crate::debug_log!("Adding text file: {}", path.display());
+                                    debug_log!("Adding text file: {}", path.display());
                                     files.push(path);
                                 } else if path.is_file() {
-                                    crate::debug_log!("Skipping non-text file: {}", path.display());
+                                    debug_log!("Skipping non-text file: {}", path.display());
                                 } else {
-                                    crate::debug_log!("Skipping non-file: {}", path.display());
+                                    debug_log!("Skipping non-file: {}", path.display());
                                 }
                             }
                             Err(e) => {
@@ -631,7 +632,7 @@ impl FileProcessor {
 
     /// Split text into chunks with overlap for better context preservation
     pub fn chunk_text(text: &str, chunk_size: usize, overlap: usize) -> Vec<String> {
-        crate::debug_log!(
+        debug_log!(
             "Chunking text: {} chars, chunk_size: {}, overlap: {}",
             text.len(),
             chunk_size,
@@ -639,7 +640,7 @@ impl FileProcessor {
         );
 
         if text.len() <= chunk_size {
-            crate::debug_log!("Text is smaller than chunk size, returning single chunk");
+            debug_log!("Text is smaller than chunk size, returning single chunk");
             return vec![text.to_string()];
         }
 
@@ -649,7 +650,7 @@ impl FileProcessor {
 
         while start < text.len() {
             iteration += 1;
-            crate::debug_log!(
+            debug_log!(
                 "Chunk iteration {}: start={}, text.len()={}",
                 iteration,
                 start,
@@ -674,12 +675,12 @@ impl FileProcessor {
             if !chunk.is_empty() {
                 let chunk_len = chunk.len();
                 chunks.push(chunk);
-                crate::debug_log!("Added chunk {}: {} chars", chunks.len(), chunk_len);
+                debug_log!("Added chunk {}: {} chars", chunks.len(), chunk_len);
             }
 
             // Move start position with overlap
             if chunk_end >= text.len() {
-                crate::debug_log!("Reached end of text, breaking");
+                debug_log!("Reached end of text, breaking");
                 break;
             }
 
@@ -693,7 +694,7 @@ impl FileProcessor {
             // move forward by at least 1 character to prevent infinite loops
             if new_start <= start {
                 start = start + 1;
-                crate::debug_log!(
+                debug_log!(
                     "Preventing infinite loop: moving start from {} to {}",
                     new_start,
                     start
@@ -702,18 +703,18 @@ impl FileProcessor {
                 start = new_start;
             }
 
-            crate::debug_log!("Next start position: {}", start);
+            debug_log!("Next start position: {}", start);
 
             // Safety check to prevent infinite loop
             if iteration > 1000 {
-                crate::debug_log!(
+                debug_log!(
                     "WARNING: Too many iterations, breaking to prevent infinite loop"
                 );
                 break;
             }
         }
 
-        crate::debug_log!("Chunking complete: {} chunks created", chunks.len());
+        debug_log!("Chunking complete: {} chunks created", chunks.len());
         chunks
     }
 
@@ -724,15 +725,15 @@ impl FileProcessor {
             handle.block_on(Self::process_file_async(path))
         } else {
             // Fallback to synchronous implementation for tests and non-async contexts
-            crate::debug_log!("Reading file synchronously: {}", path.display());
+            debug_log!("Reading file synchronously: {}", path.display());
             let content = std::fs::read_to_string(path)?;
-            crate::debug_log!("File content length: {} characters", content.len());
+            debug_log!("File content length: {} characters", content.len());
 
             // Use 1200 character chunks with 200 character overlap
-            crate::debug_log!("Starting text chunking with 1200 char chunks, 200 char overlap");
+            debug_log!("Starting text chunking with 1200 char chunks, 200 char overlap");
             let chunks = Self::chunk_text(&content, 1200, 200);
 
-            crate::debug_log!(
+            debug_log!(
                 "File '{}' split into {} chunks",
                 path.display(),
                 chunks.len()
@@ -744,16 +745,16 @@ impl FileProcessor {
 
     /// Async version of process_file with memory mapping optimization
     pub async fn process_file_async(path: &std::path::Path) -> Result<Vec<String>> {
-        crate::debug_log!("Reading file: {}", path.display());
+        debug_log!("Reading file: {}", path.display());
 
         let content = Self::read_file_optimized(path).await?;
-        crate::debug_log!("File content length: {} characters", content.len());
+        debug_log!("File content length: {} characters", content.len());
 
         // Use 1200 character chunks with 200 character overlap
-        crate::debug_log!("Starting text chunking with 1200 char chunks, 200 char overlap");
+        debug_log!("Starting text chunking with 1200 char chunks, 200 char overlap");
         let chunks = Self::chunk_text(&content, 1200, 200);
 
-        crate::debug_log!(
+        debug_log!(
             "File '{}' split into {} chunks",
             path.display(),
             chunks.len()
@@ -769,10 +770,11 @@ impl FileProcessor {
 
         // Use memory mapping for large files (>1MB)
         if file_size > 1_048_576 {
-            crate::debug_log!("Using memory mapping for large file: {} bytes", file_size);
+            debug_log!("Using memory mapping for large file: {} bytes", file_size);
 
-            let file = std::fs::File::open(path)?;
-            let mmap = unsafe { memmap2::Mmap::map(&file)? };
+            let file = tokio::fs::File::open(path).await?;
+            let std_file = file.into_std().await;
+            let mmap = unsafe { memmap2::Mmap::map(&std_file)? };
 
             // Convert bytes to string in a separate task to avoid blocking
             let content = tokio::task::spawn_blocking(move || {
@@ -785,7 +787,7 @@ impl FileProcessor {
             Ok(content)
         } else {
             // Use async file reading for smaller files
-            crate::debug_log!(
+            debug_log!(
                 "Using async file reading for small file: {} bytes",
                 file_size
             );

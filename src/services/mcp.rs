@@ -46,7 +46,7 @@ impl McpConfig {
         }
     }
 
-    pub fn load() -> Result<Self> {
+    pub async fn load() -> Result<Self> {
         let config_dir = crate::config::Config::config_dir()?;
         let mcp_config_path = config_dir.join("mcp.toml");
 
@@ -54,18 +54,18 @@ impl McpConfig {
             return Ok(Self::new());
         }
 
-        let content = std::fs::read_to_string(&mcp_config_path)?;
+        let content = tokio::fs::read_to_string(&mcp_config_path).await?;
         let config: McpConfig = toml::from_str(&content)?;
         Ok(config)
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub async fn save(&self) -> Result<()> {
         let config_dir = crate::config::Config::config_dir()?;
-        std::fs::create_dir_all(&config_dir)?;
+        tokio::fs::create_dir_all(&config_dir).await?;
 
         let mcp_config_path = config_dir.join("mcp.toml");
         let content = toml::to_string_pretty(self)?;
-        std::fs::write(&mcp_config_path, content)?;
+        tokio::fs::write(&mcp_config_path, content).await?;
         Ok(())
     }
 

@@ -316,7 +316,7 @@ mod similar_model_resolution_tests {
 
         // Test model resolution when no explicit model provided
         let result =
-            lc::cli::resolve_model_and_provider(&config, Some(db_provider), Some(db_model));
+            lc::utils::resolve_model_and_provider(&config, Some(db_provider), Some(db_model));
         assert!(result.is_ok());
 
         let (resolved_provider, resolved_model) = result.unwrap();
@@ -343,7 +343,7 @@ mod similar_model_resolution_tests {
         .unwrap();
 
         // Test explicit model override
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             Some("cohere".to_string()),
             Some("embed-english-v3.0".to_string()),
@@ -363,7 +363,7 @@ mod similar_model_resolution_tests {
         let config = create_test_config_for_similarity();
 
         // Test provider:model format
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             None,
             Some("cohere:embed-english-v3.0".to_string()),
@@ -571,11 +571,11 @@ mod similar_error_handling_tests {
         };
 
         // Test with empty config (no providers)
-        let result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(result.is_err());
 
         // Test with invalid provider
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             Some("invalid".to_string()),
             Some("model".to_string()),

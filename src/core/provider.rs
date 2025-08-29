@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-use super::template_processor::TemplateProcessor;
+use crate::template_processor::TemplateProcessor;
 
 #[derive(Debug, Serialize)]
 pub struct ChatRequest {
@@ -362,58 +362,31 @@ pub struct OpenAIClient {
 }
 
 impl OpenAIClient {
-    pub fn new_with_headers(
+    /// Creates a new OpenAI client with optional provider configuration
+    /// This is the unified factory method that consolidates HTTP client creation logic
+    pub fn create_http_client(
         base_url: String,
         api_key: String,
         models_path: String,
         chat_path: String,
         custom_headers: std::collections::HashMap<String, String>,
-    ) -> Self {
-        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+        provider_config: Option<crate::config::ProviderConfig>,
+    ) -> Result<Self> {
 
         // Create default headers including the required tracking headers
-        let mut default_headers = HeaderMap::new();
-        default_headers.insert(
-            HeaderName::from_static("http-referer"),
-            HeaderValue::from_static("https://lc.viwq.dev/"),
-        );
-        default_headers.insert(
-            HeaderName::from_static("x-title"),
-            HeaderValue::from_static("lc"),
-        );
+        let default_headers = Self::create_default_headers();
 
         // Create optimized HTTP client with connection pooling and keep-alive settings
-        // This client keeps compression enabled for regular requests
-        let mut client_builder = Client::builder()
-            .pool_max_idle_per_host(10) // Keep up to 10 idle connections per host
-            .pool_idle_timeout(Duration::from_secs(90)) // Keep connections alive for 90 seconds
-            .tcp_keepalive(Duration::from_secs(60)) // TCP keep-alive every 60 seconds
-            .timeout(Duration::from_secs(60)) // Total request timeout
-            .connect_timeout(Duration::from_secs(10)) // Connection establishment timeout
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .default_headers(default_headers.clone());
-        
-        // Disable certificate verification for development/debugging (e.g., with Proxyman)
-        if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
-            client_builder = client_builder.danger_accept_invalid_certs(true);
-        }
-        
-        let client = client_builder
-            .build()
-            .expect("Failed to create optimized HTTP client");
+        let client = Self::build_http_client(default_headers.clone(), Duration::from_secs(60))?;
 
-        // Create a separate streaming-optimized client
-        let streaming_client = Client::builder()
-            .timeout(Duration::from_secs(300)) // Longer timeout for streaming
-            .default_headers(default_headers)
-            .build()
-            .expect("Failed to create streaming-optimized HTTP client");
+        // Create a separate streaming-optimized client with longer timeout
+        let streaming_client = Self::build_http_client(default_headers, Duration::from_secs(300))?;
 
-        Self {
+        // Create template processor if provider config has templates
+        let template_processor = provider_config.as_ref()
+            .and_then(|config| Self::create_template_processor(config));
+
+        Ok(Self {
             client,
             streaming_client,
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -421,11 +394,30 @@ impl OpenAIClient {
             models_path,
             chat_path,
             custom_headers,
-            provider_config: None,
-            template_processor: None,
-        }
+            provider_config,
+            template_processor,
+        })
     }
 
+    /// Legacy method for backward compatibility - delegates to create_http_client
+    pub fn new_with_headers(
+        base_url: String,
+        api_key: String,
+        models_path: String,
+        chat_path: String,
+        custom_headers: std::collections::HashMap<String, String>,
+    ) -> Self {
+        Self::create_http_client(
+            base_url,
+            api_key,
+            models_path,
+            chat_path,
+            custom_headers,
+            None,
+        ).expect("Failed to create OpenAI client")
+    }
+
+    /// Legacy method for backward compatibility - delegates to create_http_client
     pub fn new_with_provider_config(
         base_url: String,
         api_key: String,
@@ -434,63 +426,71 @@ impl OpenAIClient {
         custom_headers: std::collections::HashMap<String, String>,
         provider_config: crate::config::ProviderConfig,
     ) -> Self {
-        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+        Self::create_http_client(
+            base_url,
+            api_key,
+            models_path,
+            chat_path,
+            custom_headers,
+            Some(provider_config),
+        ).expect("Failed to create OpenAI client with provider config")
+    }
 
-        // Create default headers including the required tracking headers
-        let mut default_headers = HeaderMap::new();
-        default_headers.insert(
+    /// Creates the default headers for all HTTP clients
+    fn create_default_headers() -> reqwest::header::HeaderMap {
+        use reqwest::header::{HeaderName, HeaderValue};
+        
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
             HeaderName::from_static("http-referer"),
             HeaderValue::from_static("https://lc.viwq.dev/"),
         );
-        default_headers.insert(
+        headers.insert(
             HeaderName::from_static("x-title"),
             HeaderValue::from_static("lc"),
         );
+        headers
+    }
 
-        // Create optimized HTTP client with connection pooling and keep-alive settings
-        // This client keeps compression enabled for regular requests
-        let mut client_builder = Client::builder()
+    /// Builds an HTTP client with the specified configuration
+    fn build_http_client(
+        default_headers: reqwest::header::HeaderMap,
+        timeout: Duration,
+    ) -> Result<Client> {
+        let mut builder = Client::builder()
             .pool_max_idle_per_host(10) // Keep up to 10 idle connections per host
             .pool_idle_timeout(Duration::from_secs(90)) // Keep connections alive for 90 seconds
             .tcp_keepalive(Duration::from_secs(60)) // TCP keep-alive every 60 seconds
-            .timeout(Duration::from_secs(60)) // Total request timeout
+            .timeout(timeout)
             .connect_timeout(Duration::from_secs(10)) // Connection establishment timeout
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .default_headers(default_headers.clone());
+            .default_headers(default_headers);
 
         // Disable certificate verification for development/debugging (e.g., with Proxyman)
         if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
-            client_builder = client_builder.danger_accept_invalid_certs(true);
+            builder = builder.danger_accept_invalid_certs(true);
         }
-        
-        let client = client_builder
-            .build()
-            .expect("Failed to create optimized HTTP client");
 
-        // Create a separate streaming-optimized client
-        let mut streaming_client_builder = Client::builder()
-            .timeout(Duration::from_secs(300)) // Longer timeout for streaming
-            .default_headers(default_headers);
-        
-        // Also disable certificate verification for streaming client
-        if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
-            streaming_client_builder = streaming_client_builder.danger_accept_invalid_certs(true);
-        }
-        
-        let streaming_client = streaming_client_builder
+        builder
             .build()
-            .expect("Failed to create streaming-optimized HTTP client");
+            .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {}", e))
+    }
 
-        // Create template processor if any endpoint templates are configured
-        let template_processor = if provider_config.chat_templates.is_some()
-            || provider_config.images_templates.is_some()
-            || provider_config.embeddings_templates.is_some()
-            || provider_config.models_templates.is_some()
-            || provider_config.speech_templates.is_some() {
+    /// Creates a template processor if any templates are configured
+    fn create_template_processor(
+        config: &crate::config::ProviderConfig,
+    ) -> Option<TemplateProcessor> {
+        let has_templates = config.chat_templates.is_some()
+            || config.images_templates.is_some()
+            || config.embeddings_templates.is_some()
+            || config.models_templates.is_some()
+            || config.speech_templates.is_some();
+
+        if has_templates {
             match TemplateProcessor::new() {
                 Ok(processor) => Some(processor),
                 Err(e) => {
@@ -500,18 +500,6 @@ impl OpenAIClient {
             }
         } else {
             None
-        };
-
-        Self {
-            client,
-            streaming_client,
-            base_url: base_url.trim_end_matches('/').to_string(),
-            api_key,
-            models_path,
-            chat_path,
-            custom_headers,
-            provider_config: Some(provider_config),
-            template_processor,
         }
     }
 
@@ -532,6 +520,60 @@ impl OpenAIClient {
                 format!("{}{}", self.base_url, self.chat_path)
             }
         }
+    }
+
+    /// Helper method to build URLs with optional model replacement
+    fn build_url(&self, endpoint_type: &str, model: &str, default_path: &str) -> String {
+        match endpoint_type {
+            "models" => format!("{}{}", self.base_url, self.models_path),
+            "embeddings" => {
+                if let Some(ref config) = self.provider_config {
+                    config.get_embeddings_url(model)
+                } else {
+                    format!("{}/embeddings", self.base_url)
+                }
+            }
+            "images" => {
+                if let Some(ref config) = self.provider_config {
+                    config.get_images_url(model)
+                } else {
+                    format!("{}/images/generations", self.base_url)
+                }
+            }
+            "audio_transcriptions" => {
+                if let Some(ref config) = self.provider_config {
+                    format!("{}{}", self.base_url, config.audio_path.as_deref().unwrap_or("/audio/transcriptions"))
+                } else {
+                    format!("{}/audio/transcriptions", self.base_url)
+                }
+            }
+            "audio_speech" => {
+                if let Some(ref config) = self.provider_config {
+                    config.get_speech_url(model)
+                } else {
+                    format!("{}/audio/speech", self.base_url)
+                }
+            }
+            _ => {
+                // Generic endpoint building
+                format!("{}{}", self.base_url, default_path)
+            }
+        }
+    }
+
+    /// Helper method to add standard headers to a request builder
+    fn add_standard_headers(&self, mut req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        // Add Authorization header only if no custom headers are present
+        if self.custom_headers.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
+
+        // Add custom headers
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+
+        req
     }
 
 
@@ -709,15 +751,8 @@ impl OpenAIClient {
             .get(&url)
             .header("Content-Type", "application/json");
 
-        // Add Authorization header only if no custom headers are present
-        if self.custom_headers.is_empty() {
-            req = req.header("Authorization", format!("Bearer {}", self.api_key));
-        }
-
-        // Add custom headers
-        for (name, value) in &self.custom_headers {
-            req = req.header(name, value);
-        }
+        // Add standard headers using helper method
+        req = self.add_standard_headers(req);
 
         let response = req.send().await?;
 
@@ -832,7 +867,7 @@ impl OpenAIClient {
             .header("Authorization", format!("token {}", self.api_key))
             .header("Content-Type", "application/json");
 
-        // Add custom headers
+        // Add custom headers only (this method uses token auth instead of Bearer)
         for (name, value) in &self.custom_headers {
             req = req.header(name, value);
         }
@@ -850,27 +885,16 @@ impl OpenAIClient {
     }
 
     pub async fn embeddings(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse> {
-        // Use provider config's get_embeddings_url method to handle model replacement
-        let url = if let Some(ref config) = self.provider_config {
-            config.get_embeddings_url(&request.model)
-        } else {
-            format!("{}/embeddings", self.base_url)
-        };
+        // Use helper method to build URL
+        let url = self.build_url("embeddings", &request.model, "/embeddings");
 
         let mut req = self
             .client
             .post(&url)
             .header("Content-Type", "application/json");
 
-        // Add Authorization header only if no custom headers are present
-        if self.custom_headers.is_empty() {
-            req = req.header("Authorization", format!("Bearer {}", self.api_key));
-        }
-
-        // Add custom headers
-        for (name, value) in &self.custom_headers {
-            req = req.header(name, value);
-        }
+        // Add standard headers using helper method
+        req = self.add_standard_headers(req);
 
         // Check if we have a template for this provider/model/endpoint
         let request_body = if let Some(ref config) = &self.provider_config {
@@ -956,28 +980,17 @@ impl OpenAIClient {
         &self,
         request: &ImageGenerationRequest,
     ) -> Result<ImageGenerationResponse> {
-        // Use provider config's get_images_url method to handle model replacement
-        let url = if let Some(ref config) = self.provider_config {
-            let model_name = request.model.as_deref().unwrap_or("");
-            config.get_images_url(model_name)
-        } else {
-            format!("{}/images/generations", self.base_url)
-        };
+        // Use helper method to build URL
+        let model_name = request.model.as_deref().unwrap_or("");
+        let url = self.build_url("images", model_name, "/images/generations");
 
         let mut req = self
             .client
             .post(&url)
             .header("Content-Type", "application/json");
 
-        // Add Authorization header only if no custom headers are present
-        if self.custom_headers.is_empty() {
-            req = req.header("Authorization", format!("Bearer {}", self.api_key));
-        }
-
-        // Add custom headers
-        for (name, value) in &self.custom_headers {
-            req = req.header(name, value);
-        }
+        // Add standard headers using helper method
+        req = self.add_standard_headers(req);
 
         // Check if we have a template for this provider/model/endpoint
         let request_body = if let Some(ref config) = &self.provider_config {
@@ -1066,12 +1079,8 @@ pub async fn transcribe_audio(
     ) -> Result<AudioTranscriptionResponse> {
         use reqwest::multipart;
         
-        // Use provider config's audio path if available, otherwise default
-        let url = if let Some(ref config) = self.provider_config {
-            format!("{}{}", self.base_url, config.audio_path.as_deref().unwrap_or("/audio/transcriptions"))
-        } else {
-            format!("{}/audio/transcriptions", self.base_url)
-        };
+        // Use helper method to build URL
+        let url = self.build_url("audio_transcriptions", &request.model, "/audio/transcriptions");
 
         // Decode base64 audio data
         use base64::Engine;
@@ -1130,15 +1139,8 @@ pub async fn transcribe_audio(
             .client
             .post(&url);
 
-        // Add Authorization header only if no custom headers are present
-        if self.custom_headers.is_empty() {
-            req = req.header("Authorization", format!("Bearer {}", self.api_key));
-        }
-
-        // Add custom headers
-        for (name, value) in &self.custom_headers {
-            req = req.header(name, value);
-        }
+        // Add standard headers using helper method
+        req = self.add_standard_headers(req);
 
         // Send multipart form request
         let response = req.multipart(form).send().await?;
@@ -1205,27 +1207,16 @@ pub async fn transcribe_audio(
         &self,
         request: &AudioSpeechRequest,
     ) -> Result<Vec<u8>> {
-        // Use provider config's get_speech_url method to handle model replacement
-        let url = if let Some(ref config) = self.provider_config {
-            config.get_speech_url(&request.model)
-        } else {
-            format!("{}/audio/speech", self.base_url)
-        };
+        // Use helper method to build URL
+        let url = self.build_url("audio_speech", &request.model, "/audio/speech");
 
         let mut req = self
             .client
             .post(&url)
             .header("Content-Type", "application/json");
 
-        // Add Authorization header only if no custom headers are present
-        if self.custom_headers.is_empty() {
-            req = req.header("Authorization", format!("Bearer {}", self.api_key));
-        }
-
-        // Add custom headers
-        for (name, value) in &self.custom_headers {
-            req = req.header(name, value);
-        }
+        // Add standard headers using helper method
+        req = self.add_standard_headers(req);
 
         // Check if we have a template for this provider/model/endpoint
         let request_body = if let Some(ref config) = &self.provider_config {
@@ -1340,15 +1331,8 @@ pub async fn transcribe_audio(
         let stdout = stdout();
         let mut handle = std::io::BufWriter::new(stdout.lock());
 
-        // Add Authorization header only if no custom headers are present
-        if self.custom_headers.is_empty() {
-            req = req.header("Authorization", format!("Bearer {}", self.api_key));
-        }
-
-        // Add custom headers
-        for (name, value) in &self.custom_headers {
-            req = req.header(name, value);
-        }
+        // Add standard headers using helper method
+        req = self.add_standard_headers(req);
  
         // Build request body using template if available (same logic as non-streaming chat)
         let request_body = if let Some(ref config) = &self.provider_config {

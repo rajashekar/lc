@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use super::template_processor::TemplateConfig;
+use crate::template_processor::TemplateConfig;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -648,8 +648,10 @@ impl Config {
     /// Check if any providers have embedded API keys (for migration detection)
     pub fn has_providers_with_keys(&self) -> bool {
         for (_name, provider_config) in &self.providers {
-            if provider_config.api_key.is_some() && !provider_config.api_key.as_ref().unwrap().is_empty() {
-                return true;
+            if let Some(api_key) = &provider_config.api_key {
+                if !api_key.is_empty() {
+                    return true;
+                }
             }
         }
         false
@@ -885,7 +887,8 @@ impl Config {
             static TEST_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
             
             // Get or create the test directory
-            let mut test_dir_guard = TEST_DIR.lock().unwrap();
+            let mut test_dir_guard = TEST_DIR.lock()
+                .map_err(|_| anyhow::anyhow!("Failed to acquire test directory lock"))?;
             if test_dir_guard.is_none() {
                 // Create a unique temp directory for this test run
                 let temp_dir = std::env::temp_dir()
@@ -912,7 +915,9 @@ impl Config {
                         static ref CLEANUP: Mutex<Option<TestDirCleanup>> = Mutex::new(None);
                     }
                     
-                    *CLEANUP.lock().unwrap() = Some(TestDirCleanup(cleanup_dir));
+                    if let Ok(mut cleanup) = CLEANUP.lock() {
+                        *cleanup = Some(TestDirCleanup(cleanup_dir));
+                    }
                 });
                 
                 *test_dir_guard = Some(temp_dir);
@@ -944,7 +949,8 @@ impl Config {
                             static ref TEST_TEMP_DIR: Mutex<Option<TempDir>> = Mutex::new(None);
                         }
                         
-                        let mut temp_dir_guard = TEST_TEMP_DIR.lock().unwrap();
+                        let mut temp_dir_guard = TEST_TEMP_DIR.lock()
+                            .map_err(|_| anyhow::anyhow!("Failed to acquire temp directory lock"))?;
                         if temp_dir_guard.is_none() {
                             // Create a new temp directory that will be automatically cleaned up
                             let temp_dir = TempDir::with_prefix("lc_test_")

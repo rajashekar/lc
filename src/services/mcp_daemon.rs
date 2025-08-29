@@ -150,7 +150,7 @@ impl McpDaemon {
     pub async fn start(&mut self) -> Result<()> {
         // Remove existing socket if it exists
         if self.socket_path.exists() {
-            std::fs::remove_file(&self.socket_path)?;
+            tokio::fs::remove_file(&self.socket_path).await?;
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
@@ -290,7 +290,7 @@ impl McpDaemon {
         );
 
         // Load configuration and connect to server
-        let config = McpConfig::load()?;
+        let config = McpConfig::load().await?;
         if let Some(server_config) = config.get_server(server_name) {
             crate::debug_log!(
                 "DAEMON: Found server config for '{}': {:?} ({})",

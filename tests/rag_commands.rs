@@ -328,14 +328,14 @@ mod rag_model_consistency_tests {
         );
 
         // Test chat model resolution
-        let chat_result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let chat_result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(chat_result.is_ok());
         let (chat_provider, chat_model) = chat_result.unwrap();
         assert_eq!(chat_provider, "venice");
         assert_eq!(chat_model, "llama-3.3-70b");
 
         // Test embedding model resolution (different provider)
-        let embed_result = lc::cli::resolve_model_and_provider(
+        let embed_result = lc::utils::resolve_model_and_provider(
             &config,
             Some("openai".to_string()),
             Some("text-embedding-3-small".to_string()),

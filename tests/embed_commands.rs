@@ -221,7 +221,7 @@ mod embed_model_resolution_tests {
         let config = create_test_config_with_embedding_providers();
 
         // Test using defaults
-        let result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");
@@ -233,7 +233,7 @@ mod embed_model_resolution_tests {
         let config = create_test_config_with_embedding_providers();
 
         // Test provider:model format
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             None,
             Some("cohere:embed-english-v3.0".to_string()),
@@ -249,14 +249,14 @@ mod embed_model_resolution_tests {
         let config = create_test_config_with_embedding_providers();
 
         // Test alias resolution
-        let result = lc::cli::resolve_model_and_provider(&config, None, Some("large".to_string()));
+        let result = lc::utils::resolve_model_and_provider(&config, None, Some("large".to_string()));
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");
         assert_eq!(model, "text-embedding-3-large");
 
         let result =
-            lc::cli::resolve_model_and_provider(&config, None, Some("cohere-en".to_string()));
+            lc::utils::resolve_model_and_provider(&config, None, Some("cohere-en".to_string()));
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "cohere");
@@ -268,7 +268,7 @@ mod embed_model_resolution_tests {
         let config = create_test_config_with_embedding_providers();
 
         // Test with explicit provider override
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             Some("cohere".to_string()),
             Some("embed-multilingual-v3.0".to_string()),
@@ -380,7 +380,7 @@ mod embed_error_handling_tests {
         };
 
         // Test with non-existent provider
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             Some("nonexistent".to_string()),
             Some("some-model".to_string()),
@@ -481,7 +481,7 @@ mod embed_error_handling_tests {
             .insert("invalid_alias".to_string(), "just-a-model".to_string());
 
         let result =
-            lc::cli::resolve_model_and_provider(&config, None, Some("invalid_alias".to_string()));
+            lc::utils::resolve_model_and_provider(&config, None, Some("invalid_alias".to_string()));
         assert!(result.is_err());
     }
 }
@@ -507,7 +507,7 @@ mod embed_integration_tests {
         let text = "Machine learning is a subset of artificial intelligence";
 
         // Test model resolution
-        let result = lc::cli::resolve_model_and_provider(&config, None, None);
+        let result = lc::utils::resolve_model_and_provider(&config, None, None);
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");
@@ -605,7 +605,7 @@ mod embed_integration_tests {
         );
 
         // Test OpenAI
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             Some("openai".to_string()),
             Some("text-embedding-3-small".to_string()),
@@ -616,7 +616,7 @@ mod embed_integration_tests {
         assert_eq!(model, "text-embedding-3-small");
 
         // Test Cohere
-        let result = lc::cli::resolve_model_and_provider(
+        let result = lc::utils::resolve_model_and_provider(
             &config,
             Some("cohere".to_string()),
             Some("embed-english-v3.0".to_string()),

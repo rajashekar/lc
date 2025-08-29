@@ -1,37 +1,29 @@
-mod audio_utils;
-mod chat;
-mod cli;
-mod completion;
-mod config;
-mod database;
-mod dump_metadata;
-mod error;
-mod http_client;
-mod image_utils;
-mod input;
-mod keys;
-mod mcp;
-// MCP daemon module - Unix implementation with Windows stubs
-mod mcp_daemon;
-mod model_metadata;
-mod models_cache;
-mod provider;
-mod provider_installer;
-mod proxy;
-mod readers;
-mod search;
-mod sync;
-mod template_processor;
-mod token_utils;
-mod unified_cache;
-mod usage_stats;
-mod vector_db;
-mod webchatproxy;
+#![deny(warnings)]
+
+// Import everything from the library crate
+extern crate lc;
+
+use lc::{
+    // Core modules
+    chat, 
+    
+    // Data modules
+    config,
+    database::{ChatEntry, Database},
+    
+    // Models modules
+    model_metadata,
+    
+    // Services modules
+    mcp_daemon,
+    
+    // CLI module
+    cli,
+};
 
 use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Commands};
-use database::{ChatEntry, Database};
 
 #[derive(Debug, Clone)]
 struct ChatMessage {
@@ -194,13 +186,13 @@ async fn main() -> Result<()> {
             }
         }
         (true, Some(Commands::Providers { command })) => {
-            cli::handle_provider_command(command).await?;
+            cli::providers::handle(command).await?;
         }
         (true, Some(Commands::Keys { command })) => {
-            cli::handle_key_command(command).await?;
+            cli::keys::handle(command).await?;
         }
         (true, Some(Commands::Logs { command })) => {
-            cli::handle_log_command(command).await?;
+            cli::logging::handle(command).await?;
         }
         (
             true,
@@ -212,10 +204,10 @@ async fn main() -> Result<()> {
                 limit,
             }),
         ) => {
-            cli::handle_usage_command(command, days, tokens_only, requests_only, limit).await?;
+            cli::usage::handle(command, days.map(|d| d as u64), tokens_only, requests_only, Some(limit)).await?;
         }
         (true, Some(Commands::Config { command })) => {
-            cli::handle_config_command(command).await?;
+            cli::config::handle(command).await?;
         }
         (
             true,
@@ -233,14 +225,14 @@ async fn main() -> Result<()> {
             let effective_provider = provider.or_else(|| cli.provider.clone());
             let effective_model = model.or_else(|| cli.model.clone());
 
-            cli::handle_chat_command(
+            cli::chat::handle(
                 effective_model,
                 effective_provider,
                 cid,
                 tools,
                 database,
                 debug,
-                images,
+                !images.is_empty(), // Convert Vec<String> to bool
                 cli.stream,
             )
             .await?;
@@ -286,23 +278,23 @@ async fn main() -> Result<()> {
                 Some(tags.join(","))
             };
 
-            cli::handle_models_command(
+            cli::models::handle(
                 command,
                 query,
                 tags_string,
-                context_length,
-                input_length,
-                output_length,
+                context_length.map(|s| s.parse().unwrap_or(0)),
+                input_length.map(|s| s.parse().unwrap_or(0)),
+                output_length.map(|s| s.parse().unwrap_or(0)),
                 input_price,
                 output_price,
             )
             .await?;
         }
         (true, Some(Commands::Alias { command })) => {
-            cli::handle_alias_command(command).await?;
+            cli::aliases::handle(command).await?;
         }
         (true, Some(Commands::Templates { command })) => {
-            cli::handle_template_command(command).await?;
+            cli::templates::handle(command).await?;
         }
         (
             true,
@@ -315,10 +307,10 @@ async fn main() -> Result<()> {
                 generate_key,
             }),
         ) => {
-            cli::handle_proxy_command(port, host, provider, model, api_key, generate_key).await?;
+            cli::proxy::handle(Some(port), Some(host), provider, model, api_key, generate_key).await?;
         }
         (true, Some(Commands::Mcp { command })) => {
-            cli::handle_mcp_command(command).await?;
+            cli::mcp::handle(command).await?;
         }
         (
             true,
@@ -331,7 +323,7 @@ async fn main() -> Result<()> {
                 debug,
             }),
         ) => {
-            cli::handle_embed_command(model, provider, database, files, text, debug).await?;
+            cli::vectors::handle_embed(Some(model), provider, database, files, text, debug).await?;
         }
         (
             true,
@@ -343,19 +335,19 @@ async fn main() -> Result<()> {
                 query,
             }),
         ) => {
-            cli::handle_similar_command(model, provider, database, limit, query).await?;
+            cli::vectors::handle_similar(model, provider, Some(database), Some(limit), query).await?;
         }
         (true, Some(Commands::Vectors { command })) => {
-            cli::handle_vectors_command(command).await?;
+            cli::vectors::handle(command).await?;
         }
         (true, Some(Commands::WebChatProxy { command })) => {
-            cli::handle_webchatproxy_command(command).await?;
+            cli::webchatproxy::handle(command).await?;
         }
         (true, Some(Commands::Sync { command })) => {
-            cli::handle_sync_command(command).await?;
+            cli::sync::handle(command).await?;
         }
         (true, Some(Commands::Search { command })) => {
-            cli::handle_search_command(command).await?;
+            cli::search::handle(command).await?;
         }
         (
             true,
@@ -369,7 +361,7 @@ async fn main() -> Result<()> {
                 debug,
             }),
         ) => {
-            cli::handle_image_command(prompt, model, provider, size, count, output, debug).await?;
+            cli::image::handle(vec![prompt], model, provider, Some(size), Some(count), output, debug).await?;
         }
         (
             true,
@@ -385,13 +377,13 @@ async fn main() -> Result<()> {
                 debug,
             }),
         ) => {
-            cli::handle_transcribe_command(
+            cli::audio::handle_transcribe(
                 audio_files,
                 model,
                 provider,
                 language,
                 prompt,
-                format,
+                Some(format),
                 temperature,
                 output,
                 debug,
@@ -411,14 +403,14 @@ async fn main() -> Result<()> {
                 debug,
             }),
         ) => {
-            cli::handle_tts_command(text, model, provider, voice, format, speed, output, debug)
+            cli::audio::handle_tts(text, model, provider, Some(voice), Some(format), speed, Some(output), debug)
                 .await?;
         }
         (true, Some(Commands::DumpMetadata { provider, list })) => {
-            cli::handle_dump_metadata_command(provider, list).await?;
+            cli::utils::handle_dump_metadata(provider, list).await?;
         }
         (true, Some(Commands::Completions { shell })) => {
-            cli::handle_completions_command(shell).await?;
+            cli::completion::handle(shell).await?;
         }
         (true, None) => {
             // No subcommand or prompt provided, check if input is piped
@@ -588,7 +580,7 @@ async fn handle_prompt_with_optional_piped_input_continue(
         .await
     } else {
         // Use existing piped input handler
-        cli::handle_direct_prompt_with_piped_input(
+        cli::prompts::handle_with_piped_input(
             piped_content,
             provider,
             model,
@@ -667,7 +659,7 @@ async fn handle_direct_prompt_with_session(
             // If model contains provider prefix, extract it
             if let Some(ref m) = final_model {
                 if m.contains(':') {
-                    Some(m.split(':').next().unwrap().to_string())
+                    m.split(':').next().map(|s| s.to_string())
                 } else {
                     None
                 }
@@ -705,7 +697,7 @@ async fn handle_direct_prompt_with_session(
         .await
     } else {
         // Use regular prompt handling
-        cli::handle_direct_prompt(
+        cli::prompts::handle_direct(
             prompt,
             provider,
             model,

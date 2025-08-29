@@ -38,7 +38,9 @@ impl ModelsCache {
         if self.cached_json.is_none() {
             self.cached_json = Some(serde_json::to_string_pretty(self)?);
         }
-        Ok(self.cached_json.as_ref().unwrap())
+        Ok(self.cached_json.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Failed to get cached JSON - internal error"))?
+            .as_str())
     }
 
     pub fn load() -> Result<Self> {
@@ -97,9 +99,12 @@ impl ModelsCache {
 
             print!("Fetching models from {}... ", provider_name);
 
+            let api_key = provider_config.api_key.clone()
+                .ok_or_else(|| anyhow::anyhow!("API key is required but not found for provider {}", provider_name))?;
+            
             let client = OpenAIClient::new_with_headers(
                 provider_config.endpoint.clone(),
-                provider_config.api_key.clone().unwrap(),
+                api_key,
                 provider_config.models_path.clone(),
                 provider_config.chat_path.clone(),
                 provider_config.headers.clone(),

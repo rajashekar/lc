@@ -108,7 +108,8 @@ impl ProviderInstaller {
         
         // Handle local file paths
         if registry_url.starts_with("file://") {
-            let path = registry_url.strip_prefix("file://").unwrap();
+            let path = registry_url.strip_prefix("file://")
+                .ok_or_else(|| anyhow::anyhow!("Invalid file:// URL format"))?;
             let content = fs::read_to_string(path)
                 .map_err(|e| anyhow::anyhow!("Failed to read local registry: {}", e))?;
             let registry: ProviderRegistry = serde_json::from_str(&content)
@@ -243,7 +244,8 @@ impl ProviderInstaller {
         
         let config_content = if config_url.starts_with("file://") {
             // Handle local file
-            let path = config_url.strip_prefix("file://").unwrap();
+            let path = config_url.strip_prefix("file://")
+                .ok_or_else(|| anyhow::anyhow!("Invalid file:// URL format"))?;
             fs::read_to_string(path)
                 .map_err(|e| anyhow::anyhow!("Failed to read local provider config: {}", e))?
         } else {

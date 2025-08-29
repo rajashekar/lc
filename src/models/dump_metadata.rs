@@ -223,7 +223,7 @@ impl MetadataDumper {
         _client: &crate::chat::LLMClient,
         provider_config: &crate::config::ProviderConfig,
     ) -> Result<String> {
-        use crate::debug_log;
+        // No need to import debug_log, it's a macro exported from lib.rs
 
         // Create optimized HTTP client with connection pooling and keep-alive settings
         let http_client = reqwest::Client::builder()
@@ -240,57 +240,59 @@ impl MetadataDumper {
             provider_config.models_path
         );
 
-        debug_log!("Making API request to: {}", url);
-        debug_log!("Request timeout: 60 seconds");
+        crate::debug_log!("Making API request to: {}", url);
+        crate::debug_log!("Request timeout: 60 seconds");
 
         let mut req = http_client
             .get(&url)
             .header("Content-Type", "application/json");
 
-        debug_log!("Added Content-Type: application/json header");
+        crate::debug_log!("Added Content-Type: application/json header");
 
         // Add custom headers first
         let mut has_custom_headers = false;
         for (name, value) in &provider_config.headers {
-            debug_log!("Adding custom header: {}: {}", name, value);
+            crate::debug_log!("Adding custom header: {}: {}", name, value);
             req = req.header(name, value);
             has_custom_headers = true;
         }
 
         // Only add Authorization header if no custom headers are present
         if !has_custom_headers {
+            let api_key = provider_config.api_key.as_ref()
+                .ok_or_else(|| anyhow::anyhow!("API key is required but not found for provider"))?;
             req = req.header(
                 "Authorization",
-                format!("Bearer {}", provider_config.api_key.as_ref().unwrap()),
+                format!("Bearer {}", api_key),
             );
-            debug_log!("Added Authorization header with API key");
+            crate::debug_log!("Added Authorization header with API key");
         } else {
-            debug_log!("Skipping Authorization header due to custom headers present");
+            crate::debug_log!("Skipping Authorization header due to custom headers present");
         }
 
-        debug_log!("Sending HTTP GET request...");
+        crate::debug_log!("Sending HTTP GET request...");
         let response = req.send().await?;
 
         let status = response.status();
-        debug_log!("Received response with status: {}", status);
+        crate::debug_log!("Received response with status: {}", status);
 
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
-            debug_log!("API request failed with error response: {}", text);
+            crate::debug_log!("API request failed with error response: {}", text);
             anyhow::bail!("API request failed with status {}: {}", status, text);
         }
 
         let response_text = response.text().await?;
-        debug_log!("Received response body ({} bytes)", response_text.len());
+        crate::debug_log!("Received response body ({} bytes)", response_text.len());
 
         // Pretty print the JSON for better readability
         match serde_json::from_str::<Value>(&response_text) {
             Ok(json_value) => {
-                debug_log!("Response is valid JSON, pretty-printing");
+                crate::debug_log!("Response is valid JSON, pretty-printing");
                 Ok(serde_json::to_string_pretty(&json_value)?)
             }
             Err(_) => {
-                debug_log!("Response is not valid JSON, returning as-is");
+                crate::debug_log!("Response is not valid JSON, returning as-is");
                 // If it's not valid JSON, return as-is
                 Ok(response_text)
             }

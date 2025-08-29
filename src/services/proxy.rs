@@ -147,7 +147,7 @@ async fn list_models(
     let mut models = Vec::new();
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or(std::time::Duration::from_secs(0))
         .as_secs();
 
     // Use models cache for fast response
@@ -259,7 +259,7 @@ async fn chat_completions(
     // Create response in OpenAI format
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or(std::time::Duration::from_secs(0))
         .as_secs();
 
     let response = ProxyChatResponse {

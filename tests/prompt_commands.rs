@@ -1,5 +1,6 @@
 use clap::Parser;
-use lc::cli::{is_code_file, read_and_format_attachments, resolve_model_and_provider, Cli};
+use lc::cli::Cli;
+use lc::utils::{is_code_file, read_and_format_attachments, resolve_model_and_provider};
 use lc::config::{Config, ProviderConfig};
 use std::collections::HashMap;
 use std::fs;
@@ -977,7 +978,7 @@ mod prompt_integration_tests {
 
 mod prompt_debug_mode_tests {
     use super::*;
-    use lc::cli::set_debug_mode;
+    use lc::utils::set_debug_mode;
 
     #[test]
     fn test_debug_flag_parsing() {
