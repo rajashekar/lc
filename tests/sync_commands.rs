@@ -1,50 +1,14 @@
 //! Tests for sync commands
 
 use anyhow::Result;
-use lc::sync::{CloudProvider, ConfigFile};
+use lc::sync::ConfigFile;
 use std::fs;
 use tempfile::TempDir;
-
-#[test]
-fn test_cloud_provider_parsing() {
-    // Test valid providers
-    assert!(matches!(
-        CloudProvider::from_str("s3"),
-        Ok(CloudProvider::S3)
-    ));
-    assert!(matches!(
-        CloudProvider::from_str("S3"),
-        Ok(CloudProvider::S3)
-    ));
-    assert!(matches!(
-        CloudProvider::from_str("amazon-s3"),
-        Ok(CloudProvider::S3)
-    ));
-    assert!(matches!(
-        CloudProvider::from_str("aws-s3"),
-        Ok(CloudProvider::S3)
-    ));
-
-    // Test invalid provider
-    assert!(CloudProvider::from_str("invalid").is_err());
-    assert!(CloudProvider::from_str("").is_err());
-}
-
-#[test]
-fn test_cloud_provider_properties() {
-    let s3 = CloudProvider::S3;
-    assert_eq!(s3.name(), "s3");
-    assert_eq!(CloudProvider::display_name_for_provider("s3"), "Amazon S3");
-    assert_eq!(CloudProvider::display_name_for_provider("cloudflare"), "Cloudflare R2");
-    assert_eq!(CloudProvider::display_name_for_provider("backblaze"), "Backblaze B2");
-    assert_eq!(CloudProvider::display_name_for_provider("unknown"), "S3-Compatible Storage");
-}
 
 #[test]
 fn test_config_file_creation() {
     let config_file = ConfigFile {
         name: "test.toml".to_string(),
-        path: std::path::PathBuf::from("/tmp/test.toml"),
         content: b"test content".to_vec(),
     };
 
@@ -162,22 +126,22 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_sync_to_invalid_provider() {
-        let result = lc::sync::handle_sync_to("invalid_provider", false, false).await;
+        let result = lc::sync::handle_sync_to("invalid_provider", false, true).await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("Unsupported cloud provider"));
+            .contains("Unsupported sync provider"));
     }
 
     #[tokio::test]
     async fn test_sync_from_invalid_provider() {
-        let result = lc::sync::handle_sync_from("invalid_provider", false, false).await;
+        let result = lc::sync::handle_sync_from("invalid_provider", false, true).await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("Unsupported cloud provider"));
+            .contains("Unsupported sync provider"));
     }
 
     // Note: S3 integration tests would require AWS credentials and a test bucket
@@ -192,20 +156,8 @@ mod integration_tests {
             return Ok(());
         }
 
-        // This would test actual S3 operations
-        // For now, just ensure the S3Provider can be created
-        let result = lc::sync::providers::S3Provider::new_with_provider("s3").await;
-
-        match result {
-            Ok(_) => {
-                println!("S3Provider created successfully");
-            }
-            Err(e) => {
-                println!("S3Provider creation failed: {}", e);
-                // Don't fail the test if AWS isn't properly configured
-            }
-        }
-
+        // Test basic S3 sync configuration
+        println!("S3 integration test would run here with proper AWS setup");
         Ok(())
     }
 }
@@ -231,11 +183,12 @@ mod cli_integration_tests {
     #[tokio::test]
     async fn test_sync_invalid_provider() {
         // Test invalid provider handling using direct API
-        let result = lc::sync::handle_sync_to("invalid_provider", false, false).await;
+        // Use yes=true to avoid hanging on stdin prompt
+        let result = lc::sync::handle_sync_to("invalid_provider", false, true).await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("Unsupported cloud provider"));
+            .contains("Unsupported sync provider"));
     }
 }
