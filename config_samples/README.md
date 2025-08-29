@@ -69,8 +69,6 @@ This directory contains sanitized sample configuration files for the `lc` tool.
 - `providers/vercel_sample.toml` - Sample for `providers/vercel.toml`
 - `providers/vertex_google_sample.toml` - Sample for `providers/vertex_google.toml`
 - `providers/vertex_llama_sample.toml` - Sample for `providers/vertex_llama.toml`
-- `providers/wmt_sample.toml` - Sample for `providers/wmt.toml`
-- `providers/wmtghco_sample.toml` - Sample for `providers/wmtghco.toml`
 - `providers/zhipu_sample.toml` - Sample for `providers/zhipu.toml`
 
 ## Directory Structure

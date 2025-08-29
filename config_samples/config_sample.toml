@@ -4,7 +4,7 @@
 # Comments below explain what each setting does
 
 # Default AI provider to use when none is specified
-default_provider = "wmt"
+default_provider = "openai"
 
 # Default model to use with the default provider
 default_model = "gpt-4o-mini"
@@ -19,9 +19,6 @@ temperature = 0.699999988079071
 [providers]
 
 [aliases]
-# Shortcut alias: use 'w' instead of 'wmt:gpt-4o-mini'
-w = "wmt:gpt-4o-mini"
-
 # Shortcut alias: use '4o-mini' instead of 'openai:gpt-4o-mini'
 4o-mini = "openai:gpt-4o-mini"
 
