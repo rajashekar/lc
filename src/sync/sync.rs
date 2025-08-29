@@ -73,11 +73,26 @@ pub async fn handle_sync_providers() -> Result<()> {
 }
 
 /// Sync configuration files to cloud storage
+
+/// Validate sync provider name
+fn validate_sync_provider(provider: &str) -> Result<()> {
+    match provider.to_lowercase().as_str() {
+        "s3" | "amazon-s3" | "aws-s3" | "cloudflare" | "backblaze" => Ok(()),
+        _ => {
+            anyhow::bail!("Unsupported sync provider: {}", provider);
+        }
+    }
+}
+
+/// Sync configuration files to cloud storage
 pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Result<()> {
     use std::fs;
     use std::io::{self, Write};
     
     println!("📤 {} configuration to {}...", "Syncing".cyan(), provider.bold());
+    
+    // Validate provider early
+    validate_sync_provider(provider)?;
     
     // Get lc config directory
     let config_dir = dirs::config_dir()
@@ -152,24 +167,17 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
         config_files
     };
     
-    match provider.to_lowercase().as_str() {
-        "s3" | "amazon-s3" | "aws-s3" | "cloudflare" | "backblaze" => {
-            #[cfg(feature = "s3-sync")]
-            {
-                use super::s3::upload_to_s3;
-                upload_to_s3(&_files_to_upload).await?;
-                println!("{} Configuration synced successfully!", "✅".green());
-                return Ok(());
-            }
-            
-            #[cfg(not(feature = "s3-sync"))]
-            {
-                anyhow::bail!("S3 sync feature not enabled. Build with --features s3-sync");
-            }
-        }
-        _ => {
-            anyhow::bail!("Unsupported sync provider: {}", provider);
-        }
+    #[cfg(feature = "s3-sync")]
+    {
+        use super::s3::upload_to_s3;
+        upload_to_s3(&_files_to_upload).await?;
+        println!("{} Configuration synced successfully!", "✅".green());
+        return Ok(());
+    }
+    
+    #[cfg(not(feature = "s3-sync"))]
+    {
+        anyhow::bail!("S3 sync feature not enabled. Build with --features s3-sync");
     }
 }
 
@@ -179,6 +187,9 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
     use std::io::{self, Write};
     
     println!("📥 {} configuration from {}...", "Syncing".cyan(), provider.bold());
+    
+    // Validate provider early
+    validate_sync_provider(provider)?;
     
     // Get lc config directory
     let config_dir = dirs::config_dir()
@@ -205,28 +216,11 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
         }
     }
     
-    let _downloaded_files: Vec<ConfigFile> = match provider.to_lowercase().as_str() {
-        "s3" | "amazon-s3" | "aws-s3" | "cloudflare" | "backblaze" => {
-            #[cfg(feature = "s3-sync")]
-            {
-                use super::s3::download_from_s3;
-                download_from_s3().await?
-            }
-            
-            #[cfg(not(feature = "s3-sync"))]
-            {
-                anyhow::bail!("S3 sync feature not enabled. Build with --features s3-sync");
-            }
-        }
-        _ => {
-            anyhow::bail!("Unsupported sync provider: {}", provider);
-        }
-    };
-    
-    // NOTE: The code below is unreachable because all match arms above return or bail!
-    // This is expected behavior as the sync functionality is feature-gated
-    #[allow(unreachable_code)]
+    #[cfg(feature = "s3-sync")]
     {
+        use super::s3::download_from_s3;
+        let _downloaded_files: Vec<ConfigFile> = download_from_s3().await?;
+        
         println!("Downloaded {} configuration files", _downloaded_files.len());
         
         // Decrypt files if they were encrypted
@@ -237,20 +231,25 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
             _downloaded_files
         };
         
-        // Save decrypted files to config directory
+        // Save files to config directory
         for file in files_to_save {
             let file_path = config_dir.join(&file.name);
             
-            // Create parent directories if needed
+            // Ensure parent directory exists
             if let Some(parent) = file_path.parent() {
                 fs::create_dir_all(parent)?;
             }
             
             fs::write(&file_path, &file.content)?;
-            println!("  {} {}", "✓".green(), file.name);
+            println!("  ✓ Saved {}", file.name);
         }
         
         println!("{} Configuration synced successfully!", "✅".green());
-        Ok(())
+        return Ok(());
+    }
+    
+    #[cfg(not(feature = "s3-sync"))]
+    {
+        anyhow::bail!("S3 sync feature not enabled. Build with --features s3-sync");
     }
 }
