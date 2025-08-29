@@ -97,7 +97,7 @@ jobs:
             asset_name: lc-macos-arm64
           
           # Windows x86_64
-          - os: windows-2019
+          - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: lc.exe
             asset_name: lc-windows-amd64.exe
@@ -158,11 +158,11 @@ jobs:
           pkg-config --libs --cflags openssl
       
       - name: Build (native)
-        if: ${{ !matrix.use_cross && matrix.os != 'windows-2019' }}
+        if: ${{ !matrix.use_cross && matrix.os != 'windows-latest' }}
         run: cargo build --release --target ${{ matrix.target }}
       
       - name: Build Windows (without S3 to avoid AWS LC issues)
-        if: matrix.os == 'windows-2019'
+        if: matrix.os == 'windows-latest'
         run: cargo build --release --target ${{ matrix.target }} --no-default-features --features "pdf unix-sockets"
       
       - name: Build (cross)
