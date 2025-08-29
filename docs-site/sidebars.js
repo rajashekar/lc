@@ -29,14 +29,17 @@ const sidebars = {
       label: 'Commands',
       items: [
         'commands/overview',
+        'commands/completions',
         'commands/config',
         'commands/keys',
         'commands/providers',
         'commands/models',
         'commands/chat',
+        'commands/audio',
         'commands/embed',
         'commands/vectors',
         'commands/similar',
+        'commands/search',
         'commands/templates',
         'commands/alias',
         'commands/sync',
@@ -44,6 +47,7 @@ const sidebars = {
         'commands/proxy',
         'commands/web-chat-proxy',
         'commands/mcp',
+        'commands/usage',
       ],
     },
     {
@@ -53,6 +57,7 @@ const sidebars = {
         'advanced/vector-database',
         'advanced/embeddings',
         'advanced/rag',
+        'advanced/provider-management',
         'advanced/sync',
         'advanced/mcp',
         'advanced/vision'
