@@ -5,11 +5,12 @@
 ### ✅ **Currently Working**
 - **From Source**: `git clone` + `cargo build --release` (all platforms)
 - **WSL2**: Full compatibility with all Linux installation methods
+- **One-liner Install Script**: `curl -fsSL https://raw.githubusercontent.com/rajashekar/lc/main/install.sh | bash`
+- **Cargo Package**: `cargo install lc-cli` (published to crates.io)
+- **GitHub Releases**: Pre-built binaries for all platforms
 
 ### 🚧 **In Development** 
-- Cargo package publication
-- GitHub releases with pre-built binaries
-- Package manager submissions
+- Package manager submissions (Homebrew, Scoop, AUR)
 
 ## Platform-Specific Installation Methods
 

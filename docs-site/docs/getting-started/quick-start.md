@@ -8,6 +8,24 @@ sidebar_position: 2
 
 Get up and running with LLM Client in just a few minutes. This guide will walk you through the essential steps to start using `lc`.
 
+## Step 0: Install lc
+
+If you haven't installed `lc` yet, use the one-liner install script:
+
+```bash
+# Install latest version (recommended)
+curl -fsSL https://raw.githubusercontent.com/rajashekar/lc/main/install.sh | bash
+```
+
+**Alternative methods:**
+- **Rust users**: `cargo install lc-cli`
+- **From source**: See the [Installation Guide](/getting-started/installation)
+
+Verify installation:
+```bash
+lc --version
+lc --help
+```
 
 ## Step 1: Add a Provider
 

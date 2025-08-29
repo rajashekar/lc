@@ -85,9 +85,64 @@ cargo --version
 
 ## Installation Methods
 
-### 🚀 Quick Install (Coming Soon)
+### 🚀 One-Liner Install Script (Recommended)
 
-**Note**: Package manager installations are planned for future releases. Currently, install from source or use cargo.
+**The fastest way to get started on any platform!**
+
+```bash
+# Install latest version
+curl -fsSL https://raw.githubusercontent.com/rajashekar/lc/main/install.sh | bash
+```
+
+**Customization options:**
+
+```bash
+# Install to custom directory
+LC_BIN_DIR=~/.bin curl -fsSL https://raw.githubusercontent.com/rajashekar/lc/main/install.sh | bash
+
+# Install specific version
+LC_VERSION=v0.1.1 curl -fsSL https://raw.githubusercontent.com/rajashekar/lc/main/install.sh | bash
+
+# Force overwrite existing installation
+LC_FORCE=true curl -fsSL https://raw.githubusercontent.com/rajashekar/lc/main/install.sh | bash
+```
+
+**Supported platforms:**
+- Linux (x86_64, ARM64)
+- macOS (Intel, Apple Silicon) 
+- Windows (WSL, WSL2, Git Bash, MSYS2)
+
+**Features:**
+- ✅ Automatic platform and architecture detection
+- ✅ Downloads pre-built binaries from GitHub releases
+- ✅ Installs to `$HOME/.local/bin` by default
+- ✅ Provides PATH setup instructions
+- ✅ Verifies installation
+
+### 📦 From Cargo (Rust Users)
+
+```bash
+# Install from crates.io (published!)
+cargo install lc-cli
+
+# Or install directly from git (development version)
+cargo install --git https://github.com/rajashekar/lc
+```
+
+### 📁 Manual Binary Download
+
+1. Download the latest binary for your platform from [GitHub Releases](https://github.com/rajashekar/lc/releases)
+2. Extract and place in your PATH
+
+| Platform | Architecture | Binary Name |
+|----------|-------------|-------------|
+| **Linux** | x86_64 | `lc-linux-x86_64.tar.gz` |
+| **Linux** | ARM64 | `lc-linux-arm64.tar.gz` |
+| **macOS** | Intel | `lc-macos-x86_64.tar.gz` |
+| **macOS** | Apple Silicon | `lc-macos-arm64.tar.gz` |
+| **Windows** | x86_64 | `lc-windows-amd64.zip` |
+
+### 🚧 Package Managers (Coming Soon)
 
 ```bash
 # macOS
@@ -102,37 +157,7 @@ winget install lc                  # 🚧 Coming soon
 apt install lc                     # 🚧 Coming soon
 dnf install lc                     # 🚧 Coming soon
 yay -S lc                          # 🚧 Coming soon (AUR)
-
-# Universal (Rust users)
-cargo install lc-cli               # ✅ Available now!
 ```
-
-### 📦 From Cargo (Rust Users)
-
-**Recommended method for all platforms!**
-
-```bash
-# Install from crates.io (published!)
-cargo install lc-cli
-
-# Or install directly from git (development version)
-cargo install --git https://github.com/rajashekar/lc
-```
-
-### 📁 Pre-built Binaries (Recommended)
-
-**Note**: GitHub releases with pre-built binaries are coming soon.
-
-1. Download the latest binary for your platform from [GitHub Releases](https://github.com/rajashekar/lc/releases)
-2. Extract and place in your PATH
-
-| Platform | Architecture | Binary Name |
-|----------|-------------|-------------|
-| **Linux** | x86_64 | `lc-linux-amd64` |
-| **Linux** | ARM64 | `lc-linux-arm64` |
-| **macOS** | Intel | `lc-macos-amd64` |
-| **macOS** | Apple Silicon | `lc-macos-arm64` |
-| **Windows** | x86_64 | `lc-windows-amd64.exe` |
 
 ### 🔨 From Source (Current Method)
 
