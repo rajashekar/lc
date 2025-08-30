@@ -131,11 +131,21 @@ lc similar -v knowledge "What is neural network programming?"
 lc chat -v knowledge -m openai:gpt-4
 lc -m openai:gpt-4 -v knowledge "Explain the relationship between AI and programming languages"
 
-# Use MCP tools for internet access
-lc -t fetch "What's the latest news about AI?"
+# Adding mcp server
+lc mcp add playwright "npx @playwright/mcp@latest" --type stdio
 
-# Multiple MCP tools
-lc -t fetch,playwright "Navigate to example.com and analyze its content"
+# to list mcp servers
+lc mcp list
+
+# to list all the functions in a mcp
+lc mcp functions playwright
+
+# to invoke a mcp function
+lc mcp invoke playwright browser_navigate url=https://google.com
+
+
+# Use playwright tools with chat
+lc -m openai:gpt-4o-mini -t playwright "Go to google.com and search for Model context protocol"
 
 # Web search integration
 lc --use-search brave "What are the latest developments in quantum computing?"

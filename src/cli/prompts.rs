@@ -22,7 +22,7 @@ pub async fn handle_direct(
     _attachments: Vec<String>,
     _images: Vec<String>,
     _audio_files: Vec<String>,
-    _tools: Option<String>,
+    tools: Option<String>,
     _vectordb: Option<String>,
     _use_search: Option<String>,
     stream: bool,
@@ -79,6 +79,13 @@ pub async fn handle_direct(
 
     debug_log!("Using API model name: '{}'", api_model_name);
 
+    // Fetch MCP tools if specified
+    let (mcp_tools, mcp_server_names) = if let Some(tools_str) = &tools {
+        crate::core::tools::fetch_mcp_tools(tools_str).await?
+    } else {
+        (None, Vec::new())
+    };
+
     // Send the request - templates will be automatically applied by the client
     if stream {
         debug_log!("Sending streaming chat request");
@@ -108,7 +115,7 @@ pub async fn handle_direct(
             max_tokens_parsed,
             temperature_parsed,
             &provider_name,
-            None, // No tools for now
+            mcp_tools.clone(),
         )
         .await?;
         
@@ -117,18 +124,39 @@ pub async fn handle_direct(
         eprintln!("\nNote: Streaming responses are not saved to conversation history.");
     } else {
         debug_log!("Sending non-streaming chat request");
-        let (response, input_tokens, output_tokens) = send_chat_request_with_validation(
-            &client,
-            &api_model_name,
-            &prompt,
-            &[], // No history for direct prompt
-            system_prompt.as_deref(),
-            max_tokens_parsed,
-            temperature_parsed,
-            &provider_name,
-            None, // No tools for now
-        )
-        .await?;
+        
+        // Use tool execution if tools are available
+        let (response, input_tokens, output_tokens) = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+            // Convert server names to &str references
+            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+            
+            crate::core::chat::send_chat_request_with_tool_execution(
+                &client,
+                &api_model_name,
+                &prompt,
+                &[], // No history for direct prompt
+                system_prompt.as_deref(),
+                max_tokens_parsed,
+                temperature_parsed,
+                &provider_name,
+                mcp_tools.clone(),
+                &server_refs,
+            )
+            .await?
+        } else {
+            send_chat_request_with_validation(
+                &client,
+                &api_model_name,
+                &prompt,
+                &[], // No history for direct prompt
+                system_prompt.as_deref(),
+                max_tokens_parsed,
+                temperature_parsed,
+                &provider_name,
+                mcp_tools.clone(),
+            )
+            .await?
+        };
 
         // Print the response
         println!("{}", response);

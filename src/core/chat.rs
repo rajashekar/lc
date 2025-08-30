@@ -861,14 +861,28 @@ pub async fn send_chat_request_with_tool_execution(
 
 // Helper function to format tool result for display
 fn format_tool_result(result: &serde_json::Value) -> String {
+    const MAX_TOOL_RESULT_LENGTH: usize = 10000; // Limit tool results to 10KB
+    const TRUNCATION_MESSAGE: &str = "\n\n[Content truncated - exceeded maximum length]";
+    
     if let Some(content_array) = result.get("content") {
         if let Some(content_items) = content_array.as_array() {
             let mut formatted = String::new();
             for item in content_items {
                 if let Some(text) = item.get("text") {
                     if let Some(text_str) = text.as_str() {
-                        formatted.push_str(text_str);
-                        formatted.push('\n');
+                        // Check if adding this text would exceed the limit
+                        if formatted.len() + text_str.len() > MAX_TOOL_RESULT_LENGTH {
+                            // Add as much as we can
+                            let remaining = MAX_TOOL_RESULT_LENGTH.saturating_sub(formatted.len());
+                            if remaining > 0 {
+                                formatted.push_str(&text_str[..remaining.min(text_str.len())]);
+                            }
+                            formatted.push_str(TRUNCATION_MESSAGE);
+                            break; // Stop processing more items
+                        } else {
+                            formatted.push_str(text_str);
+                            formatted.push('\n');
+                        }
                     }
                 }
             }
@@ -876,8 +890,15 @@ fn format_tool_result(result: &serde_json::Value) -> String {
         }
     }
 
-    // Fallback to pretty-printed JSON
-    serde_json::to_string_pretty(result).unwrap_or_else(|_| "Error formatting result".to_string())
+    // Fallback to pretty-printed JSON (also with truncation)
+    let json_result = serde_json::to_string_pretty(result)
+        .unwrap_or_else(|_| "Error formatting result".to_string());
+    
+    if json_result.len() > MAX_TOOL_RESULT_LENGTH {
+        format!("{}{}", &json_result[..MAX_TOOL_RESULT_LENGTH], TRUNCATION_MESSAGE)
+    } else {
+        json_result
+    }
 }
 
 // Message-based versions of the chat functions for handling multimodal content

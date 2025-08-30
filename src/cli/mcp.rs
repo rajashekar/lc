@@ -151,16 +151,56 @@ pub async fn handle(command: McpCommands) -> Result<()> {
                             match serde_json::from_str::<serde_json::Value>(&args[0]) {
                                 Ok(json) => json,
                                 Err(_) => {
-                                    // If not valid JSON, treat as string value
-                                    serde_json::json!({ "value": args[0] })
+                                    // Check if it's a key=value format
+                                    if args[0].contains('=') {
+                                        let mut obj = serde_json::Map::new();
+                                        let parts: Vec<&str> = args[0].splitn(2, '=').collect();
+                                        if parts.len() == 2 {
+                                            obj.insert(
+                                                parts[0].to_string(),
+                                                serde_json::Value::String(parts[1].to_string())
+                                            );
+                                        }
+                                        serde_json::Value::Object(obj)
+                                    } else {
+                                        // If not valid JSON and not key=value, treat as string value
+                                        serde_json::json!({ "value": args[0] })
+                                    }
                                 }
                             }
                         } else {
-                            // Multiple args, create an object with indexed keys
+                            // Multiple args - check if they are key=value pairs
                             let mut obj = serde_json::Map::new();
-                            for (i, arg) in args.iter().enumerate() {
-                                obj.insert(format!("arg{}", i), serde_json::Value::String(arg.clone()));
+                            let mut all_key_value = true;
+                            
+                            for arg in args.iter() {
+                                if arg.contains('=') {
+                                    let parts: Vec<&str> = arg.splitn(2, '=').collect();
+                                    if parts.len() == 2 {
+                                        // Try to parse the value as JSON first (for nested objects/arrays)
+                                        let value = match serde_json::from_str::<serde_json::Value>(parts[1]) {
+                                            Ok(json_val) => json_val,
+                                            Err(_) => serde_json::Value::String(parts[1].to_string()),
+                                        };
+                                        obj.insert(parts[0].to_string(), value);
+                                    } else {
+                                        all_key_value = false;
+                                        break;
+                                    }
+                                } else {
+                                    all_key_value = false;
+                                    break;
+                                }
                             }
+                            
+                            if !all_key_value {
+                                // Fallback to indexed keys if not all args are key=value
+                                obj.clear();
+                                for (i, arg) in args.iter().enumerate() {
+                                    obj.insert(format!("arg{}", i), serde_json::Value::String(arg.clone()));
+                                }
+                            }
+                            
                             serde_json::Value::Object(obj)
                         };
                         
