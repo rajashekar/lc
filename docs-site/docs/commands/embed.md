@@ -148,3 +148,18 @@ lc models embed
 # - text-embedding-ada-002 (OpenAI)
 # - embed-english-v3.0 (Cohere)
 ```
+
+### Vector Database Storage
+
+Vector databases are stored in platform-appropriate locations:
+
+| Platform | Vector Database Directory |
+|----------|---------------------------|
+| **Linux** | `~/.config/lc/embeddings/` |
+| **macOS** | `~/Library/Application Support/lc/embeddings/` |
+| **Windows** | `%APPDATA%\lc\embeddings\` |
+
+Each database is a SQLite file containing:
+- **vectors** table - Text content, embeddings, and metadata
+- **model_info** table - Embedding model and provider information
+- **Indexes** - Optimized for fast similarity search

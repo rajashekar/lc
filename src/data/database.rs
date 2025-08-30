@@ -521,15 +521,10 @@ impl Database {
     }
 
     fn database_path() -> Result<PathBuf> {
-        // Use data_local_dir for cross-platform data storage
-        // On macOS: ~/Library/Application Support/lc
-        // On Linux: ~/.local/share/lc
-        // On Windows: %LOCALAPPDATA%/lc
-        let data_dir = dirs::data_local_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?
-            .join("lc");
-        std::fs::create_dir_all(&data_dir)?;
-        Ok(data_dir.join("logs.db"))
+        // Use the same config directory logic as Config::config_dir() for test isolation
+        let config_dir = crate::config::Config::config_dir()?;
+        std::fs::create_dir_all(&config_dir)?;
+        Ok(config_dir.join("logs.db"))
     }
 }
 

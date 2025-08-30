@@ -668,6 +668,9 @@ impl ModelMetadataExtractor {
             }
         }
 
+        // Determine model type based on model ID or name patterns
+        metadata.model_type = self.determine_model_type(&metadata.id, metadata.display_name.as_deref());
+
         Ok(metadata)
     }
 
@@ -906,6 +909,128 @@ impl ModelMetadataExtractor {
         }
 
         Some(false)
+    }
+
+    /// Determine model type based on model ID and name patterns
+    fn determine_model_type(&self, model_id: &str, display_name: Option<&str>) -> ModelType {
+        let id_lower = model_id.to_lowercase();
+        let name_lower = display_name.map(|n| n.to_lowercase());
+        
+        // Check for embedding model patterns
+        let embedding_patterns = [
+            "embed",
+            "embedding",
+            "text-embedding",
+            "text_embedding",
+            "ada",
+            "similarity",
+            "bge",
+            "e5",
+            "gte",
+            "instructor",
+            "voyage",
+            "titan-embed",
+            "embedding-gecko",
+            "embed-english",
+            "embed-multilingual",
+        ];
+        
+        for pattern in &embedding_patterns {
+            if id_lower.contains(pattern) {
+                return ModelType::Embedding;
+            }
+            if let Some(ref name) = name_lower {
+                if name.contains(pattern) {
+                    return ModelType::Embedding;
+                }
+            }
+        }
+        
+        // Check for image generation model patterns
+        let image_patterns = [
+            "dall-e",
+            "dalle",
+            "stable-diffusion",
+            "midjourney",
+            "imagen",
+            "image",
+        ];
+        
+        for pattern in &image_patterns {
+            if id_lower.contains(pattern) {
+                return ModelType::ImageGeneration;
+            }
+            if let Some(ref name) = name_lower {
+                if name.contains(pattern) {
+                    return ModelType::ImageGeneration;
+                }
+            }
+        }
+        
+        // Check for audio generation model patterns
+        let audio_patterns = [
+            "whisper",
+            "tts",
+            "audio",
+            "speech",
+            "voice",
+        ];
+        
+        for pattern in &audio_patterns {
+            if id_lower.contains(pattern) {
+                return ModelType::AudioGeneration;
+            }
+            if let Some(ref name) = name_lower {
+                if name.contains(pattern) {
+                    return ModelType::AudioGeneration;
+                }
+            }
+        }
+        
+        // Check for moderation model patterns
+        let moderation_patterns = [
+            "moderation",
+            "moderate",
+            "safety",
+        ];
+        
+        for pattern in &moderation_patterns {
+            if id_lower.contains(pattern) {
+                return ModelType::Moderation;
+            }
+            if let Some(ref name) = name_lower {
+                if name.contains(pattern) {
+                    return ModelType::Moderation;
+                }
+            }
+        }
+        
+        // Check for completion model patterns (older style models)
+        let completion_patterns = [
+            "davinci",
+            "curie",
+            "babbage",
+            "ada-001",
+            "text-davinci",
+            "text-curie",
+            "text-babbage",
+            "code-davinci",
+            "code-cushman",
+        ];
+        
+        for pattern in &completion_patterns {
+            if id_lower.contains(pattern) && !id_lower.contains("embed") {
+                return ModelType::Completion;
+            }
+            if let Some(ref name) = name_lower {
+                if name.contains(pattern) && !name.contains("embed") {
+                    return ModelType::Completion;
+                }
+            }
+        }
+        
+        // Default to Chat for everything else (GPT, Claude, Llama, etc.)
+        ModelType::Chat
     }
 
     /// Check if model name matches a specific pattern using regex (case-insensitive)

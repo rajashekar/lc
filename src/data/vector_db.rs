@@ -65,9 +65,9 @@ impl VectorDatabase {
     }
 
     pub fn embeddings_dir() -> Result<PathBuf> {
-        let home_dir =
-            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
-        Ok(home_dir.join("Library/Application Support/lc/embeddings"))
+        // Use the same config directory logic as Config::config_dir() for test isolation
+        let config_dir = crate::config::Config::config_dir()?;
+        Ok(config_dir.join("embeddings"))
     }
 
     pub fn list_databases() -> Result<Vec<String>> {

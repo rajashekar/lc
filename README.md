@@ -35,6 +35,8 @@ cargo build --release
 
 # Add a provider
 lc providers add openai https://api.openai.com/v1
+or
+lc providers install openai
 
 # Set your API key
 lc keys add openai
@@ -77,27 +79,6 @@ These dependencies are required for Rust crates that link against OpenSSL and na
 - 🎨 **Flexible Templates** - Configure request/response formats for any LLM API
 - ⚡ **Shell Completion** - Tab completion for commands, providers, models, and more
 
-## Shell Completion
-
-`lc` supports comprehensive tab completion for all major shells (Bash, Zsh, Fish, PowerShell, Elvish) with both static and dynamic completion:
-
-```bash
-# Generate completion script for your shell
-lc completions bash > ~/.local/share/bash-completion/completions/lc
-lc completions zsh > ~/.local/share/zsh/site-functions/_lc
-lc completions fish > ~/.config/fish/completions/lc.fish
-
-# Dynamic provider completion
-lc -p <TAB>                 # Shows all configured providers
-lc -p g<TAB>                # Shows providers starting with "g"
-
-# Command completion
-lc providers <TAB>          # Shows provider subcommands
-lc config set <TAB>         # Shows configuration options
-```
-
-For detailed setup instructions, see [Shell Completion Guide](docs/shell-completion.md).
-
 ## Documentation
 
 For comprehensive documentation, visit **[lc.viwq.dev](https://lc.viwq.dev)**
@@ -112,44 +93,6 @@ For comprehensive documentation, visit **[lc.viwq.dev](https://lc.viwq.dev)**
 - [Model Context Protocol (MCP)](https://lc.viwq.dev/advanced/mcp)
 - [Template System](docs/TEMPLATE_SYSTEM.md) - Configure custom request/response formats
 
-## Supported Providers
-Any OpenAI-compatible API can be used with `lc`. Here are some popular providers:
-Anthropic, Gemini, and Amazon Bedrock also supported.
-  - ai21 - https://api.ai21.com/studio/v1 (API Key: ✓)
-  - amazon_bedrock - https://bedrock-runtime.us-east-1.amazonaws.com (API Key: ✓) - See [Bedrock Setup](#amazon-bedrock-setup)
-  - cerebras - https://api.cerebras.ai/v1 (API Key: ✓)
-  - chub - https://inference.chub.ai/v1 (API Key: ✓)
-  - chutes - https://llm.chutes.ai/v1 (API Key: ✓)
-  - claude - https://api.anthropic.com/v1 (API Key: ✓)
-  - cohere - https://api.cohere.com/v2 (API Key: ✓)
-  - deepinfra - https://api.deepinfra.com/v1/openai (API Key: ✓)
-  - digitalocean - https://inference.do-ai.run/v1 (API Key: ✓)
-  - fireworks - https://api.fireworks.ai/inference/v1 (API Key: ✓)
-  - gemini - https://generativelanguage.googleapis.com (API Key: ✓)
-  - github - https://models.github.ai (API Key: ✓)
-  - github-copilot - https://api.individual.githubcopilot.com (API Key: ✓)
-  - grok - https://api.x.ai/v1 (API Key: ✓)
-  - groq - https://api.groq.com/openai/v1 (API Key: ✓)
-  - huggingface - https://router.huggingface.co/v1 (API Key: ✓)
-  - hyperbolic - https://api.hyperbolic.xyz/v1 (API Key: ✓)
-  - kilo - https://kilocode.ai/api/openrouter (API Key: ✓)
-  - meta - https://api.llama.com/v1 (API Key: ✓)
-  - mistral - https://api.mistral.ai/v1 (API Key: ✓)
-  - nebius - https://api.studio.nebius.com/v1 (API Key: ✓)
-  - novita - https://api.novita.ai/v3/openai (API Key: ✓)
-  - nscale - https://inference.api.nscale.com/v1 (API Key: ✓)
-  - nvidia - https://integrate.api.nvidia.com/v1 (API Key: ✓)
-  - ollama - http://localhost:11434/v1 (API Key: ✓)
-  - openai - https://api.openai.com/v1 (API Key: ✓)
-  - openrouter - https://openrouter.ai/api/v1 (API Key: ✓)
-  - perplexity - https://api.perplexity.ai (API Key: ✓)
-  - poe - https://api.poe.com/v1 (API Key: ✓)
-  - requesty - https://router.requesty.ai/v1 (API Key: ✓)
-  - sambanova - https://api.sambanova.ai/v1 (API Key: ✓)
-  - together - https://api.together.xyz/v1 (API Key: ✓)
-  - venice - https://api.venice.ai/api/v1 (API Key: ✓)
-  - vercel - https://ai-gateway.vercel.sh/v1 (API Key: ✓)
-
 ## Example Usage
 
 ```bash
@@ -159,14 +102,34 @@ lc -m openai:gpt-4 "Explain quantum computing"
 # Interactive chat session
 lc chat -m anthropic:claude-3.5-sonnet
 
-# Create embeddings
-lc embed -m openai:text-embedding-3-small -v knowledge "Important information"
+# find embedding models
+lc models embed
+or
+lc m e
+
+# create embeddings for your text
+lc embed -m text-embedding-3-small -v knowledge "Machine learning is a subset of AI"
+lc embed -m text-embedding-3-small -v knowledge "Deep learning uses neural networks"
+lc embed -m text-embedding-3-small -v knowledge "Python is popular for data science"
+
+# Embed files with intelligent chunking
+lc embed -m text-embedding-3-small -v docs -f README.md
+lc embed -m text-embedding-3-small -v docs -f "*.md"
+lc embed -m text-embedding-3-small -v docs -f "/path/to/docs/*.txt"
+
+# above will create a vector db with knowledge
+# you can get all vector dbs by using below command
+lc vectors list
+
+## to get details of the vector db
+lc vectors stats knowledge
 
 # Search similar content
-lc similar -v knowledge "related query"
+lc similar -v knowledge "What is neural network programming?"
 
 # RAG-enhanced chat
-lc -v knowledge "What do you know about this topic?"
+lc chat -v knowledge -m openai:gpt-4
+lc -m openai:gpt-4 -v knowledge "Explain the relationship between AI and programming languages"
 
 # Use MCP tools for internet access
 lc -t fetch "What's the latest news about AI?"

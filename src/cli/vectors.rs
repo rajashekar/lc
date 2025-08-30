@@ -94,6 +94,69 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                 name
             );
         }
+        VectorCommands::Info { name } => {
+            // Check if database exists
+            let databases = VectorDatabase::list_databases()?;
+            if !databases.contains(&name) {
+                anyhow::bail!("Vector database '{}' not found", name);
+            }
+            
+            let db = VectorDatabase::new(&name)?;
+            let count = db.count()?;
+            let model_info = db.get_model_info()?;
+            
+            println!("\n{} Database: {}", "ℹ️".bold().blue(), name.bold());
+            println!("  Vector count: {}", count);
+            
+            if let Some((model, provider)) = model_info {
+                println!("  Model: {}", model);
+                println!("  Provider: {}", provider);
+            } else {
+                println!("  Model: {}", "Not set".dimmed());
+                println!("  Provider: {}", "Not set".dimmed());
+            }
+            
+            // Show recent entries if any
+            if count > 0 {
+                println!("\n{} Recent entries:", "📝".bold().blue());
+                let vectors = db.get_all_vectors()?;
+                for (i, entry) in vectors.iter().take(10).enumerate() {
+                    let preview = if entry.text.len() > 80 {
+                        format!("{}...", &entry.text[..80])
+                    } else {
+                        entry.text.clone()
+                    };
+                    
+                    let source_info = if let Some(ref file_path) = entry.file_path {
+                        if let (Some(chunk_idx), Some(total_chunks)) = 
+                            (entry.chunk_index, entry.total_chunks) 
+                        {
+                            format!(" [{}:{}/{}]", file_path, chunk_idx + 1, total_chunks)
+                        } else {
+                            format!(" [{}]", file_path)
+                        }
+                    } else {
+                        String::new()
+                    };
+                    
+                    println!(
+                        "  {}. {}{} ({})",
+                        i + 1,
+                        preview,
+                        source_info.dimmed(),
+                        entry
+                            .created_at
+                            .format("%Y-%m-%d %H:%M")
+                            .to_string()
+                            .dimmed()
+                    );
+                }
+                
+                if vectors.len() > 10 {
+                    println!("  ... and {} more", vectors.len() - 10);
+                }
+            }
+        }
         VectorCommands::Stats { name } => {
             let databases = VectorDatabase::list_databases()?;
             if !databases.contains(&name) {

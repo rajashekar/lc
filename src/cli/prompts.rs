@@ -82,6 +82,23 @@ pub async fn handle_direct(
     // Send the request - templates will be automatically applied by the client
     if stream {
         debug_log!("Sending streaming chat request");
+        // For streaming, we don't get the response back, so we can't save it to database
+        // But we should still create/update the session for consistency
+        let db = Database::new()?;
+        let _session_id = match db.get_current_session_id()? {
+            Some(id) => {
+                debug_log!("Using existing session for streaming: {}", id);
+                id
+            }
+            None => {
+                // Generate a new session ID using UUID for consistency
+                let new_session_id = uuid::Uuid::new_v4().to_string();
+                db.set_current_session_id(&new_session_id)?;
+                debug_log!("Created new session for streaming: {}", new_session_id);
+                new_session_id
+            }
+        };
+        
         send_chat_request_with_streaming(
             &client,
             &api_model_name,
@@ -94,6 +111,10 @@ pub async fn handle_direct(
             None, // No tools for now
         )
         .await?;
+        
+        // Note: We can't save the response to database in streaming mode
+        // as the response is streamed directly to stdout
+        eprintln!("\nNote: Streaming responses are not saved to conversation history.");
     } else {
         debug_log!("Sending non-streaming chat request");
         let (response, input_tokens, output_tokens) = send_chat_request_with_validation(
@@ -275,8 +296,20 @@ async fn save_to_database(
 ) -> Result<()> {
     let db = Database::new()?;
 
-    // Generate a new session ID
-    let session_id = format!("chat_{}", chrono::Utc::now().timestamp_millis());
+    // Get or create session ID
+    let session_id = match db.get_current_session_id()? {
+        Some(id) => {
+            debug_log!("Using existing session: {}", id);
+            id
+        }
+        None => {
+            // Generate a new session ID using UUID for consistency
+            let new_session_id = uuid::Uuid::new_v4().to_string();
+            db.set_current_session_id(&new_session_id)?;
+            debug_log!("Created new session: {}", new_session_id);
+            new_session_id
+        }
+    };
 
     // Save the entry with tokens
     db.save_chat_entry_with_tokens(

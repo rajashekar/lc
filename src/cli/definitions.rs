@@ -3,6 +3,18 @@
 
 use clap::{Parser, Subcommand};
 
+// Helper function to parse environment variable KEY=VALUE pairs
+fn parse_env_var(s: &str) -> Result<(String, String), String> {
+    let parts: Vec<&str> = s.splitn(2, '=').collect();
+    if parts.len() != 2 {
+        return Err(format!(
+            "Invalid environment variable format: '{}'. Expected 'KEY=VALUE'",
+            s
+        ));
+    }
+    Ok((parts[0].to_string(), parts[1].to_string()))
+}
+
 #[derive(Parser)]
 #[command(name = "lc")]
 #[command(
@@ -90,6 +102,16 @@ pub enum CompletionShell {
     PowerShell,
     /// Elvish shell
     Elvish,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum McpServerType {
+    /// Standard I/O based MCP server
+    Stdio,
+    /// Server-Sent Events MCP server
+    Sse,
+    /// Streamable HTTP MCP server
+    Streamable,
 }
 
 #[derive(Subcommand)]
@@ -972,6 +994,12 @@ pub enum VectorCommands {
         #[arg(long)]
         yes: bool,
     },
+    /// Show database information (alias: i)
+    #[command(alias = "i")]
+    Info {
+        /// Database name
+        name: String,
+    },
     /// Show database statistics (alias: s)
     #[command(alias = "s")]
     Stats {
@@ -1107,28 +1135,64 @@ pub enum SearchCommands {
 
 #[derive(Subcommand)]
 pub enum McpCommands {
-    /// Start an MCP server (alias: s)
-    #[command(alias = "s")]
-    Start {
+    /// Add a new MCP server (alias: a)
+    #[command(alias = "a")]
+    Add {
         /// Server name
         name: String,
-        /// Server command
-        command: String,
-        /// Server arguments
-        #[arg(short = 'a', long = "args")]
-        args: Vec<String>,
+        /// Command or URL for the MCP server
+        command_or_url: String,
+        /// MCP server type
+        #[arg(long = "type", value_enum)]
+        server_type: McpServerType,
+        /// Environment variables (can be specified multiple times as KEY=VALUE)
+        #[arg(short = 'e', long = "env", value_parser = parse_env_var)]
+        env: Vec<(String, String)>,
     },
-    /// Stop an MCP server (alias: st)
+    /// Delete an MCP server configuration (alias: d)
+    #[command(alias = "d")]
+    Delete {
+        /// Server name
+        name: String,
+    },
+    /// List all configured MCP servers (alias: l)
+    #[command(alias = "l")]
+    List,
+    /// Stop an MCP server connection (alias: st)
     #[command(alias = "st")]
     Stop {
         /// Server name
         name: String,
     },
-    /// List all MCP servers (alias: l)
-    #[command(alias = "l")]
-    List,
-    /// Show MCP server status (alias: status)
-    #[command(alias = "status")]
+    /// List functions exposed by a running MCP server (alias: f)
+    #[command(alias = "f")]
+    Functions {
+        /// Server name
+        name: String,
+    },
+    /// Invoke a function from a running MCP server (alias: i)
+    #[command(alias = "i")]
+    Invoke {
+        /// Server name
+        name: String,
+        /// Function name
+        function: String,
+        /// Function arguments
+        args: Vec<String>,
+    },
+    /// Start an MCP server (alias: s)
+    #[command(alias = "s")]
+    Start {
+        /// Server name
+        name: String,
+        /// Server command (optional - uses stored configuration if not provided)
+        command: Option<String>,
+        /// Server arguments
+        #[arg(short = 'a', long = "args")]
+        args: Vec<String>,
+    },
+    /// Show MCP server status (alias: st)
+    #[command(alias = "stat")]
     Status {
         /// Server name (optional, shows all if not specified)
         name: Option<String>,
