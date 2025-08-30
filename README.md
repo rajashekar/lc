@@ -51,7 +51,6 @@ lc config set model gpt-4
 lc "What is the capital of France?"
 ```
 
-
 ## System Requirements
 
 **Before building from source**, ensure you have the required system dependencies:
@@ -156,46 +155,9 @@ lc --use-search brave "What are the latest developments in quantum computing?"
 lc --use-search "brave:quantum computing 2024" "Summarize the findings"
 
 # Generate images from text prompts
-lc image "A futuristic city with flying cars" -m dall-e-3 -s 1024x1024
+lc image "A futuristic city with flying cars" -m dall-e-3 -s 1024x1024 -o /tmp
 lc img "Abstract art with vibrant colors" -c 2 -o ./generated_images
 ```
-
-### Image Generation
-
-`lc` supports text-to-image generation using compatible providers:
-
-```bash
-# Basic image generation
-lc image "A beautiful sunset over mountains"
-
-# Generate with specific model and size
-lc image "A futuristic robot" -m dall-e-3 -s 1024x1024
-
-# Generate multiple images
-lc image "Abstract geometric patterns" -c 4
-
-# Save to specific directory
-lc image "A cozy coffee shop" -o ./my_images
-
-# Use short alias
-lc img "A magical forest" -m dall-e-2 -s 512x512
-
-# Generate with specific provider
-lc image "Modern architecture" -p openai -m dall-e-3
-
-# Debug mode to see API requests
-lc image "Space exploration" --debug
-```
-
-**Supported Parameters:**
-- `-m, --model`: Image generation model (e.g., dall-e-2, dall-e-3)
-- `-p, --provider`: Provider to use (openai, etc.)
-- `-s, --size`: Image size (256x256, 512x512, 1024x1024, 1792x1024, 1024x1792)
-- `-c, --count`: Number of images to generate (1-10, default: 1)
-- `-o, --output`: Output directory for saved images (default: current directory)
-- `--debug`: Enable debug mode to see API requests
-
-**Note:** Image generation is currently supported by OpenAI-compatible providers. Generated images are automatically saved with timestamps and descriptive filenames.
 
 ### TLS Configuration and Debugging
 
@@ -237,49 +199,6 @@ $env:LC_DISABLE_TLS_VERIFY=1; lc embed -m openai:text-embedding-3-small "test te
 - **Bypass Specific Domains**: Configure your debugging tool to exclude specific APIs from interception
 - **Use System Certificates**: Ensure your system's certificate store is up to date
 
-### Vision/Image Support
-
-`lc` supports image inputs for vision-capable models across multiple providers:
-
-```bash
-# Single image analysis
-lc -m gpt-4-vision-preview -i photo.jpg "What's in this image?"
-
-# Multiple images
-lc -m claude-3-opus-20240229 -i before.jpg -i after.jpg "Compare these images"
-
-# Image from URL
-lc -m gemini-pro-vision -i https://example.com/image.jpg "Describe this image"
-
-# Interactive chat with images
-lc chat -m gpt-4-vision-preview -i screenshot.png
-
-# Find vision-capable models
-lc models --vision
-
-# Combine with other features
-lc -m gpt-4-vision-preview -i diagram.png -a notes.txt "Explain this diagram with the context from my notes"
-```
-
-Supported formats: JPG, PNG, GIF, WebP (max 20MB per image)
-
-### Model Context Protocol (MCP)
-
-`lc` supports MCP servers to extend LLM capabilities with external tools:
-
-```bash
-# Add an MCP server
-lc mcp add fetch "uvx mcp-server-fetch" --type stdio
-
-# List available functions
-lc mcp functions fetch
-
-# Use tools in prompts
-lc -t fetch "Get the current weather in Tokyo"
-
-# Interactive chat with tools
-lc chat -m gpt-4 -t fetch
-```
 
 **Platform Support for MCP Daemon:**
 - **Unix systems** (Linux, macOS, WSL2): Full MCP daemon support with persistent connections via Unix sockets (enabled by default with the `unix-sockets` feature)
@@ -290,8 +209,6 @@ To build without Unix socket support:
 ```bash
 cargo build --release --no-default-features --features pdf
 ```
-
-Learn more about MCP in our [documentation](https://lc.viwq.dev/advanced/mcp).
 
 ### File Attachments and PDF Support
 

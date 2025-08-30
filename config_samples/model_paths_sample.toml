@@ -1,6 +1,0 @@
-# Sample configuration file for model_paths.toml
-# This is a sanitized version with sensitive values masked
-# Replace <your-*> placeholders with your actual values
-# Comments below explain what each setting does
-
-paths = [".data[]", ".models[]", ".", ".modelSummaries"]

@@ -28,27 +28,6 @@ This directory contains PDF test fixtures for automated testing of the PDF reade
 - **Expected Result**: Error with appropriate error message
 - **Test Cases**: Error handling, graceful failure modes
 
-## Generated Fixtures (if available)
-
-If the Python script `scripts/generate_pdf_fixtures.py` is run with dependencies installed, additional fixtures will be created:
-
-### `encrypted.pdf`
-- **Purpose**: Password-protected PDF testing
-- **Content**: Simple text requiring password "testpassword"
-- **Expected Result**: Error indicating encryption/password required
-- **Test Cases**: Encryption handling, security error messages
-
-### `image_only.pdf`
-- **Purpose**: Image-only PDF testing
-- **Content**: PDF containing only rasterized images (no selectable text)
-- **Expected Result**: "[image page]" indicator or similar
-- **Test Cases**: OCR-required content detection
-
-### `complex.pdf`
-- **Purpose**: Complex content testing
-- **Content**: Mixed fonts, special characters, Unicode text
-- **Expected Result**: All text extracted with proper encoding
-- **Test Cases**: Character encoding, font handling, Unicode support
 
 ## Test Strategy
 
