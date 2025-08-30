@@ -24,7 +24,7 @@ pub async fn handle_direct(
     _audio_files: Vec<String>,
     tools: Option<String>,
     _vectordb: Option<String>,
-    _use_search: Option<String>,
+    use_search: Option<String>,
     stream: bool,
 ) -> Result<()> {
     debug_log!(
@@ -79,6 +79,46 @@ pub async fn handle_direct(
 
     debug_log!("Using API model name: '{}'", api_model_name);
 
+    // Process search if --use-search is specified
+    let final_prompt = if let Some(search_spec) = use_search {
+        debug_log!("Processing search with spec: {}", search_spec);
+        
+        // Parse search spec (format: "provider" or "provider:query")
+        let (search_provider, search_query) = if search_spec.contains(':') {
+            let parts: Vec<&str> = search_spec.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                (parts[0].to_string(), parts[1].to_string())
+            } else {
+                (search_spec, prompt.clone())
+            }
+        } else {
+            (search_spec, prompt.clone())
+        };
+        
+        debug_log!("Search provider: '{}', query: '{}'", search_provider, search_query);
+        
+        // Perform the search
+        let search_engine = crate::search::SearchEngine::new()?;
+        let search_results = search_engine.search(&search_provider, &search_query, Some(5)).await?;
+        
+        // Extract context from search results
+        let search_context = search_engine.extract_context_for_llm(&search_results, 5);
+        
+        // Combine search context with original prompt
+        let combined_prompt = format!(
+            "{}\n\nUser's question: {}",
+            search_context,
+            prompt
+        );
+        
+        debug_log!("Added search context, combined prompt length: {}", combined_prompt.len());
+        println!("🔍 Search completed: {} results from {}\n", search_results.results.len(), search_provider);
+        
+        combined_prompt
+    } else {
+        prompt.clone()
+    };
+
     // Fetch MCP tools if specified
     let (mcp_tools, mcp_server_names) = if let Some(tools_str) = &tools {
         crate::core::tools::fetch_mcp_tools(tools_str).await?
@@ -109,7 +149,7 @@ pub async fn handle_direct(
         send_chat_request_with_streaming(
             &client,
             &api_model_name,
-            &prompt,
+            &final_prompt,
             &[], // No history for direct prompt
             system_prompt.as_deref(),
             max_tokens_parsed,
@@ -133,7 +173,7 @@ pub async fn handle_direct(
             crate::core::chat::send_chat_request_with_tool_execution(
                 &client,
                 &api_model_name,
-                &prompt,
+                &final_prompt,
                 &[], // No history for direct prompt
                 system_prompt.as_deref(),
                 max_tokens_parsed,
@@ -147,7 +187,7 @@ pub async fn handle_direct(
             send_chat_request_with_validation(
                 &client,
                 &api_model_name,
-                &prompt,
+                &final_prompt,
                 &[], // No history for direct prompt
                 system_prompt.as_deref(),
                 max_tokens_parsed,

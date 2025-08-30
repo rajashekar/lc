@@ -1,5 +1,5 @@
 //! CLI definitions and command structures
-//! This file contains all the CLI struct and enum definitions that were previously in cli_old.rs
+//! This file contains all the CLI struct and enum definitions
 
 use clap::{Parser, Subcommand};
 
@@ -1103,33 +1103,56 @@ pub enum ConfigureCommands {
 
 #[derive(Subcommand)]
 pub enum SearchCommands {
+    /// Manage search providers (alias: p)
+    #[command(alias = "p")]
+    Provider {
+        #[command(subcommand)]
+        command: SearchProviderCommands,
+    },
+    /// Query a search provider directly (alias: q)
+    #[command(alias = "q")]
+    Query {
+        /// Search provider name
+        provider: String,
+        /// Search query
+        query: String,
+        /// Output format (json or md/markdown)
+        #[arg(short = 'f', long = "format", default_value = "md")]
+        format: String,
+        /// Number of results to return
+        #[arg(short = 'n', long = "count", default_value = "5")]
+        count: usize,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SearchProviderCommands {
     /// Add a search provider (alias: a)
     #[command(alias = "a")]
     Add {
         /// Provider name
         name: String,
-        /// Provider type (google, bing, duckduckgo, etc.)
-        provider_type: String,
-        /// API key (if required)
-        #[arg(short = 'k', long = "key")]
-        api_key: Option<String>,
-    },
-    /// Remove a search provider (alias: r)
-    #[command(alias = "r")]
-    Remove {
-        /// Provider name
-        name: String,
+        /// Provider URL (auto-detects type)
+        url: String,
     },
     /// List all search providers (alias: l)
     #[command(alias = "l")]
     List,
-    /// Test a search provider (alias: t)
-    #[command(alias = "t")]
-    Test {
+    /// Delete a search provider (alias: d)
+    #[command(alias = "d")]
+    Delete {
         /// Provider name
         name: String,
-        /// Test query
-        query: String,
+    },
+    /// Set provider headers/configuration (alias: s)
+    #[command(alias = "s")]
+    Set {
+        /// Provider name
+        provider: String,
+        /// Header name (e.g., X-API-KEY, Authorization)
+        header_name: String,
+        /// Header value
+        header_value: String,
     },
 }
 

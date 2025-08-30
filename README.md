@@ -143,11 +143,13 @@ lc mcp functions playwright
 # to invoke a mcp function
 lc mcp invoke playwright browser_navigate url=https://google.com
 
-
 # Use playwright tools with chat
 lc -m openai:gpt-4o-mini -t playwright "Go to google.com and search for Model context protocol"
 
 # Web search integration
+lc search provider add brave https://api.search.brave.com/res/v1/web/search -t brave
+lc search provider set brave X-Subscription-Token YOUR_API_KEY
+
 lc --use-search brave "What are the latest developments in quantum computing?"
 
 # Search with specific query
@@ -156,42 +158,6 @@ lc --use-search "brave:quantum computing 2024" "Summarize the findings"
 # Generate images from text prompts
 lc image "A futuristic city with flying cars" -m dall-e-3 -s 1024x1024
 lc img "Abstract art with vibrant colors" -c 2 -o ./generated_images
-```
-
-### Web Search Integration
-
-`lc` supports web search integration to enhance prompts with real-time information:
-
-```bash
-# Configure Brave Search
-lc search provider add brave https://api.search.brave.com/res/v1/web/search -t brave
-lc search provider set brave X-Subscription-Token YOUR_API_KEY
-
-# Configure Exa (AI-powered search)
-lc search provider add exa https://api.exa.ai -t exa
-lc search provider set exa x-api-key YOUR_API_KEY
-
-# Configure Serper (Google Search API)
-lc search provider add serper https://google.serper.dev -t serper
-lc search provider set serper X-API-KEY YOUR_API_KEY
-
-# Set default search provider
-lc config set search brave
-
-# Direct search
-lc search query brave "rust programming language" -f json
-lc search query exa "machine learning best practices" -n 10
-lc search query serper "latest AI developments" -f md
-
-# Use search results as context
-lc --use-search brave "What are the latest AI breakthroughs?"
-lc --use-search exa "Explain transformer architecture"
-lc --use-search serper "What are the current trends in quantum computing?"
-
-# Search with custom query
-lc --use-search "brave:specific search terms" "Analyze these results"
-lc --use-search "exa:neural networks 2024" "Summarize recent advances"
-lc --use-search "serper:GPT-4 alternatives 2024" "Compare the latest language models"
 ```
 
 ### Image Generation
