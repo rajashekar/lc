@@ -1,6 +1,6 @@
 use crate::{
     config::Config,
-    debug_log,  // Import debug_log macro
+    debug_log, // Import debug_log macro
     model_metadata::{extract_models_from_provider, ModelMetadata},
     provider::Provider,
 };
@@ -322,7 +322,7 @@ impl UnifiedCache {
         );
 
         let mut config_mut = config.clone();
-        let _client = crate::chat::create_authenticated_client(&mut config_mut, provider).await?;
+        let client = crate::chat::create_authenticated_client(&mut config_mut, provider).await?;
 
         // Save config if tokens were updated
         if config_mut.get_cached_token(provider) != config.get_cached_token(provider) {
@@ -333,19 +333,55 @@ impl UnifiedCache {
             config_mut.save()?;
         }
 
-        // Fetch raw response
+        // Build the models URL
+        let models_url = format!(
+            "{}{}",
+            provider_config.endpoint, provider_config.models_path
+        );
+        debug_log!("Fetching models from URL: {}", models_url);
+
+        // Fetch raw response using the client's list_models method
         debug_log!(
             "Making API request to fetch models from provider '{}'",
             provider
         );
-        // TODO: Implement raw models response fetching in the new architecture
-        // For now, return an empty response to avoid compilation error
-        let raw_response = r#"{"data": [], "object": "list"}"#;
+
+        // Make the actual API request to fetch models
+        let models_list = client.list_models().await?;
+
+        // Create a JSON response that matches the OpenAI models format
+        // This is what we'll cache as the "raw response"
+        let models_json = serde_json::json!({
+            "object": "list",
+            "data": models_list.iter().map(|m| {
+                serde_json::json!({
+                    "id": m.id,
+                    "object": m.object,
+                    "providers": m.providers.iter().map(|p| {
+                        serde_json::json!({
+                            "provider": p.provider,
+                            "status": p.status,
+                            "supports_tools": p.supports_tools,
+                            "supports_structured_output": p.supports_structured_output
+                        })
+                    }).collect::<Vec<_>>()
+                })
+            }).collect::<Vec<_>>()
+        });
+
+        let raw_response = serde_json::to_string_pretty(&models_json)?;
 
         debug_log!(
             "Received raw response from provider '{}' ({} bytes)",
             provider,
             raw_response.len()
+        );
+
+        // Debug log the full response when -d flag is used
+        debug_log!(
+            "Full response from provider '{}': {}",
+            provider,
+            raw_response
         );
 
         // Extract metadata using the new generic approach
@@ -362,7 +398,7 @@ impl UnifiedCache {
             supports_structured_output: false,
         };
 
-        let models = extract_models_from_provider(&provider_obj, raw_response)?;
+        let models = extract_models_from_provider(&provider_obj, &raw_response)?;
 
         debug_log!(
             "Extracted {} models from provider '{}'",
@@ -372,7 +408,7 @@ impl UnifiedCache {
 
         // Cache the data (both in-memory and file)
         debug_log!("Saving cache data for provider '{}'", provider);
-        Self::save_provider_cache(provider, raw_response, &models).await?;
+        Self::save_provider_cache(provider, &raw_response, &models).await?;
 
         Ok(models)
     }

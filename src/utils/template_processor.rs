@@ -4,7 +4,7 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use tera::{Context as TeraContext, Filter, Tera, Value};
 
-use crate::provider::{ChatRequest, Message, MessageContent, ContentPart};
+use crate::provider::{ChatRequest, ContentPart, Message, MessageContent};
 
 /// Template processor for handling request/response transformations
 #[derive(Clone)]
@@ -18,11 +18,11 @@ pub struct EndpointTemplates {
     /// Default template for all models
     #[serde(default)]
     pub template: Option<TemplateConfig>,
-    
+
     /// Model-specific templates (exact match)
     #[serde(default)]
     pub model_templates: HashMap<String, TemplateConfig>,
-    
+
     /// Model pattern templates (regex match)
     #[serde(default)]
     pub model_template_patterns: HashMap<String, TemplateConfig>,
@@ -63,7 +63,7 @@ impl EndpointTemplates {
                 _ => None,
             };
         }
-        
+
         // Then check regex patterns
         for (pattern, template) in &self.model_template_patterns {
             if let Ok(re) = regex::Regex::new(pattern) {
@@ -77,7 +77,7 @@ impl EndpointTemplates {
                 }
             }
         }
-        
+
         // Finally fall back to default template
         if let Some(template) = &self.template {
             return match template_type {
@@ -87,7 +87,7 @@ impl EndpointTemplates {
                 _ => None,
             };
         }
-        
+
         None
     }
 }
@@ -96,7 +96,7 @@ impl TemplateProcessor {
     /// Create a new template processor
     pub fn new() -> Result<Self> {
         let mut tera = Tera::default();
-        
+
         // Register custom filters
         tera.register_filter("json", JsonFilter);
         tera.register_filter("gemini_role", GeminiRoleFilter);
@@ -108,13 +108,18 @@ impl TemplateProcessor {
         tera.register_filter("base_messages", BaseMessagesFilter);
         tera.register_filter("anthropic_messages", AnthropicMessagesFilter);
         tera.register_filter("gemini_messages", GeminiMessagesFilter);
-        
+
         Ok(Self { tera })
     }
 
     /// Render a template directly
     #[allow(dead_code)]
-    pub fn render_template(&mut self, name: &str, template: &str, context: &TeraContext) -> Result<String> {
+    pub fn render_template(
+        &mut self,
+        name: &str,
+        template: &str,
+        context: &TeraContext,
+    ) -> Result<String> {
         self.tera.add_raw_template(name, template)?;
         Ok(self.tera.render(name, context)?)
     }
@@ -133,38 +138,39 @@ impl TemplateProcessor {
 
         // Build context from ChatRequest
         let mut context = TeraContext::new();
-        
+
         // Add basic fields
         context.insert("model", &request.model);
         context.insert("max_tokens", &request.max_tokens);
         context.insert("temperature", &request.temperature);
         context.insert("stream", &request.stream);
         context.insert("tools", &request.tools);
-        
+
         // Process messages into a format suitable for templates
         let processed_messages = self.process_messages(&request.messages)?;
         context.insert("messages", &processed_messages);
-        
+
         // Extract system prompt if present
         if let Some(system_msg) = request.messages.iter().find(|m| m.role == "system") {
             if let Some(content) = system_msg.get_text_content() {
                 context.insert("system_prompt", content);
             }
         }
-        
+
         // Add provider-specific variables
         for (key, value) in provider_vars {
             context.insert(key, value);
         }
 
         // Render template
-        let rendered = self.tera
+        let rendered = self
+            .tera
             .render("request", &context)
             .context("Failed to render request template")?;
 
         // Parse as JSON to validate
-        let json_value: JsonValue = serde_json::from_str(&rendered)
-            .context("Template did not produce valid JSON")?;
+        let json_value: JsonValue =
+            serde_json::from_str(&rendered).context("Template did not produce valid JSON")?;
 
         Ok(json_value)
     }
@@ -183,7 +189,7 @@ impl TemplateProcessor {
 
         // Build context from ImageGenerationRequest
         let mut context = TeraContext::new();
-        
+
         // Add basic fields
         context.insert("prompt", &request.prompt);
         context.insert("model", &request.model);
@@ -192,20 +198,21 @@ impl TemplateProcessor {
         context.insert("quality", &request.quality);
         context.insert("style", &request.style);
         context.insert("response_format", &request.response_format);
-        
+
         // Add provider-specific variables
         for (key, value) in provider_vars {
             context.insert(key, value);
         }
 
         // Render template
-        let rendered = self.tera
+        let rendered = self
+            .tera
             .render("image_request", &context)
             .context("Failed to render image request template")?;
 
         // Parse as JSON to validate
-        let json_value: JsonValue = serde_json::from_str(&rendered)
-            .context("Image template did not produce valid JSON")?;
+        let json_value: JsonValue =
+            serde_json::from_str(&rendered).context("Image template did not produce valid JSON")?;
 
         Ok(json_value)
     }
@@ -225,7 +232,7 @@ impl TemplateProcessor {
 
         // Build context from AudioTranscriptionRequest
         let mut context = TeraContext::new();
-        
+
         // Add basic fields
         context.insert("file", &request.file);
         context.insert("model", &request.model);
@@ -233,20 +240,21 @@ impl TemplateProcessor {
         context.insert("prompt", &request.prompt);
         context.insert("response_format", &request.response_format);
         context.insert("temperature", &request.temperature);
-        
+
         // Add provider-specific variables
         for (key, value) in provider_vars {
             context.insert(key, value);
         }
 
         // Render template
-        let rendered = self.tera
+        let rendered = self
+            .tera
             .render("audio_request", &context)
             .context("Failed to render audio request template")?;
 
         // Parse as JSON to validate
-        let json_value: JsonValue = serde_json::from_str(&rendered)
-            .context("Audio template did not produce valid JSON")?;
+        let json_value: JsonValue =
+            serde_json::from_str(&rendered).context("Audio template did not produce valid JSON")?;
 
         Ok(json_value)
     }
@@ -265,21 +273,22 @@ impl TemplateProcessor {
 
         // Build context from AudioSpeechRequest
         let mut context = TeraContext::new();
-        
+
         // Add basic fields
         context.insert("model", &request.model);
         context.insert("input", &request.input);
         context.insert("voice", &request.voice);
         context.insert("response_format", &request.response_format);
         context.insert("speed", &request.speed);
-        
+
         // Add provider-specific variables
         for (key, value) in provider_vars {
             context.insert(key, value);
         }
 
         // Render template
-        let rendered = self.tera
+        let rendered = self
+            .tera
             .render("speech_request", &context)
             .context("Failed to render speech request template")?;
 
@@ -304,19 +313,20 @@ impl TemplateProcessor {
 
         // Build context from EmbeddingRequest
         let mut context = TeraContext::new();
-        
+
         // Add basic fields
         context.insert("model", &request.model);
         context.insert("input", &request.input);
         context.insert("encoding_format", &request.encoding_format);
-        
+
         // Add provider-specific variables
         for (key, value) in provider_vars {
             context.insert(key, value);
         }
 
         // Render template
-        let rendered = self.tera
+        let rendered = self
+            .tera
             .render("embeddings_request", &context)
             .context("Failed to render embeddings request template")?;
 
@@ -328,11 +338,7 @@ impl TemplateProcessor {
     }
 
     /// Process a response using the provided template
-    pub fn process_response(
-        &mut self,
-        response: &JsonValue,
-        template: &str,
-    ) -> Result<JsonValue> {
+    pub fn process_response(&mut self, response: &JsonValue, template: &str) -> Result<JsonValue> {
         // Add template to Tera
         self.tera
             .add_raw_template("response", template)
@@ -343,7 +349,8 @@ impl TemplateProcessor {
             .context("Failed to serialize response to context")?;
 
         // Render template
-        let rendered = self.tera
+        let rendered = self
+            .tera
             .render("response", &context)
             .context("Failed to render response template")?;
 
@@ -383,13 +390,13 @@ impl TemplateProcessor {
                                     if let Some(comma_pos) = data_url.find(',') {
                                         let header = &data_url[..comma_pos];
                                         let data = &data_url[comma_pos + 1..];
-                                        
+
                                         let mime_type = if let Some(semi_pos) = header.find(';') {
                                             header[..semi_pos].to_string()
                                         } else {
                                             header.to_string()
                                         };
-                                        
+
                                         proc_msg.images.push(ProcessedImage {
                                             mime_type,
                                             data: data.to_string(),
@@ -441,7 +448,10 @@ impl Filter for JsonFilter {
     fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
         match serde_json::to_string(&value) {
             Ok(json_str) => Ok(Value::String(json_str)),
-            Err(e) => Err(tera::Error::msg(format!("Failed to serialize to JSON: {}", e))),
+            Err(e) => Err(tera::Error::msg(format!(
+                "Failed to serialize to JSON: {}",
+                e
+            ))),
         }
     }
 }
@@ -497,11 +507,13 @@ struct SelectToolCallsFilter;
 impl Filter for SelectToolCallsFilter {
     fn filter(&self, value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
         if let Some(array) = value.as_array() {
-            let key = args.get("key")
+            let key = args
+                .get("key")
                 .and_then(|v| v.as_str())
                 .unwrap_or("functionCall");
-                
-            let filtered: Vec<Value> = array.iter()
+
+            let filtered: Vec<Value> = array
+                .iter()
                 .filter(|item| {
                     item.as_object()
                         .map(|obj| obj.contains_key(key))
@@ -509,7 +521,7 @@ impl Filter for SelectToolCallsFilter {
                 })
                 .cloned()
                 .collect();
-                
+
             Ok(Value::Array(filtered))
         } else {
             Ok(Value::Array(vec![]))
@@ -528,7 +540,10 @@ impl Filter for FromJsonFilter {
                     // Convert JsonValue to Tera Value
                     match serde_json::to_value(&parsed) {
                         Ok(tera_value) => Ok(tera_value),
-                        Err(e) => Err(tera::Error::msg(format!("Failed to convert to Tera value: {}", e))),
+                        Err(e) => Err(tera::Error::msg(format!(
+                            "Failed to convert to Tera value: {}",
+                            e
+                        ))),
                     }
                 }
                 Err(e) => Err(tera::Error::msg(format!("Failed to parse JSON: {}", e))),
@@ -545,14 +560,17 @@ struct SelectAttrFilter;
 impl Filter for SelectAttrFilter {
     fn filter(&self, value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
         if let Some(array) = value.as_array() {
-            let attr_name = args.get("attr")
+            let attr_name = args
+                .get("attr")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| tera::Error::msg("selectattr filter requires 'attr' argument"))?;
-            
-            let test_value = args.get("value")
+
+            let test_value = args
+                .get("value")
                 .ok_or_else(|| tera::Error::msg("selectattr filter requires 'value' argument"))?;
-                
-            let filtered: Vec<Value> = array.iter()
+
+            let filtered: Vec<Value> = array
+                .iter()
                 .filter(|item| {
                     if let Some(obj) = item.as_object() {
                         if let Some(attr_value) = obj.get(attr_name) {
@@ -566,7 +584,7 @@ impl Filter for SelectAttrFilter {
                 })
                 .cloned()
                 .collect();
-                
+
             Ok(Value::Array(filtered))
         } else {
             Ok(Value::Array(vec![]))
@@ -580,11 +598,12 @@ struct BaseMessagesFilter;
 impl Filter for BaseMessagesFilter {
     fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
         if let Some(array) = value.as_array() {
-            let cleaned: Vec<Value> = array.iter()
+            let cleaned: Vec<Value> = array
+                .iter()
                 .map(|item| {
                     if let Some(obj) = item.as_object() {
                         let mut cleaned_obj = serde_json::Map::new();
-                        
+
                         // Only include non-null, non-empty fields that are commonly supported
                         for (key, value) in obj {
                             match key.as_str() {
@@ -594,13 +613,17 @@ impl Filter for BaseMessagesFilter {
                                 }
                                 "tool_calls" => {
                                     // Only include tool_calls if it's not null and not empty
-                                    if !value.is_null() && value.as_array().map_or(true, |arr| !arr.is_empty()) {
+                                    if !value.is_null()
+                                        && value.as_array().map_or(true, |arr| !arr.is_empty())
+                                    {
                                         cleaned_obj.insert(key.clone(), value.clone());
                                     }
                                 }
                                 "tool_call_id" => {
                                     // Only include tool_call_id if it's not null and not empty
-                                    if !value.is_null() && value.as_str().map_or(false, |s| !s.is_empty()) {
+                                    if !value.is_null()
+                                        && value.as_str().map_or(false, |s| !s.is_empty())
+                                    {
                                         cleaned_obj.insert(key.clone(), value.clone());
                                     }
                                 }
@@ -608,14 +631,14 @@ impl Filter for BaseMessagesFilter {
                                 _ => {}
                             }
                         }
-                        
+
                         Value::Object(cleaned_obj)
                     } else {
                         item.clone()
                     }
                 })
                 .collect();
-                
+
             Ok(Value::Array(cleaned))
         } else {
             Ok(value.clone())
@@ -629,22 +652,25 @@ struct AnthropicMessagesFilter;
 impl Filter for AnthropicMessagesFilter {
     fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
         if let Some(array) = value.as_array() {
-            let converted: Vec<Value> = array.iter()
+            let converted: Vec<Value> = array
+                .iter()
                 .map(|item| {
                     if let Some(obj) = item.as_object() {
                         let mut anthropic_msg = serde_json::Map::new();
-                        
+
                         // Always include role
                         if let Some(role) = obj.get("role") {
                             anthropic_msg.insert("role".to_string(), role.clone());
                         }
-                        
+
                         // Convert content to Anthropic's format
                         let mut content_parts = Vec::new();
-                        
+
                         // Add text content if present
                         if let Some(text_content) = obj.get("content") {
-                            if !text_content.is_null() && text_content.as_str().map_or(false, |s| !s.is_empty()) {
+                            if !text_content.is_null()
+                                && text_content.as_str().map_or(false, |s| !s.is_empty())
+                            {
                                 let text_part = serde_json::json!({
                                     "type": "text",
                                     "text": text_content
@@ -652,7 +678,7 @@ impl Filter for AnthropicMessagesFilter {
                                 content_parts.push(text_part);
                             }
                         }
-                        
+
                         // Add image content if present
                         if let Some(images) = obj.get("images") {
                             if let Some(images_array) = images.as_array() {
@@ -660,7 +686,7 @@ impl Filter for AnthropicMessagesFilter {
                                     if let Some(image_obj) = image.as_object() {
                                         if let (Some(data), Some(mime_type)) = (
                                             image_obj.get("data").and_then(|v| v.as_str()),
-                                            image_obj.get("mime_type").and_then(|v| v.as_str())
+                                            image_obj.get("mime_type").and_then(|v| v.as_str()),
                                         ) {
                                             if !data.is_empty() {
                                                 // Base64 image
@@ -674,7 +700,9 @@ impl Filter for AnthropicMessagesFilter {
                                                 });
                                                 content_parts.push(image_part);
                                             }
-                                        } else if let Some(url) = image_obj.get("url").and_then(|v| v.as_str()) {
+                                        } else if let Some(url) =
+                                            image_obj.get("url").and_then(|v| v.as_str())
+                                        {
                                             if !url.starts_with("data:") && !url.is_empty() {
                                                 // URL image
                                                 let image_part = serde_json::json!({
@@ -691,37 +719,49 @@ impl Filter for AnthropicMessagesFilter {
                                 }
                             }
                         }
-                        
+
                         // Set content as array if we have parts, otherwise as string
-                        if content_parts.len() > 1 || (content_parts.len() == 1 && content_parts[0].get("type") == Some(&serde_json::Value::String("image".to_string()))) {
-                            anthropic_msg.insert("content".to_string(), serde_json::Value::Array(content_parts));
+                        if content_parts.len() > 1
+                            || (content_parts.len() == 1
+                                && content_parts[0].get("type")
+                                    == Some(&serde_json::Value::String("image".to_string())))
+                        {
+                            anthropic_msg.insert(
+                                "content".to_string(),
+                                serde_json::Value::Array(content_parts),
+                            );
                         } else if let Some(first_part) = content_parts.first() {
                             if let Some(text) = first_part.get("text") {
                                 anthropic_msg.insert("content".to_string(), text.clone());
                             }
                         }
-                        
+
                         // Include tool_calls if present and not empty
                         if let Some(tool_calls) = obj.get("tool_calls") {
-                            if !tool_calls.is_null() && tool_calls.as_array().map_or(true, |arr| !arr.is_empty()) {
+                            if !tool_calls.is_null()
+                                && tool_calls.as_array().map_or(true, |arr| !arr.is_empty())
+                            {
                                 anthropic_msg.insert("tool_calls".to_string(), tool_calls.clone());
                             }
                         }
-                        
+
                         // Include tool_call_id if present and not empty
                         if let Some(tool_call_id) = obj.get("tool_call_id") {
-                            if !tool_call_id.is_null() && tool_call_id.as_str().map_or(false, |s| !s.is_empty()) {
-                                anthropic_msg.insert("tool_call_id".to_string(), tool_call_id.clone());
+                            if !tool_call_id.is_null()
+                                && tool_call_id.as_str().map_or(false, |s| !s.is_empty())
+                            {
+                                anthropic_msg
+                                    .insert("tool_call_id".to_string(), tool_call_id.clone());
                             }
                         }
-                        
+
                         Value::Object(anthropic_msg)
                     } else {
                         item.clone()
                     }
                 })
                 .collect();
-                
+
             Ok(Value::Array(converted))
         } else {
             Ok(value.clone())
@@ -735,11 +775,12 @@ struct GeminiMessagesFilter;
 impl Filter for GeminiMessagesFilter {
     fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
         if let Some(array) = value.as_array() {
-            let converted: Vec<Value> = array.iter()
+            let converted: Vec<Value> = array
+                .iter()
                 .map(|item| {
                     if let Some(obj) = item.as_object() {
                         let mut gemini_msg = serde_json::Map::new();
-                        
+
                         // Convert role to Gemini format
                         if let Some(role) = obj.get("role").and_then(|v| v.as_str()) {
                             let gemini_role = match role {
@@ -747,22 +788,27 @@ impl Filter for GeminiMessagesFilter {
                                 "system" => "user", // Gemini handles system as user
                                 other => other,
                             };
-                            gemini_msg.insert("role".to_string(), serde_json::Value::String(gemini_role.to_string()));
+                            gemini_msg.insert(
+                                "role".to_string(),
+                                serde_json::Value::String(gemini_role.to_string()),
+                            );
                         }
-                        
+
                         // Convert content to Gemini's parts format
                         let mut parts = Vec::new();
-                        
+
                         // Add text content if present
                         if let Some(text_content) = obj.get("content") {
-                            if !text_content.is_null() && text_content.as_str().map_or(false, |s| !s.is_empty()) {
+                            if !text_content.is_null()
+                                && text_content.as_str().map_or(false, |s| !s.is_empty())
+                            {
                                 let text_part = serde_json::json!({
                                     "text": text_content
                                 });
                                 parts.push(text_part);
                             }
                         }
-                        
+
                         // Add image content if present
                         if let Some(images) = obj.get("images") {
                             if let Some(images_array) = images.as_array() {
@@ -770,7 +816,7 @@ impl Filter for GeminiMessagesFilter {
                                     if let Some(image_obj) = image.as_object() {
                                         if let (Some(data), Some(mime_type)) = (
                                             image_obj.get("data").and_then(|v| v.as_str()),
-                                            image_obj.get("mime_type").and_then(|v| v.as_str())
+                                            image_obj.get("mime_type").and_then(|v| v.as_str()),
                                         ) {
                                             if !data.is_empty() {
                                                 // Base64 image for Gemini
@@ -787,31 +833,35 @@ impl Filter for GeminiMessagesFilter {
                                 }
                             }
                         }
-                        
+
                         // Set parts array
                         gemini_msg.insert("parts".to_string(), serde_json::Value::Array(parts));
-                        
+
                         // Include tool_calls if present and not empty (for function calling)
                         if let Some(tool_calls) = obj.get("tool_calls") {
-                            if !tool_calls.is_null() && tool_calls.as_array().map_or(true, |arr| !arr.is_empty()) {
+                            if !tool_calls.is_null()
+                                && tool_calls.as_array().map_or(true, |arr| !arr.is_empty())
+                            {
                                 gemini_msg.insert("tool_calls".to_string(), tool_calls.clone());
                             }
                         }
-                        
+
                         // Include tool_call_id if present and not empty
                         if let Some(tool_call_id) = obj.get("tool_call_id") {
-                            if !tool_call_id.is_null() && tool_call_id.as_str().map_or(false, |s| !s.is_empty()) {
+                            if !tool_call_id.is_null()
+                                && tool_call_id.as_str().map_or(false, |s| !s.is_empty())
+                            {
                                 gemini_msg.insert("tool_call_id".to_string(), tool_call_id.clone());
                             }
                         }
-                        
+
                         Value::Object(gemini_msg)
                     } else {
                         item.clone()
                     }
                 })
                 .collect();
-                
+
             Ok(Value::Array(converted))
         } else {
             Ok(value.clone())
@@ -828,7 +878,7 @@ mod tests {
         let filter = JsonFilter;
         let value = Value::String("test".to_string());
         let args = HashMap::new();
-        
+
         let result = filter.filter(&value, &args).unwrap();
         assert_eq!(result, Value::String("\"test\"".to_string()));
     }
@@ -837,11 +887,11 @@ mod tests {
     fn test_gemini_role_filter() {
         let filter = GeminiRoleFilter;
         let args = HashMap::new();
-        
+
         let value = Value::String("assistant".to_string());
         let result = filter.filter(&value, &args).unwrap();
         assert_eq!(result, Value::String("model".to_string()));
-        
+
         let value = Value::String("system".to_string());
         let result = filter.filter(&value, &args).unwrap();
         assert_eq!(result, Value::String("user".to_string()));
@@ -852,11 +902,11 @@ mod tests {
         let filter = DefaultFilter;
         let mut args = HashMap::new();
         args.insert("value".to_string(), Value::String("default".to_string()));
-        
+
         let value = Value::Null;
         let result = filter.filter(&value, &args).unwrap();
         assert_eq!(result, Value::String("default".to_string()));
-        
+
         let value = Value::String("existing".to_string());
         let result = filter.filter(&value, &args).unwrap();
         assert_eq!(result, Value::String("existing".to_string()));

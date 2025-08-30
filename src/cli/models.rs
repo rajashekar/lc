@@ -1,9 +1,9 @@
 //! Model management commands
 
-use anyhow::Result;
-use colored::Colorize;
 use crate::cli::{ModelsCommands, ModelsPathCommands, ModelsTagsCommands};
 use crate::{chat, config, debug_log};
+use anyhow::Result;
+use colored::Colorize;
 
 /// Handle model-related commands
 pub async fn handle(
@@ -20,7 +20,7 @@ pub async fn handle(
     let context_length_str = context_length.map(|v| v.to_string());
     let input_length_str = input_length.map(|v| v.to_string());
     let output_length_str = output_length.map(|v| v.to_string());
-    
+
     handle_models_command(
         command,
         query,

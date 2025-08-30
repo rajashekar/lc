@@ -191,7 +191,11 @@ pub async fn handle_sync_configure(
             println!("Setting cloud provider to: {}", provider);
             // TODO: Implement provider configuration
         }
-        Some(ConfigureCommands::S3 { bucket, region, endpoint }) => {
+        Some(ConfigureCommands::S3 {
+            bucket,
+            region,
+            endpoint,
+        }) => {
             println!("Setting S3 bucket to: {}", bucket);
             println!("Setting S3 region to: {}", region);
             if let Some(endpoint_url) = endpoint {
@@ -215,7 +219,11 @@ pub async fn handle_sync_configure(
 async fn setup_s3_config(provider_name: &str) -> Result<()> {
     use std::io::{self, Write};
 
-    println!("{} Setting up S3 configuration for '{}'", "🔧".blue(), provider_name);
+    println!(
+        "{} Setting up S3 configuration for '{}'",
+        "🔧".blue(),
+        provider_name
+    );
     println!(
         "{} This will be stored in your lc config directory",
         "ℹ️".blue()
@@ -292,7 +300,11 @@ async fn setup_s3_config(provider_name: &str) -> Result<()> {
     config.set_provider(provider_name.to_string(), provider_config);
     config.save()?;
 
-    println!("\n{} S3 configuration for '{}' saved successfully!", "✓".green(), provider_name);
+    println!(
+        "\n{} S3 configuration for '{}' saved successfully!",
+        "✓".green(),
+        provider_name
+    );
     println!("{} Configuration details:", "📋".blue());
     println!("  Bucket: {}", bucket_name);
     println!("  Region: {}", region);
@@ -305,8 +317,16 @@ async fn setup_s3_config(provider_name: &str) -> Result<()> {
     }
 
     println!("\n{} You can now use:", "💡".yellow());
-    println!("  {} - Sync to {}", format!("lc sync to {}", provider_name).dimmed(), provider_name);
-    println!("  {} - Sync from {}", format!("lc sync from {}", provider_name).dimmed(), provider_name);
+    println!(
+        "  {} - Sync to {}",
+        format!("lc sync to {}", provider_name).dimmed(),
+        provider_name
+    );
+    println!(
+        "  {} - Sync from {}",
+        format!("lc sync from {}", provider_name).dimmed(),
+        provider_name
+    );
     println!(
         "  {} - View configuration",
         format!("lc sync configure {} show", provider_name).dimmed()

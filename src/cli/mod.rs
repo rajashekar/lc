@@ -1,7 +1,6 @@
 //! CLI module - organized by domain
 
 use anyhow::Result;
-use std::sync::atomic::AtomicBool;
 
 // CLI definitions (structs and enums)
 pub mod definitions;
@@ -10,8 +9,9 @@ pub mod definitions;
 pub mod aliases;
 pub mod audio;
 pub mod chat;
-pub mod config;
 pub mod completion;
+pub mod config;
+pub mod embed;
 pub mod image;
 pub mod keys;
 pub mod logging;
@@ -31,12 +31,9 @@ pub mod webchatproxy;
 // Re-export all CLI types for easy access
 pub use definitions::*;
 
-// Global debug flag
-pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
-
-// Set debug mode
+// Set debug mode - updates the global debug flag used by debug_log! macro
 pub fn set_debug_mode(enabled: bool) {
-    DEBUG_MODE.store(enabled, std::sync::atomic::Ordering::Relaxed);
+    crate::DEBUG_MODE.store(enabled, std::sync::atomic::Ordering::Relaxed);
 }
 
 // Helper function for parsing environment variables

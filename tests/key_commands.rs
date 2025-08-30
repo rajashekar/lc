@@ -46,7 +46,10 @@ mod key_add_tests {
         let openai_name = get_test_provider_name("openai");
         let anthropic_name = get_test_provider_name("anthropic");
 
-        let test_keys = vec![(&openai_name, "sk-openai-123"), (&anthropic_name, "sk-ant-456")];
+        let test_keys = vec![
+            (&openai_name, "sk-openai-123"),
+            (&anthropic_name, "sk-ant-456"),
+        ];
 
         for (provider, key) in test_keys {
             let result = config.set_api_key(provider.to_string(), key.to_string());
@@ -92,7 +95,7 @@ mod key_list_tests {
 
         // Check which providers have keys from centralized keys.toml
         let keys = lc::keys::KeysConfig::load().unwrap();
-        
+
         assert!(keys.has_auth(&openai_name));
         assert!(keys.has_auth(&anthropic_name)); // From test setup
     }
@@ -115,7 +118,7 @@ mod key_list_tests {
 
         // Check status from centralized keys.toml
         let keys = lc::keys::KeysConfig::load().unwrap();
-        
+
         assert!(keys.has_auth(&openai_name));
         assert!(!keys.has_auth(&anthropic_name));
     }
@@ -130,7 +133,7 @@ mod key_get_tests {
     fn test_key_get_existing() {
         let mut config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
-        
+
         config
             .set_api_key(openai_name.clone(), "sk-test-key".to_string())
             .unwrap();
@@ -173,7 +176,7 @@ mod key_remove_tests {
     fn test_key_remove_existing() {
         let mut config = create_config_with_providers();
         let openai_name = get_test_provider_name("openai");
-        
+
         config
             .set_api_key(openai_name.clone(), "sk-test-key".to_string())
             .unwrap();

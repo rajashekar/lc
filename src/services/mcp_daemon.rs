@@ -4,6 +4,12 @@
 //! connections, allowing browser sessions and other stateful resources to persist
 //! across multiple CLI command invocations.
 
+#[cfg(all(unix, feature = "unix-sockets"))]
+use crate::mcp::{
+    create_sse_server_config, create_stdio_server_config, McpConfig, McpServerType, SdkMcpManager,
+};
+#[cfg(all(unix, feature = "unix-sockets"))]
+use anyhow::anyhow;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -12,10 +18,6 @@ use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::net::{UnixListener, UnixStream};
-#[cfg(all(unix, feature = "unix-sockets"))]
-use crate::mcp::{create_sse_server_config, create_stdio_server_config, McpConfig, McpServerType, SdkMcpManager};
-#[cfg(all(unix, feature = "unix-sockets"))]
-use anyhow::anyhow;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DaemonRequest {
@@ -68,7 +70,7 @@ pub struct McpDaemon {
 #[cfg(all(unix, not(feature = "unix-sockets")))]
 impl McpDaemon {
     /// Creates a new MCP daemon instance.
-    /// 
+    ///
     /// **Note**: MCP daemon functionality requires the "unix-sockets" feature to be enabled.
     pub fn new() -> Result<Self> {
         Err(anyhow::anyhow!(
@@ -78,7 +80,7 @@ impl McpDaemon {
     }
 
     /// Returns the socket path for the daemon.
-    /// 
+    ///
     /// **Note**: This returns an error when the unix-sockets feature is disabled.
     pub fn get_socket_path() -> Result<PathBuf> {
         Err(anyhow::anyhow!(
@@ -87,7 +89,7 @@ impl McpDaemon {
     }
 
     /// Starts the daemon service.
-    /// 
+    ///
     /// **Note**: This returns an error when the unix-sockets feature is disabled.
     pub async fn start(&mut self) -> Result<()> {
         Err(anyhow::anyhow!(
@@ -99,7 +101,7 @@ impl McpDaemon {
 #[cfg(windows)]
 impl McpDaemon {
     /// Creates a new MCP daemon instance.
-    /// 
+    ///
     /// **Note**: MCP daemon functionality is not supported on Windows.
     /// This returns an error indicating unsupported operation.
     #[allow(dead_code)]
@@ -112,7 +114,7 @@ impl McpDaemon {
     }
 
     /// Returns the socket path for the daemon.
-    /// 
+    ///
     /// **Note**: This always returns an error on Windows as Unix sockets are not supported.
     #[allow(dead_code)]
     pub fn get_socket_path() -> Result<PathBuf> {
@@ -122,7 +124,7 @@ impl McpDaemon {
     }
 
     /// Starts the daemon service.
-    /// 
+    ///
     /// **Note**: This always returns an error on Windows.
     #[allow(dead_code)]
     pub async fn start(&mut self) -> Result<()> {
@@ -403,7 +405,7 @@ pub struct DaemonClient {
 #[cfg(all(unix, not(feature = "unix-sockets")))]
 impl DaemonClient {
     /// Creates a new daemon client.
-    /// 
+    ///
     /// **Note**: MCP daemon functionality requires the "unix-sockets" feature to be enabled.
     pub fn new() -> Result<Self> {
         Err(anyhow::anyhow!(
@@ -412,14 +414,14 @@ impl DaemonClient {
     }
 
     /// Checks if the daemon is running.
-    /// 
+    ///
     /// **Note**: Always returns false when unix-sockets feature is disabled.
     pub async fn is_daemon_running(&self) -> bool {
         false
     }
 
     /// Attempts to start the daemon if needed.
-    /// 
+    ///
     /// **Note**: Always returns an error when unix-sockets feature is disabled.
     pub async fn start_daemon_if_needed(&self) -> Result<()> {
         Err(anyhow::anyhow!(
@@ -428,7 +430,7 @@ impl DaemonClient {
     }
 
     /// Sends a request to the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error when unix-sockets feature is disabled.
     pub async fn send_request(&self, _request: DaemonRequest) -> Result<DaemonResponse> {
         Err(anyhow::anyhow!(
@@ -437,7 +439,7 @@ impl DaemonClient {
     }
 
     /// Ensures a server is connected via the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error when unix-sockets feature is disabled.
     pub async fn ensure_server_connected(&self, _server_name: &str) -> Result<()> {
         Err(anyhow::anyhow!(
@@ -446,7 +448,7 @@ impl DaemonClient {
     }
 
     /// Calls a tool via the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error when unix-sockets feature is disabled.
     pub async fn call_tool(
         &self,
@@ -460,7 +462,7 @@ impl DaemonClient {
     }
 
     /// Lists tools via the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error when unix-sockets feature is disabled.
     pub async fn list_tools(
         &self,
@@ -472,7 +474,7 @@ impl DaemonClient {
     }
 
     /// Closes a server connection via the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error when unix-sockets feature is disabled.
     pub async fn close_server(&self, _server_name: &str) -> Result<()> {
         Err(anyhow::anyhow!(
@@ -484,7 +486,7 @@ impl DaemonClient {
 #[cfg(windows)]
 impl DaemonClient {
     /// Creates a new daemon client.
-    /// 
+    ///
     /// **Note**: MCP daemon functionality is not supported on Windows.
     pub fn new() -> Result<Self> {
         Err(anyhow::anyhow!(
@@ -493,7 +495,7 @@ impl DaemonClient {
     }
 
     /// Checks if the daemon is running.
-    /// 
+    ///
     /// **Note**: Always returns false on Windows.
     #[allow(dead_code)]
     pub async fn is_daemon_running(&self) -> bool {
@@ -501,7 +503,7 @@ impl DaemonClient {
     }
 
     /// Attempts to start the daemon if needed.
-    /// 
+    ///
     /// **Note**: Always returns an error on Windows.
     #[allow(dead_code)]
     pub async fn start_daemon_if_needed(&self) -> Result<()> {
@@ -511,7 +513,7 @@ impl DaemonClient {
     }
 
     /// Sends a request to the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error on Windows.
     #[allow(dead_code)]
     pub async fn send_request(&self, _request: DaemonRequest) -> Result<DaemonResponse> {
@@ -521,7 +523,7 @@ impl DaemonClient {
     }
 
     /// Ensures a server is connected via the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error on Windows.
     pub async fn ensure_server_connected(&self, _server_name: &str) -> Result<()> {
         Err(anyhow::anyhow!(
@@ -530,7 +532,7 @@ impl DaemonClient {
     }
 
     /// Calls a tool via the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error on Windows.
     pub async fn call_tool(
         &self,
@@ -544,7 +546,7 @@ impl DaemonClient {
     }
 
     /// Lists tools via the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error on Windows.
     pub async fn list_tools(
         &self,
@@ -556,7 +558,7 @@ impl DaemonClient {
     }
 
     /// Closes a server connection via the daemon.
-    /// 
+    ///
     /// **Note**: Always returns an error on Windows.
     pub async fn close_server(&self, _server_name: &str) -> Result<()> {
         Err(anyhow::anyhow!(

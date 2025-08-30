@@ -1,4 +1,3 @@
-
 //! CLI definitions and command structures
 //! This file contains all the CLI struct and enum definitions that were previously in cli_old.rs
 

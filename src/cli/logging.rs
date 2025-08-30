@@ -4,7 +4,7 @@ use anyhow::Result;
 use colored::Colorize;
 use std::io::{self, Write};
 
-use crate::cli::{LogCommands, RecentCommands, AnswerCommands};
+use crate::cli::{AnswerCommands, LogCommands, RecentCommands};
 use crate::database;
 
 /// Handle log-related commands
@@ -106,7 +106,11 @@ async fn show_logs(db: &database::Database, minimal: bool) -> Result<()> {
     Ok(())
 }
 
-async fn handle_recent(db: &database::Database, command: Option<RecentCommands>, count: usize) -> Result<()> {
+async fn handle_recent(
+    db: &database::Database,
+    command: Option<RecentCommands>,
+    count: usize,
+) -> Result<()> {
     match command {
         Some(RecentCommands::Answer { command }) => {
             let entries = db.get_all_logs()?;
@@ -329,9 +333,7 @@ async fn handle_purge(
     } else {
         // Full purge (existing behavior)
         if !yes {
-            print!(
-                "Are you sure you want to purge all logs? This cannot be undone. (y/N): "
-            );
+            print!("Are you sure you want to purge all logs? This cannot be undone. (y/N): ");
             // Deliberately flush stdout to ensure prompt appears before user input
             io::stdout().flush()?;
 

@@ -62,7 +62,9 @@ impl ConnectionPool {
     }
 
     pub fn get_connection(&self) -> Result<PooledConnection> {
-        let mut connections = self.connections.lock()
+        let mut connections = self
+            .connections
+            .lock()
             .map_err(|_| anyhow::anyhow!("Failed to acquire connection pool lock"))?;
 
         if let Some(conn) = connections.pop() {
@@ -104,7 +106,8 @@ impl PooledConnection {
         sql: &str,
         params: impl rusqlite::Params,
     ) -> Result<usize, rusqlite::Error> {
-        self.conn.as_ref()
+        self.conn
+            .as_ref()
             .ok_or_else(|| rusqlite::Error::InvalidPath("Connection not available".into()))?
             .execute(sql, params)
     }
@@ -114,7 +117,8 @@ impl PooledConnection {
         P: rusqlite::Params,
         F: FnOnce(&rusqlite::Row<'_>) -> Result<T, rusqlite::Error>,
     {
-        self.conn.as_ref()
+        self.conn
+            .as_ref()
             .ok_or_else(|| rusqlite::Error::InvalidPath("Connection not available".into()))?
             .query_row(sql, params, f)
     }
@@ -219,7 +223,9 @@ impl Database {
     pub fn get_chat_history(&self, chat_id: &str) -> Result<Vec<ChatEntry>> {
         let conn = self.pool.get_connection()?;
 
-        let conn_ref = conn.conn.as_ref()
+        let conn_ref = conn
+            .conn
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Database connection not available"))?;
         let mut stmt = conn_ref.prepare(
             "SELECT id, chat_id, model, question, response, timestamp, input_tokens, output_tokens
@@ -271,7 +277,9 @@ impl Database {
                 .to_string()
         };
 
-        let conn_ref = conn.conn.as_ref()
+        let conn_ref = conn
+            .conn
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Database connection not available"))?;
         let mut stmt = conn_ref.prepare(&sql)?;
 
@@ -308,10 +316,12 @@ impl Database {
     pub fn get_current_session_id(&self) -> Result<Option<String>> {
         let conn = self.pool.get_connection()?;
 
-        let conn_ref = conn.conn.as_ref()
+        let conn_ref = conn
+            .conn
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Database connection not available"))?;
-        let mut stmt = conn_ref
-            .prepare("SELECT value FROM session_state WHERE key = 'current_session'")?;
+        let mut stmt =
+            conn_ref.prepare("SELECT value FROM session_state WHERE key = 'current_session'")?;
 
         let mut rows = stmt.query_map([], |row| Ok(row.get::<_, String>(0)?))?;
 
@@ -487,7 +497,9 @@ impl Database {
         };
 
         // Get model usage statistics
-        let conn_ref = conn.conn.as_ref()
+        let conn_ref = conn
+            .conn
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Database connection not available"))?;
         let mut stmt = conn_ref.prepare(
             "SELECT model, COUNT(*) as count FROM chat_logs GROUP BY model ORDER BY count DESC",
@@ -550,11 +562,11 @@ mod tests {
     fn test_optimized_database() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        
+
         // Create test database with isolated path
         let pool = ConnectionPool::new(db_path, 3).unwrap();
         let db = Database { pool };
-        
+
         // Initialize schema for test database
         let conn = db.pool.get_connection().unwrap();
         Database::initialize_schema(&conn).unwrap();

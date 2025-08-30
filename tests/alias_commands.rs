@@ -112,14 +112,18 @@ mod alias_add_tests {
             "claude".to_string(),
             "test-anthropic:claude-3-sonnet".to_string(),
         );
-        let result3 = config.add_alias("gpt35".to_string(), "test-openai:gpt-3.5-turbo".to_string());
+        let result3 =
+            config.add_alias("gpt35".to_string(), "test-openai:gpt-3.5-turbo".to_string());
 
         assert!(result1.is_ok());
         assert!(result2.is_ok());
         assert!(result3.is_ok());
 
         // Verify all aliases exist
-        assert_eq!(config.get_alias("gpt4"), Some(&"test-openai:gpt-4".to_string()));
+        assert_eq!(
+            config.get_alias("gpt4"),
+            Some(&"test-openai:gpt-4".to_string())
+        );
         assert_eq!(
             config.get_alias("claude"),
             Some(&"test-anthropic:claude-3-sonnet".to_string())
@@ -141,7 +145,10 @@ mod alias_add_tests {
         // Add initial alias
         let result1 = config.add_alias("gpt".to_string(), "test-openai:gpt-4".to_string());
         assert!(result1.is_ok());
-        assert_eq!(config.get_alias("gpt"), Some(&"test-openai:gpt-4".to_string()));
+        assert_eq!(
+            config.get_alias("gpt"),
+            Some(&"test-openai:gpt-4".to_string())
+        );
 
         // Overwrite with new target
         let result2 = config.add_alias("gpt".to_string(), "test-openai:gpt-3.5-turbo".to_string());
@@ -211,12 +218,18 @@ mod alias_add_tests {
         assert!(result3.is_ok());
 
         // Verify all aliases exist
-        assert_eq!(config.get_alias("gpt-4"), Some(&"test-openai:gpt-4".to_string()));
+        assert_eq!(
+            config.get_alias("gpt-4"),
+            Some(&"test-openai:gpt-4".to_string())
+        );
         assert_eq!(
             config.get_alias("claude_3"),
             Some(&"test-anthropic:claude-3-sonnet".to_string())
         );
-        assert_eq!(config.get_alias("gpt.4"), Some(&"test-openai:gpt-4".to_string()));
+        assert_eq!(
+            config.get_alias("gpt.4"),
+            Some(&"test-openai:gpt-4".to_string())
+        );
     }
 }
 

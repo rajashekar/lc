@@ -47,32 +47,32 @@ pub mod cli;
 pub mod core;
 // Re-export core modules at the top level for compatibility
 pub use core::chat;
+pub use core::completion;
+pub use core::http_client;
 pub use core::provider;
 pub use core::provider_installer;
-pub use core::http_client;
-pub use core::completion;
 
 // Data modules
 pub mod data;
 // Re-export data modules at the top level for compatibility
-pub use data::database;
 pub use data::config;
+pub use data::database;
 pub use data::keys;
 pub use data::vector_db;
 
 // Model-related modules
 pub mod models;
 // Re-export models modules at the top level for compatibility
-pub use models::metadata as model_metadata;
 pub use models::cache as models_cache;
-pub use models::unified_cache;
 pub use models::dump_metadata;
+pub use models::metadata as model_metadata;
+pub use models::unified_cache;
 
 // Service modules
 pub mod services;
 // Re-export service modules at the top level for compatibility
-pub use services::proxy;
 pub use services::mcp;
+pub use services::proxy;
 // MCP daemon module - Unix implementation with Windows stubs
 // On Windows, all daemon functions return appropriate "unsupported" errors
 pub use services::mcp_daemon;
@@ -83,10 +83,10 @@ pub mod utils;
 // Re-export utility modules at the top level for compatibility
 pub use utils::audio as audio_utils;
 pub use utils::image as image_utils;
-pub use utils::token as token_utils;
 pub use utils::input;
-pub use utils::test as test_utils;
 pub use utils::template_processor;
+pub use utils::test as test_utils;
+pub use utils::token as token_utils;
 
 // Analytics modules
 pub mod analytics;

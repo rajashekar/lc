@@ -448,10 +448,14 @@ impl ModelMetadataExtractor {
                     Value::Array(arr) => models.extend(arr.clone()),
                     Value::Object(obj) => {
                         // Check if object looks like a model using configured field mappings
-                        let has_model_field = self.model_paths.field_mappings.id_fields.iter()
+                        let has_model_field = self
+                            .model_paths
+                            .field_mappings
+                            .id_fields
+                            .iter()
                             .any(|field| obj.contains_key(field))
                             || obj.contains_key("model"); // Keep "model" as a generic field
-                        
+
                         if has_model_field {
                             models.push(extracted);
                         }
@@ -599,12 +603,19 @@ impl ModelMetadataExtractor {
         let mut metadata = ModelMetadata::default();
 
         // Extract ID using configured field mappings (in priority order)
-        let base_id = self.model_paths.field_mappings.id_fields.iter()
+        let base_id = self
+            .model_paths
+            .field_mappings
+            .id_fields
+            .iter()
             .find_map(|field| model.get(field).and_then(|v| v.as_str()))
             .map(|s| s.to_string())
             .ok_or_else(|| {
                 let fields = self.model_paths.field_mappings.id_fields.join(", ");
-                anyhow::anyhow!("Model missing required ID field. Checked fields: {}", fields)
+                anyhow::anyhow!(
+                    "Model missing required ID field. Checked fields: {}",
+                    fields
+                )
             })?;
 
         // For HuggingFace models, append the provider suffix from the expanded provider object
@@ -628,7 +639,11 @@ impl ModelMetadataExtractor {
         metadata.raw_data = model.clone();
 
         // Extract basic fields using configured field mappings
-        if let Some(name) = self.model_paths.field_mappings.name_fields.iter()
+        if let Some(name) = self
+            .model_paths
+            .field_mappings
+            .name_fields
+            .iter()
             .find_map(|field| model.get(field).and_then(|v| v.as_str()))
         {
             metadata.display_name = Some(name.to_string());

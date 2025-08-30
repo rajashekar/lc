@@ -1,4 +1,4 @@
-use crate::debug_log;  // Import debug_log macro
+use crate::debug_log; // Import debug_log macro
 use anyhow::Result;
 use dashmap::DashMap;
 use hnsw_rs::prelude::*;
@@ -707,9 +707,7 @@ impl FileProcessor {
 
             // Safety check to prevent infinite loop
             if iteration > 1000 {
-                debug_log!(
-                    "WARNING: Too many iterations, breaking to prevent infinite loop"
-                );
+                debug_log!("WARNING: Too many iterations, breaking to prevent infinite loop");
                 break;
             }
         }

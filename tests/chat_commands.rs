@@ -176,7 +176,8 @@ mod chat_model_resolution_tests {
         assert_eq!(provider, "openai");
         assert_eq!(model, "gpt-4");
 
-        let result = lc::utils::resolve_model_and_provider(&config, None, Some("claude".to_string()));
+        let result =
+            lc::utils::resolve_model_and_provider(&config, None, Some("claude".to_string()));
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "anthropic");

@@ -42,7 +42,6 @@ impl From<&ChatRequest> for ChatRequestWithoutModel {
     }
 }
 
-
 #[derive(Debug, Serialize)]
 pub struct EmbeddingRequest {
     pub model: String,
@@ -310,7 +309,6 @@ pub struct FunctionCall {
     pub arguments: String,
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct ModelsResponse {
     #[serde(alias = "models")]
@@ -372,7 +370,6 @@ impl OpenAIClient {
         custom_headers: std::collections::HashMap<String, String>,
         provider_config: Option<crate::config::ProviderConfig>,
     ) -> Result<Self> {
-
         // Create default headers including the required tracking headers
         let default_headers = Self::create_default_headers();
 
@@ -383,7 +380,8 @@ impl OpenAIClient {
         let streaming_client = Self::build_http_client(default_headers, Duration::from_secs(300))?;
 
         // Create template processor if provider config has templates
-        let template_processor = provider_config.as_ref()
+        let template_processor = provider_config
+            .as_ref()
             .and_then(|config| Self::create_template_processor(config));
 
         Ok(Self {
@@ -414,7 +412,8 @@ impl OpenAIClient {
             chat_path,
             custom_headers,
             None,
-        ).expect("Failed to create OpenAI client")
+        )
+        .expect("Failed to create OpenAI client")
     }
 
     /// Legacy method for backward compatibility - delegates to create_http_client
@@ -433,13 +432,14 @@ impl OpenAIClient {
             chat_path,
             custom_headers,
             Some(provider_config),
-        ).expect("Failed to create OpenAI client with provider config")
+        )
+        .expect("Failed to create OpenAI client with provider config")
     }
 
     /// Creates the default headers for all HTTP clients
     fn create_default_headers() -> reqwest::header::HeaderMap {
         use reqwest::header::{HeaderName, HeaderValue};
-        
+
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             HeaderName::from_static("http-referer"),
@@ -542,7 +542,14 @@ impl OpenAIClient {
             }
             "audio_transcriptions" => {
                 if let Some(ref config) = self.provider_config {
-                    format!("{}{}", self.base_url, config.audio_path.as_deref().unwrap_or("/audio/transcriptions"))
+                    format!(
+                        "{}{}",
+                        self.base_url,
+                        config
+                            .audio_path
+                            .as_deref()
+                            .unwrap_or("/audio/transcriptions")
+                    )
                 } else {
                     format!("{}/audio/transcriptions", self.base_url)
                 }
@@ -575,8 +582,6 @@ impl OpenAIClient {
 
         req
     }
-
-
 
     pub async fn chat(&self, request: &ChatRequest) -> Result<String> {
         let url = self.get_chat_url(&request.model);
@@ -667,20 +672,27 @@ impl OpenAIClient {
 
                 if let Some(template_str) = template {
                     // Parse response as JSON
-                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                    if let Ok(response_json) =
+                        serde_json::from_str::<serde_json::Value>(&response_text)
+                    {
                         // Clone the processor to avoid mutable borrow issues
                         let mut processor_clone = processor.clone();
                         // Use template to extract content
                         match processor_clone.process_response(&response_json, &template_str) {
                             Ok(extracted) => {
                                 // Extract content from the template result
-                                if let Some(content) = extracted.get("content").and_then(|v| v.as_str()) {
+                                if let Some(content) =
+                                    extracted.get("content").and_then(|v| v.as_str())
+                                {
                                     return Ok(content.to_string());
-                                } else if let Some(tool_calls) = extracted.get("tool_calls").and_then(|v| v.as_array()) {
+                                } else if let Some(tool_calls) =
+                                    extracted.get("tool_calls").and_then(|v| v.as_array())
+                                {
                                     if !tool_calls.is_empty() {
                                         let mut response = String::new();
                                         response.push_str("🔧 **Tool Calls Made:**\n\n");
-                                        response.push_str(&format!("Tool calls: {:?}\n\n", tool_calls));
+                                        response
+                                            .push_str(&format!("Tool calls: {:?}\n\n", tool_calls));
                                         response.push_str("*Tool calls detected - execution handled by chat module*\n\n");
                                         return Ok(response);
                                     }
@@ -737,14 +749,15 @@ impl OpenAIClient {
             }
         }
 
-
-
         // If all fail, return an error with the response text for debugging
         anyhow::bail!("Failed to parse chat response. Response: {}", response_text);
     }
 
     pub async fn list_models(&self) -> Result<Vec<Model>> {
         let url = format!("{}{}", self.base_url, self.models_path);
+
+        // Debug log the URL being requested
+        crate::debug_log!("Requesting models from URL: {}", url);
 
         let mut req = self
             .client
@@ -759,26 +772,78 @@ impl OpenAIClient {
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
+            crate::debug_log!("API request failed with status {}: {}", status, text);
             anyhow::bail!("API request failed with status {}: {}", status, text);
         }
 
         // Get the response text first to handle different formats
         let response_text = response.text().await?;
 
+        // Debug log the full response
+        crate::debug_log!(
+            "Received models response ({} bytes): {}",
+            response_text.len(),
+            response_text
+        );
+
         // Try to parse as ModelsResponse first (with "data" field)
-        let models =
-            if let Ok(models_response) = serde_json::from_str::<ModelsResponse>(&response_text) {
-                models_response.data
-            } else if let Ok(parsed_models) = serde_json::from_str::<Vec<Model>>(&response_text) {
-                // If that fails, try to parse as direct array of models
-                parsed_models
+        let models = if let Ok(models_response) =
+            serde_json::from_str::<ModelsResponse>(&response_text)
+        {
+            models_response.data
+        } else if let Ok(parsed_models) = serde_json::from_str::<Vec<Model>>(&response_text) {
+            // If that fails, try to parse as direct array of models
+            parsed_models
+        } else {
+            // Try to parse as Gemini format with "models" field containing different structure
+            if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                if let Some(models_array) = json_value.get("models").and_then(|v| v.as_array()) {
+                    // Convert Gemini models to our Model struct
+                    let mut converted_models = Vec::new();
+                    for model_json in models_array {
+                        // Extract the model name/id - Gemini uses "name" field like "models/gemini-1.5-pro"
+                        if let Some(name) = model_json.get("name").and_then(|v| v.as_str()) {
+                            // Remove "models/" prefix if present
+                            let id = if name.starts_with("models/") {
+                                &name[7..]
+                            } else {
+                                name
+                            };
+
+                            converted_models.push(Model {
+                                id: id.to_string(),
+                                object: "model".to_string(),
+                                providers: vec![], // Gemini doesn't have providers field
+                            });
+                        }
+                    }
+
+                    if !converted_models.is_empty() {
+                        crate::debug_log!(
+                            "Successfully parsed {} Gemini models",
+                            converted_models.len()
+                        );
+                        converted_models
+                    } else {
+                        anyhow::bail!(
+                            "Failed to parse models response. Response: {}",
+                            response_text
+                        );
+                    }
+                } else {
+                    // If all fail, return an error with the response text for debugging
+                    anyhow::bail!(
+                        "Failed to parse models response. Response: {}",
+                        response_text
+                    );
+                }
             } else {
-                // If all fail, return an error with the response text for debugging
                 anyhow::bail!(
                     "Failed to parse models response. Response: {}",
                     response_text
                 );
-            };
+            }
+        };
 
         // Expand models with providers into separate entries
         let mut expanded_models = Vec::new();
@@ -906,7 +971,11 @@ impl OpenAIClient {
                     // Clone the processor to avoid mutable borrow issues
                     let mut processor_clone = processor.clone();
                     // Use template to transform request
-                    match processor_clone.process_embeddings_request(request, &template_str, &config.vars) {
+                    match processor_clone.process_embeddings_request(
+                        request,
+                        &template_str,
+                        &config.vars,
+                    ) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process embeddings request template: {}. Falling back to default.", e);
@@ -951,14 +1020,18 @@ impl OpenAIClient {
 
                 if let Some(template_str) = template {
                     // Parse response as JSON
-                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                    if let Ok(response_json) =
+                        serde_json::from_str::<serde_json::Value>(&response_text)
+                    {
                         // Clone the processor to avoid mutable borrow issues
                         let mut processor_clone = processor.clone();
                         // Use template to transform response
                         match processor_clone.process_response(&response_json, &template_str) {
                             Ok(transformed) => {
                                 // Try to parse the transformed response as EmbeddingResponse
-                                if let Ok(embedding_response) = serde_json::from_value::<EmbeddingResponse>(transformed) {
+                                if let Ok(embedding_response) =
+                                    serde_json::from_value::<EmbeddingResponse>(transformed)
+                                {
                                     return Ok(embedding_response);
                                 }
                             }
@@ -1003,7 +1076,11 @@ impl OpenAIClient {
                     // Clone the processor to avoid mutable borrow issues
                     let mut processor_clone = processor.clone();
                     // Use template to transform request
-                    match processor_clone.process_image_request(request, &template_str, &config.vars) {
+                    match processor_clone.process_image_request(
+                        request,
+                        &template_str,
+                        &config.vars,
+                    ) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process image request template: {}. Falling back to default.", e);
@@ -1049,14 +1126,18 @@ impl OpenAIClient {
 
                 if let Some(template_str) = template {
                     // Parse response as JSON
-                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                    if let Ok(response_json) =
+                        serde_json::from_str::<serde_json::Value>(&response_text)
+                    {
                         // Clone the processor to avoid mutable borrow issues
                         let mut processor_clone = processor.clone();
                         // Use template to transform response
                         match processor_clone.process_response(&response_json, &template_str) {
                             Ok(transformed) => {
                                 // Try to parse the transformed response as ImageGenerationResponse
-                                if let Ok(image_response) = serde_json::from_value::<ImageGenerationResponse>(transformed) {
+                                if let Ok(image_response) =
+                                    serde_json::from_value::<ImageGenerationResponse>(transformed)
+                                {
                                     return Ok(image_response);
                                 }
                             }
@@ -1073,14 +1154,18 @@ impl OpenAIClient {
         let image_response: ImageGenerationResponse = serde_json::from_str(&response_text)?;
         Ok(image_response)
     }
-pub async fn transcribe_audio(
+    pub async fn transcribe_audio(
         &self,
         request: &AudioTranscriptionRequest,
     ) -> Result<AudioTranscriptionResponse> {
         use reqwest::multipart;
-        
+
         // Use helper method to build URL
-        let url = self.build_url("audio_transcriptions", &request.model, "/audio/transcriptions");
+        let url = self.build_url(
+            "audio_transcriptions",
+            &request.model,
+            "/audio/transcriptions",
+        );
 
         // Decode base64 audio data
         use base64::Engine;
@@ -1108,7 +1193,7 @@ pub async fn transcribe_audio(
                 "data:audio/ogg" => "ogg",
                 "data:audio/webm" => "webm",
                 "data:audio/mp4" => "mp4",
-                _ => "wav"
+                _ => "wav",
             }
         } else {
             "wav" // Default extension
@@ -1117,9 +1202,19 @@ pub async fn transcribe_audio(
         // Create multipart form
         let mut form = multipart::Form::new()
             .text("model", request.model.clone())
-            .part("file", multipart::Part::bytes(audio_bytes)
-                .file_name(format!("audio.{}", file_extension))
-                .mime_str(&format!("audio/{}", if file_extension == "mp3" { "mpeg" } else { file_extension }))?);
+            .part(
+                "file",
+                multipart::Part::bytes(audio_bytes)
+                    .file_name(format!("audio.{}", file_extension))
+                    .mime_str(&format!(
+                        "audio/{}",
+                        if file_extension == "mp3" {
+                            "mpeg"
+                        } else {
+                            file_extension
+                        }
+                    ))?,
+            );
 
         // Add optional parameters
         if let Some(language) = &request.language {
@@ -1135,9 +1230,7 @@ pub async fn transcribe_audio(
             form = form.text("temperature", temperature.to_string());
         }
 
-        let mut req = self
-            .client
-            .post(&url);
+        let mut req = self.client.post(&url);
 
         // Add standard headers using helper method
         req = self.add_standard_headers(req);
@@ -1166,14 +1259,20 @@ pub async fn transcribe_audio(
 
                 if let Some(template_str) = template {
                     // Parse response as JSON
-                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                    if let Ok(response_json) =
+                        serde_json::from_str::<serde_json::Value>(&response_text)
+                    {
                         // Clone the processor to avoid mutable borrow issues
                         let mut processor_clone = processor.clone();
                         // Use template to transform response
                         match processor_clone.process_response(&response_json, &template_str) {
                             Ok(transformed) => {
                                 // Try to parse the transformed response as AudioTranscriptionResponse
-                                if let Ok(audio_response) = serde_json::from_value::<AudioTranscriptionResponse>(transformed) {
+                                if let Ok(audio_response) =
+                                    serde_json::from_value::<AudioTranscriptionResponse>(
+                                        transformed,
+                                    )
+                                {
                                     return Ok(audio_response);
                                 }
                             }
@@ -1203,10 +1302,7 @@ pub async fn transcribe_audio(
         }
     }
 
-    pub async fn generate_speech(
-        &self,
-        request: &AudioSpeechRequest,
-    ) -> Result<Vec<u8>> {
+    pub async fn generate_speech(&self, request: &AudioSpeechRequest) -> Result<Vec<u8>> {
         // Use helper method to build URL
         let url = self.build_url("audio_speech", &request.model, "/audio/speech");
 
@@ -1228,7 +1324,11 @@ pub async fn transcribe_audio(
                     // Clone the processor to avoid mutable borrow issues
                     let mut processor_clone = processor.clone();
                     // Use template to transform request
-                    match processor_clone.process_speech_request(request, &template_str, &config.vars) {
+                    match processor_clone.process_speech_request(
+                        request,
+                        &template_str,
+                        &config.vars,
+                    ) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process speech request template: {}. Falling back to default.", e);
@@ -1273,7 +1373,9 @@ pub async fn transcribe_audio(
 
                 if let Some(template_str) = template {
                     // Parse response as JSON
-                    if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                    if let Ok(response_json) =
+                        serde_json::from_str::<serde_json::Value>(&response_text)
+                    {
                         // Clone the processor to avoid mutable borrow issues
                         let mut processor_clone = processor.clone();
                         // Use template to extract base64 data
@@ -1283,7 +1385,9 @@ pub async fn transcribe_audio(
                                 if let Some(base64_data) = extracted.as_str() {
                                     // Decode base64 to bytes
                                     use base64::Engine;
-                                    match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+                                    match base64::engine::general_purpose::STANDARD
+                                        .decode(base64_data)
+                                    {
                                         Ok(audio_bytes) => return Ok(audio_bytes),
                                         Err(e) => {
                                             eprintln!("Warning: Failed to decode base64 audio data: {}. Falling back to default parsing.", e);
@@ -1302,9 +1406,14 @@ pub async fn transcribe_audio(
 
         // Fall back to default parsing - assume response is raw audio bytes
         // Try to parse as base64 first (for providers that return base64 in plain text)
-        if response_text.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=') {
+        if response_text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+        {
             use base64::Engine;
-            if let Ok(audio_bytes) = base64::engine::general_purpose::STANDARD.decode(&response_text) {
+            if let Ok(audio_bytes) =
+                base64::engine::general_purpose::STANDARD.decode(&response_text)
+            {
                 return Ok(audio_bytes);
             }
         }
@@ -1333,13 +1442,13 @@ pub async fn transcribe_audio(
 
         // Add standard headers using helper method
         req = self.add_standard_headers(req);
- 
+
         // Build request body using template if available (same logic as non-streaming chat)
         let request_body = if let Some(ref config) = &self.provider_config {
             if let Some(ref processor) = &self.template_processor {
                 // Get template for chat endpoint
                 let template = config.get_endpoint_template("chat", &request.model);
- 
+
                 if let Some(template_str) = template {
                     // Clone the processor to avoid mutable borrow issues
                     let mut processor_clone = processor.clone();
@@ -1360,14 +1469,14 @@ pub async fn transcribe_audio(
         } else {
             None
         };
- 
+
         // Check if we should exclude model from payload (when model is in URL path)
         let should_exclude_model = if let Some(ref config) = self.provider_config {
             config.chat_path.contains("{model}")
         } else {
             self.chat_path.contains("{model}")
         };
- 
+
         // Send request with template-processed body or fall back to default logic
         let response = if let Some(json_body) = request_body {
             req.json(&json_body).send().await?

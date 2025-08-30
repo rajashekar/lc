@@ -259,12 +259,11 @@ impl MetadataDumper {
 
         // Only add Authorization header if no custom headers are present
         if !has_custom_headers {
-            let api_key = provider_config.api_key.as_ref()
+            let api_key = provider_config
+                .api_key
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("API key is required but not found for provider"))?;
-            req = req.header(
-                "Authorization",
-                format!("Bearer {}", api_key),
-            );
+            req = req.header("Authorization", format!("Bearer {}", api_key));
             crate::debug_log!("Added Authorization header with API key");
         } else {
             crate::debug_log!("Skipping Authorization header due to custom headers present");

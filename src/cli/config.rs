@@ -1,10 +1,10 @@
 //! Configuration management commands
 
+use crate::cli::ConfigCommands;
+use crate::cli::{DeleteCommands, GetCommands, SetCommands};
+use crate::config;
 use anyhow::Result;
 use colored::Colorize;
-use crate::cli::ConfigCommands;
-use crate::cli::{SetCommands, GetCommands, DeleteCommands};
-use crate::config;
 
 /// Handle config-related commands
 pub async fn handle(command: Option<ConfigCommands>) -> Result<()> {
@@ -64,7 +64,10 @@ async fn handle_set_command(command: SetCommands) -> Result<()> {
             let mut search_config = crate::search::SearchConfig::load()?;
 
             if !search_config.has_provider(&name) {
-                anyhow::bail!("Search provider '{}' not found. Add it first with 'lc search provider add'", name);
+                anyhow::bail!(
+                    "Search provider '{}' not found. Add it first with 'lc search provider add'",
+                    name
+                );
             }
 
             search_config.set_default_provider(name.clone())?;
@@ -264,8 +267,7 @@ async fn handle_show_current_config() -> Result<()> {
 
                         // Build capability indicators
                         let mut capabilities = Vec::new();
-                        if model_metadata.supports_tools
-                            || model_metadata.supports_function_calling
+                        if model_metadata.supports_tools || model_metadata.supports_function_calling
                         {
                             capabilities.push("🔧 tools".blue());
                         }

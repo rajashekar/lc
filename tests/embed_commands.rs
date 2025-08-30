@@ -249,7 +249,8 @@ mod embed_model_resolution_tests {
         let config = create_test_config_with_embedding_providers();
 
         // Test alias resolution
-        let result = lc::utils::resolve_model_and_provider(&config, None, Some("large".to_string()));
+        let result =
+            lc::utils::resolve_model_and_provider(&config, None, Some("large".to_string()));
         assert!(result.is_ok());
         let (provider, model) = result.unwrap();
         assert_eq!(provider, "openai");

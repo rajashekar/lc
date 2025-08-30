@@ -25,44 +25,41 @@ impl TestEnvironment {
     /// Create a new test environment verification helper
     pub fn new() -> Self {
         // Get the actual config directory being used
-        let config_dir = lc::config::Config::config_dir()
-            .expect("Failed to get config directory");
-        
-        TestEnvironment {
-            config_dir,
-        }
+        let config_dir = lc::config::Config::config_dir().expect("Failed to get config directory");
+
+        TestEnvironment { config_dir }
     }
-    
+
     /// Get the path to the test configuration directory
     #[allow(dead_code)]
     pub fn config_path(&self) -> &PathBuf {
         &self.config_dir
     }
-    
+
     /// Verify that we're using a test directory, not production
     pub fn verify_test_isolation(&self) {
         let path_str = self.config_dir.to_string_lossy();
-        
+
         // Verify we're in a temp directory
         assert!(
             path_str.contains("lc_test") || path_str.contains("tmp") || path_str.contains("temp"),
             "Config directory should be in temp location for tests: {}",
             path_str
         );
-        
+
         // Verify we're NOT in production directories
         #[cfg(target_os = "macos")]
         assert!(
             !path_str.contains("Library/Application Support/lc"),
             "Should not use production config directory in tests"
         );
-        
+
         #[cfg(target_os = "linux")]
         assert!(
             !path_str.contains(".local/share/lc"),
             "Should not use production config directory in tests"
         );
-        
+
         #[cfg(target_os = "windows")]
         assert!(
             !path_str.contains("AppData") || path_str.contains("Temp"),
@@ -80,7 +77,7 @@ pub fn get_test_binary_path() -> PathBuf {
             .args(&["build", "--bin", "lc"])
             .output()
             .expect("Failed to build test binary");
-        
+
         if !output.status.success() {
             panic!(
                 "Failed to build test binary: {}",
@@ -93,14 +90,14 @@ pub fn get_test_binary_path() -> PathBuf {
     path.push("target");
     path.push("debug");
     path.push("lc");
-    
+
     #[cfg(windows)]
     path.set_extension("exe");
-    
+
     if !path.exists() {
         panic!("Test binary not found at: {:?}", path);
     }
-    
+
     path
 }
 
@@ -178,7 +175,7 @@ pub fn create_config_with_providers() -> Config {
     // Add test providers with test- prefix
     let openai_name = get_test_provider_name("openai");
     let anthropic_name = get_test_provider_name("anthropic");
-    
+
     config.providers.insert(
         openai_name.clone(),
         create_test_provider_config("https://api.openai.com"),
@@ -193,8 +190,10 @@ pub fn create_config_with_providers() -> Config {
 
     // Set up API keys in centralized keys.toml for test setup
     let mut keys = lc::keys::KeysConfig::load().unwrap_or_default();
-    keys.set_api_key(openai_name.clone(), "test-api-key".to_string()).unwrap();
-    keys.set_api_key(anthropic_name.clone(), "test-api-key".to_string()).unwrap();
+    keys.set_api_key(openai_name.clone(), "test-api-key".to_string())
+        .unwrap();
+    keys.set_api_key(anthropic_name.clone(), "test-api-key".to_string())
+        .unwrap();
 
     config
 }
@@ -268,13 +267,13 @@ pub mod assertions {
     pub fn assert_provider_api_key(_config: &Config, name: &str, expected_key: &str) {
         // Load keys from centralized keys.toml
         let keys = lc::keys::KeysConfig::load().expect("Should load keys config");
-        let actual_key = keys.get_api_key(name).expect("Provider should have an API key");
+        let actual_key = keys
+            .get_api_key(name)
+            .expect("Provider should have an API key");
         assert_eq!(
-            actual_key,
-            expected_key,
+            actual_key, expected_key,
             "Provider '{}' API key should be '{}'",
-            name,
-            expected_key
+            name, expected_key
         );
     }
 

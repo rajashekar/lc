@@ -13,8 +13,7 @@ static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 fn get_config_dir() -> PathBuf {
     // Use the Config::config_dir() which handles test isolation
-    lc::config::Config::config_dir()
-        .expect("Could not get config directory")
+    lc::config::Config::config_dir().expect("Could not get config directory")
 }
 
 fn backup_config() -> Result<()> {
@@ -47,7 +46,7 @@ fn cleanup_config() -> Result<()> {
 #[serial]
 fn test_search_provider_add() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -56,22 +55,26 @@ fn test_search_provider_add() -> Result<()> {
 
     // Test the underlying functionality directly instead of via CLI
     let mut config = SearchConfig::load()?;
-    
+
     // Add a search provider (type auto-detected from URL)
     let result = config.add_provider_auto(
         "brave".to_string(),
         "https://api.search.brave.com/res/v1".to_string(),
     );
-    
-    assert!(result.is_ok(), "Failed to add search provider: {:?}", result.err());
-    
+
+    assert!(
+        result.is_ok(),
+        "Failed to add search provider: {:?}",
+        result.err()
+    );
+
     // Save the config
     config.save()?;
 
     // Verify config file was created and contains the provider
     let config_path = get_config_dir().join("search_config.toml");
     assert!(config_path.exists());
-    
+
     // Reload and verify the provider is there
     let reloaded_config = SearchConfig::load()?;
     assert!(reloaded_config.has_provider("brave"));
@@ -85,7 +88,7 @@ fn test_search_provider_add() -> Result<()> {
 #[serial]
 fn test_search_provider_list() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -103,12 +106,15 @@ fn test_search_provider_list() -> Result<()> {
     // Test listing providers
     let providers = config.list_providers();
     assert!(!providers.is_empty(), "Should have at least one provider");
-    assert!(providers.contains_key("brave_list_test"), "Should contain the added provider");
-    
+    assert!(
+        providers.contains_key("brave_list_test"),
+        "Should contain the added provider"
+    );
+
     // Test that the provider has the correct configuration
     let provider = providers.get("brave_list_test").unwrap();
     assert_eq!(provider.url, "https://api.search.brave.com/res/v1");
-    
+
     // The direct API test above already verified the functionality works
 
     cleanup_config()?;
@@ -120,7 +126,7 @@ fn test_search_provider_list() -> Result<()> {
 #[serial]
 fn test_search_provider_delete() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -134,21 +140,31 @@ fn test_search_provider_delete() -> Result<()> {
         "https://api.search.brave.com/res/v1".to_string(),
     )?;
     config.save()?;
-    
+
     // Verify provider exists
     assert!(config.has_provider("brave_delete_test"));
 
     // Delete the provider using direct API
     let result = config.delete_provider("brave_delete_test");
-    assert!(result.is_ok(), "Failed to delete provider: {:?}", result.err());
-    
+    assert!(
+        result.is_ok(),
+        "Failed to delete provider: {:?}",
+        result.err()
+    );
+
     // Save and verify deletion
     config.save()?;
-    assert!(!config.has_provider("brave_delete_test"), "Provider should be deleted");
-    
+    assert!(
+        !config.has_provider("brave_delete_test"),
+        "Provider should be deleted"
+    );
+
     // Reload config and verify deletion persists
     let reloaded_config = SearchConfig::load()?;
-    assert!(!reloaded_config.has_provider("brave_delete_test"), "Provider should still be deleted after reload");
+    assert!(
+        !reloaded_config.has_provider("brave_delete_test"),
+        "Provider should still be deleted after reload"
+    );
 
     cleanup_config()?;
     restore_config()?;
@@ -159,7 +175,7 @@ fn test_search_provider_delete() -> Result<()> {
 #[serial]
 fn test_search_provider_set_header() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -175,13 +191,20 @@ fn test_search_provider_set_header() -> Result<()> {
     config.save()?;
 
     // Set a header using direct API
-    config.set_header("brave", "X-Subscription-Token".to_string(), "test-key".to_string())?;
+    config.set_header(
+        "brave",
+        "X-Subscription-Token".to_string(),
+        "test-key".to_string(),
+    )?;
     config.save()?;
-    
+
     // Verify header was set
     let provider = config.get_provider("brave")?;
     assert!(provider.headers.contains_key("X-Subscription-Token"));
-    assert_eq!(provider.headers.get("X-Subscription-Token"), Some(&"test-key".to_string()));
+    assert_eq!(
+        provider.headers.get("X-Subscription-Token"),
+        Some(&"test-key".to_string())
+    );
 
     cleanup_config()?;
     restore_config()?;
@@ -192,7 +215,7 @@ fn test_search_provider_set_header() -> Result<()> {
 #[serial]
 fn test_default_search_provider_config() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -201,34 +224,34 @@ fn test_default_search_provider_config() -> Result<()> {
 
     // Add providers using direct API
     let mut config = SearchConfig::load()?;
-    
+
     // Add first provider
     config.add_provider_auto(
         "brave".to_string(),
         "https://api.search.brave.com/res/v1".to_string(),
     )?;
-    
+
     // Add second provider
-    config.add_provider_auto(
-        "exa".to_string(),
-        "https://api.exa.ai/search".to_string(),
-    )?;
-    
+    config.add_provider_auto("exa".to_string(), "https://api.exa.ai/search".to_string())?;
+
     config.save()?;
-    
+
     // Verify the first provider is set as default
     assert_eq!(config.get_default_provider(), Some(&"brave".to_string()));
-    
+
     // Test setting a different default
     config.set_default_provider("exa".to_string())?;
     config.save()?;
-    
+
     // Verify the default changed
     assert_eq!(config.get_default_provider(), Some(&"exa".to_string()));
-    
+
     // Reload and verify persistence
     let reloaded_config = SearchConfig::load()?;
-    assert_eq!(reloaded_config.get_default_provider(), Some(&"exa".to_string()));
+    assert_eq!(
+        reloaded_config.get_default_provider(),
+        Some(&"exa".to_string())
+    );
 
     cleanup_config()?;
     restore_config()?;
@@ -239,7 +262,7 @@ fn test_default_search_provider_config() -> Result<()> {
 #[serial]
 fn test_default_search_provider_config_cli() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -248,40 +271,49 @@ fn test_default_search_provider_config_cli() -> Result<()> {
 
     // Add providers using direct API
     let mut config = SearchConfig::load()?;
-    
+
     // Add first provider
     config.add_provider_auto(
         "brave_config_test".to_string(),
         "https://api.search.brave.com/res/v1".to_string(),
     )?;
-    
+
     // Add second provider
     config.add_provider_auto(
         "test_config".to_string(),
         "https://api.search.brave.com/res/v1/test".to_string(),
     )?;
-    
+
     config.save()?;
-    
+
     // Verify the first provider is set as default initially
-    assert_eq!(config.get_default_provider(), Some(&"brave_config_test".to_string()));
-    
+    assert_eq!(
+        config.get_default_provider(),
+        Some(&"brave_config_test".to_string())
+    );
+
     // Test setting a different default
     config.set_default_provider("test_config".to_string())?;
     config.save()?;
-    
+
     // Verify the default changed
-    assert_eq!(config.get_default_provider(), Some(&"test_config".to_string()));
-    
+    assert_eq!(
+        config.get_default_provider(),
+        Some(&"test_config".to_string())
+    );
+
     // Reload and verify persistence
     let reloaded_config = SearchConfig::load()?;
-    assert_eq!(reloaded_config.get_default_provider(), Some(&"test_config".to_string()));
-    
+    assert_eq!(
+        reloaded_config.get_default_provider(),
+        Some(&"test_config".to_string())
+    );
+
     // Test clearing default (set to empty string to clear)
     let mut config = reloaded_config;
     config.set_default_provider("".to_string())?;
     config.save()?;
-    
+
     // Verify default is cleared
     let final_config = SearchConfig::load()?;
     assert_eq!(final_config.get_default_provider(), None);
@@ -295,7 +327,7 @@ fn test_default_search_provider_config_cli() -> Result<()> {
 #[serial]
 fn test_search_query_missing_provider() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -304,13 +336,16 @@ fn test_search_query_missing_provider() -> Result<()> {
 
     // Try to get a nonexistent provider from config
     let config = SearchConfig::load()?;
-    
+
     // Test that getting a nonexistent provider returns None
     let result = config.get_provider("nonexistent");
     assert!(result.is_err(), "Should not find nonexistent provider");
-    
+
     // Test that searching with empty config has no providers
-    assert!(config.list_providers().is_empty(), "Should have no providers configured");
+    assert!(
+        config.list_providers().is_empty(),
+        "Should have no providers configured"
+    );
 
     // The direct API test above already verified that nonexistent providers are handled correctly
 
@@ -323,7 +358,7 @@ fn test_search_query_missing_provider() -> Result<()> {
 #[serial]
 fn test_search_integration_flag() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -342,8 +377,8 @@ fn test_search_integration_flag() -> Result<()> {
     assert!(config.has_provider("brave"));
     let provider = config.get_provider("brave")?;
     assert_eq!(provider.url, "https://api.search.brave.com/res/v1");
-    
-    // Test that we can parse the provider:query format  
+
+    // Test that we can parse the provider:query format
     let query_str = "brave:test query";
     if let Some((provider_name, query)) = query_str.split_once(':') {
         assert_eq!(provider_name, "brave");
@@ -362,7 +397,7 @@ fn test_search_integration_flag() -> Result<()> {
 #[serial]
 fn test_search_provider_duplicate_add() -> Result<()> {
     use lc::search::SearchConfig;
-    
+
     let _guard = TEST_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -376,7 +411,7 @@ fn test_search_provider_duplicate_add() -> Result<()> {
         "https://api.search.brave.com/res/v1".to_string(),
     )?;
     config.save()?;
-    
+
     // Verify provider exists with original URL
     assert!(config.has_provider("brave_dup_test"));
     let provider = config.get_provider("brave_dup_test")?;
@@ -388,14 +423,20 @@ fn test_search_provider_duplicate_add() -> Result<()> {
         "https://api.search.brave.com/res/v1/different".to_string(),
     )?;
     config.save()?;
-    
+
     // Verify URL was updated
     let updated_provider = config.get_provider("brave_dup_test")?;
-    assert_eq!(updated_provider.url, "https://api.search.brave.com/res/v1/different");
-    
+    assert_eq!(
+        updated_provider.url,
+        "https://api.search.brave.com/res/v1/different"
+    );
+
     // Verify we still have only one provider with this name
     let providers = config.list_providers();
-    let brave_providers: Vec<_> = providers.keys().filter(|k| k.contains("brave_dup_test")).collect();
+    let brave_providers: Vec<_> = providers
+        .keys()
+        .filter(|k| k.contains("brave_dup_test"))
+        .collect();
     assert_eq!(brave_providers.len(), 1);
 
     cleanup_config()?;

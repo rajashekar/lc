@@ -1,9 +1,7 @@
 use crate::config::Config;
 use crate::database::ChatEntry;
 use crate::model_metadata::MetadataExtractor;
-use crate::provider::{
-    ChatRequest, Message, MessageContent, OpenAIClient,
-};
+use crate::provider::{ChatRequest, Message, MessageContent, OpenAIClient};
 use crate::token_utils::TokenCounter;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -361,7 +359,6 @@ async fn get_model_metadata(
     provider_name: &str,
     model_name: &str,
 ) -> Option<crate::model_metadata::ModelMetadata> {
-
     let filename = format!("models/{}.json", provider_name);
 
     if !std::path::Path::new(&filename).exists() {
@@ -518,7 +515,6 @@ pub async fn get_or_refresh_token(
     Ok(token_response.token)
 }
 
-
 // All providers now use OpenAIClient with template-based transformations
 pub type LLMClient = OpenAIClient;
 
@@ -532,7 +528,7 @@ pub async fn create_authenticated_client(
         "Creating authenticated client for provider '{}'",
         provider_name
     );
-    
+
     // Get provider config with authentication from centralized keys
     let mut provider_config = config.get_provider_with_auth(provider_name)?;
 
@@ -595,7 +591,7 @@ pub async fn create_authenticated_client(
             && !v.trim().is_empty()
             && !v.contains("${api_key}")
     });
-    
+
     if provider_config.api_key.is_none() && header_has_resolved_key {
         // Header-based auth present (e.g., Gemini x-goog-api-key). No token retrieval needed.
         // Pass empty api_key since Authorization won't be used when custom headers exist.
@@ -609,7 +605,7 @@ pub async fn create_authenticated_client(
         );
         return Ok(client);
     }
-    
+
     // Fallback: API key in Authorization or token URL-based auth
     let temp_client = OpenAIClient::new_with_headers(
         provider_config.endpoint.clone(),
@@ -618,9 +614,9 @@ pub async fn create_authenticated_client(
         provider_config.chat_path.clone(),
         provider_config.headers.clone(),
     );
-    
+
     let auth_token = get_or_refresh_token(config, provider_name, &temp_client).await?;
-    
+
     let client = OpenAIClient::new_with_provider_config(
         provider_config.endpoint.clone(),
         auth_token,
@@ -629,7 +625,7 @@ pub async fn create_authenticated_client(
         provider_config.headers.clone(),
         provider_config.clone(),
     );
-    
+
     Ok(client)
 }
 

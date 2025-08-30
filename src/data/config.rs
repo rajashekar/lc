@@ -320,7 +320,11 @@ impl ProviderConfig {
     }
 
     /// Get response template for a specific endpoint and model
-    pub fn get_endpoint_response_template(&self, endpoint: &str, model_name: &str) -> Option<String> {
+    pub fn get_endpoint_response_template(
+        &self,
+        endpoint: &str,
+        model_name: &str,
+    ) -> Option<String> {
         let endpoint_templates = match endpoint {
             "chat" => self.chat_templates.as_ref()?,
             "images" => self.images_templates.as_ref()?,
@@ -335,7 +339,12 @@ impl ProviderConfig {
     }
 
     /// Get template for a specific model from endpoint templates
-    fn get_template_for_model(&self, templates: &HashMap<String, TemplateConfig>, model_name: &str, template_type: &str) -> Option<String> {
+    fn get_template_for_model(
+        &self,
+        templates: &HashMap<String, TemplateConfig>,
+        model_name: &str,
+        template_type: &str,
+    ) -> Option<String> {
         // First check exact match
         if let Some(template) = templates.get(model_name) {
             return match template_type {
@@ -345,7 +354,7 @@ impl ProviderConfig {
                 _ => None,
             };
         }
-        
+
         // Then check regex patterns (skip empty string which is the default)
         for (pattern, template) in templates {
             if !pattern.is_empty() {
@@ -361,7 +370,7 @@ impl ProviderConfig {
                 }
             }
         }
-        
+
         // Finally check for default template (empty key)
         if let Some(template) = templates.get("") {
             return match template_type {
@@ -371,7 +380,7 @@ impl ProviderConfig {
                 _ => None,
             };
         }
-        
+
         None
     }
 }
@@ -406,12 +415,12 @@ impl Config {
         let mut config = if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
             let mut config: Config = toml::from_str(&content)?;
-            
+
             // If providers exist in main config, migrate them to separate files
             if !config.providers.is_empty() {
                 Self::migrate_providers_to_separate_files(&mut config)?;
             }
-            
+
             config
         } else {
             // Create default config
@@ -440,29 +449,29 @@ impl Config {
 
         // Save the main config (without providers)
         config.save_main_config()?;
-        
+
         // Migrate API keys to centralized keys.toml if needed
         if config.has_providers_with_keys() {
             crate::debug_log!("Detected providers with embedded API keys, initiating migration...");
             let _ = crate::keys::KeysConfig::migrate_from_provider_configs(&config);
         }
-        
+
         Ok(config)
     }
 
     pub fn save(&self) -> Result<()> {
         // Save main config without providers
         self.save_main_config()?;
-        
+
         // Save each provider to its own file
         self.save_providers_to_files()?;
-        
+
         Ok(())
     }
 
     fn save_main_config(&self) -> Result<()> {
         let config_path = Self::config_file_path()?;
-        
+
         // Create a config without providers for the main file
         let main_config = Config {
             providers: HashMap::new(), // Empty - providers are in separate files
@@ -475,7 +484,7 @@ impl Config {
             temperature: self.temperature,
             stream: self.stream,
         };
-        
+
         let content = toml::to_string_pretty(&main_config)?;
         fs::write(&config_path, content)?;
         Ok(())
@@ -488,13 +497,15 @@ impl Config {
         for (provider_name, provider_config) in &self.providers {
             self.save_single_provider_flat(provider_name, provider_config)?;
         }
-        
+
         Ok(())
     }
 
-    fn load_providers_from_files(providers_dir: &PathBuf) -> Result<HashMap<String, ProviderConfig>> {
+    fn load_providers_from_files(
+        providers_dir: &PathBuf,
+    ) -> Result<HashMap<String, ProviderConfig>> {
         let mut providers = HashMap::new();
-        
+
         if !providers_dir.exists() {
             return Ok(providers);
         }
@@ -502,32 +513,46 @@ impl Config {
         for entry in fs::read_dir(providers_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.extension().and_then(|s| s.to_str()) == Some("toml") {
                 if let Some(provider_name) = path.file_stem().and_then(|s| s.to_str()) {
                     let content = fs::read_to_string(&path)?;
-                    
+
                     // Try to parse as new flatter format first
                     match Self::parse_flat_provider_config(&content) {
                         Ok(config) => {
                             providers.insert(provider_name.to_string(), config);
                         }
                         Err(flat_error) => {
-                            crate::debug_log!("Failed to parse {} as flat format: {}", provider_name, flat_error);
-                            
+                            crate::debug_log!(
+                                "Failed to parse {} as flat format: {}",
+                                provider_name,
+                                flat_error
+                            );
+
                             // Try to parse as old nested format for backward compatibility
-                            match toml::from_str::<HashMap<String, HashMap<String, ProviderConfig>>>(&content) {
+                            match toml::from_str::<HashMap<String, HashMap<String, ProviderConfig>>>(
+                                &content,
+                            ) {
                                 Ok(provider_data) => {
-                                    if let Some(providers_section) = provider_data.get("providers") {
+                                    if let Some(providers_section) = provider_data.get("providers")
+                                    {
                                         for (name, config) in providers_section {
                                             providers.insert(name.clone(), config.clone());
                                         }
                                     }
                                 }
                                 Err(nested_error) => {
-                                    crate::debug_log!("Failed to parse {} as nested format: {}", provider_name, nested_error);
-                                    eprintln!("Warning: Failed to parse provider config file '{}': {}",
-                                        path.display(), flat_error);
+                                    crate::debug_log!(
+                                        "Failed to parse {} as nested format: {}",
+                                        provider_name,
+                                        nested_error
+                                    );
+                                    eprintln!(
+                                        "Warning: Failed to parse provider config file '{}': {}",
+                                        path.display(),
+                                        flat_error
+                                    );
                                     eprintln!("  Also failed as nested format: {}", nested_error);
                                     // Skip this provider file instead of failing entirely
                                     continue;
@@ -538,14 +563,14 @@ impl Config {
                 }
             }
         }
-        
+
         Ok(providers)
     }
 
     fn parse_flat_provider_config(content: &str) -> Result<ProviderConfig> {
         // Directly deserialize the ProviderConfig without the wrapper struct
-        let config: ProviderConfig = toml::from_str(content)
-            .map_err(|e| anyhow::anyhow!("TOML parse error: {}", e))?;
+        let config: ProviderConfig =
+            toml::from_str(content).map_err(|e| anyhow::anyhow!("TOML parse error: {}", e))?;
         Ok(config)
     }
 
@@ -560,7 +585,7 @@ impl Config {
 
         // Clear providers from main config since they're now in separate files
         config.providers.clear();
-        
+
         Ok(())
     }
 
@@ -628,11 +653,11 @@ impl Config {
         if !self.has_provider(&provider) {
             anyhow::bail!("Provider '{}' not found", provider);
         }
-        
+
         // Store in centralized keys.toml instead of provider config
         let mut keys = crate::keys::KeysConfig::load()?;
         keys.set_api_key(provider.clone(), api_key)?;
-        
+
         // Clear from provider config if it exists there (for migration)
         if let Some(provider_config) = self.providers.get_mut(&provider) {
             if provider_config.api_key.is_some() {
@@ -641,10 +666,10 @@ impl Config {
                 self.save_single_provider(&provider, &config_clone)?;
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Check if any providers have embedded API keys (for migration detection)
     pub fn has_providers_with_keys(&self) -> bool {
         for (_name, provider_config) in &self.providers {
@@ -656,11 +681,11 @@ impl Config {
         }
         false
     }
-    
+
     /// Get provider with authentication from centralized keys
     pub fn get_provider_with_auth(&self, name: &str) -> Result<ProviderConfig> {
         let mut provider_config = self.get_provider(name)?.clone();
-        
+
         // Load authentication from centralized keys
         if let Some(auth) = crate::keys::get_provider_auth(name)? {
             match auth {
@@ -673,7 +698,7 @@ impl Config {
                             break;
                         }
                     }
-                    
+
                     if has_custom_auth_header {
                         // Replace ${api_key} in headers
                         let mut updated_headers = HashMap::new();
@@ -703,7 +728,7 @@ impl Config {
                 }
             }
         }
-        
+
         Ok(provider_config)
     }
 
@@ -873,28 +898,29 @@ impl Config {
             }
             return Ok(test_path);
         }
-        
+
         // Automatically detect if we're running in a test environment
         // This works because cargo test sets CARGO_TARGET_TMPDIR and other test-specific env vars
         // We can also check if we're running under cargo test by checking for CARGO env vars
         #[cfg(test)]
         {
             // When compiling for tests, always use a temp directory
-            use std::sync::Once;
             use std::sync::Mutex;
-            
+            use std::sync::Once;
+
             static INIT: Once = Once::new();
             static TEST_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
-            
+
             // Get or create the test directory
-            let mut test_dir_guard = TEST_DIR.lock()
+            let mut test_dir_guard = TEST_DIR
+                .lock()
                 .map_err(|_| anyhow::anyhow!("Failed to acquire test directory lock"))?;
             if test_dir_guard.is_none() {
                 // Create a unique temp directory for this test run
                 let temp_dir = std::env::temp_dir()
                     .join("lc_test")
                     .join(format!("test_{}", std::process::id()));
-                
+
                 // Register cleanup on process exit
                 let cleanup_dir = temp_dir.clone();
                 INIT.call_once(|| {
@@ -909,20 +935,20 @@ impl Config {
                             }
                         }
                     }
-                    
+
                     // Create a static cleanup object that will be dropped on exit
                     lazy_static::lazy_static! {
                         static ref CLEANUP: Mutex<Option<TestDirCleanup>> = Mutex::new(None);
                     }
-                    
+
                     if let Ok(mut cleanup) = CLEANUP.lock() {
                         *cleanup = Some(TestDirCleanup(cleanup_dir));
                     }
                 });
-                
+
                 *test_dir_guard = Some(temp_dir);
             }
-            
+
             if let Some(ref test_path) = *test_dir_guard {
                 if !test_path.exists() {
                     fs::create_dir_all(test_path)?;
@@ -930,7 +956,7 @@ impl Config {
                 return Ok(test_path.clone());
             }
         }
-        
+
         // For non-test builds, check if we're running under cargo test
         // This catches integration tests that aren't compiled with #[cfg(test)]
         if std::env::var("CARGO").is_ok() && std::env::var("CARGO_PKG_NAME").is_ok() {
@@ -941,23 +967,24 @@ impl Config {
                     // Cargo test binaries typically have hashes in their names
                     if exe_str.contains("test") || exe_str.contains("-") && exe_str.len() > 20 {
                         // Use a temp directory for tests with automatic cleanup
-                        use tempfile::TempDir;
                         use std::sync::Mutex;
-                        
+                        use tempfile::TempDir;
+
                         // Store the TempDir in a static to keep it alive for the test duration
                         lazy_static::lazy_static! {
                             static ref TEST_TEMP_DIR: Mutex<Option<TempDir>> = Mutex::new(None);
                         }
-                        
-                        let mut temp_dir_guard = TEST_TEMP_DIR.lock()
-                            .map_err(|_| anyhow::anyhow!("Failed to acquire temp directory lock"))?;
+
+                        let mut temp_dir_guard = TEST_TEMP_DIR.lock().map_err(|_| {
+                            anyhow::anyhow!("Failed to acquire temp directory lock")
+                        })?;
                         if temp_dir_guard.is_none() {
                             // Create a new temp directory that will be automatically cleaned up
                             let temp_dir = TempDir::with_prefix("lc_test_")
                                 .map_err(|e| anyhow::anyhow!("Failed to create temp dir: {}", e))?;
                             *temp_dir_guard = Some(temp_dir);
                         }
-                        
+
                         if let Some(ref temp_dir) = *temp_dir_guard {
                             return Ok(temp_dir.path().to_path_buf());
                         }
@@ -965,7 +992,7 @@ impl Config {
                 }
             }
         }
-        
+
         // Use data_local_dir for cross-platform data storage to match database location
         // On macOS: ~/Library/Application Support/lc
         // On Linux: ~/.local/share/lc
@@ -973,7 +1000,7 @@ impl Config {
         let data_dir = dirs::data_local_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?
             .join("lc");
-        
+
         // Only create directory if it doesn't exist to prevent potential recursion
         if !data_dir.exists() {
             fs::create_dir_all(&data_dir)?;
@@ -981,24 +1008,36 @@ impl Config {
         Ok(data_dir)
     }
 
-    fn save_single_provider(&self, provider_name: &str, provider_config: &ProviderConfig) -> Result<()> {
+    fn save_single_provider(
+        &self,
+        provider_name: &str,
+        provider_config: &ProviderConfig,
+    ) -> Result<()> {
         self.save_single_provider_flat(provider_name, provider_config)
     }
 
-    fn save_single_provider_flat(&self, provider_name: &str, provider_config: &ProviderConfig) -> Result<()> {
+    fn save_single_provider_flat(
+        &self,
+        provider_name: &str,
+        provider_config: &ProviderConfig,
+    ) -> Result<()> {
         let providers_dir = Self::providers_dir()?;
         Self::save_single_provider_flat_static(&providers_dir, provider_name, provider_config)
     }
 
-    fn save_single_provider_flat_static(providers_dir: &PathBuf, provider_name: &str, provider_config: &ProviderConfig) -> Result<()> {
+    fn save_single_provider_flat_static(
+        providers_dir: &PathBuf,
+        provider_name: &str,
+        provider_config: &ProviderConfig,
+    ) -> Result<()> {
         fs::create_dir_all(providers_dir)?;
 
         let provider_file = providers_dir.join(format!("{}.toml", provider_name));
-        
+
         // Use the new flat format - serialize the ProviderConfig directly
         let content = toml::to_string_pretty(provider_config)?;
         fs::write(&provider_file, content)?;
-        
+
         Ok(())
     }
 

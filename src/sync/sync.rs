@@ -13,16 +13,15 @@ pub struct ConfigFile {
 /// Encrypt multiple configuration files
 pub fn encrypt_files(config_files: &[ConfigFile]) -> Result<Vec<ConfigFile>> {
     use super::encryption::{derive_key_from_password, encrypt_data};
-    
+
     // Get encryption password from environment or prompt
-    let password = std::env::var("LC_SYNC_PASSWORD")
-        .unwrap_or_else(|_| {
-            rpassword::prompt_password("Enter sync encryption password: ")
-                .expect("Failed to read password")
-        });
-    
+    let password = std::env::var("LC_SYNC_PASSWORD").unwrap_or_else(|_| {
+        rpassword::prompt_password("Enter sync encryption password: ")
+            .expect("Failed to read password")
+    });
+
     let key = derive_key_from_password(&password)?;
-    
+
     let mut encrypted_files = Vec::new();
     for file in config_files {
         let encrypted_content = encrypt_data(&file.content, &key)?;
@@ -31,23 +30,22 @@ pub fn encrypt_files(config_files: &[ConfigFile]) -> Result<Vec<ConfigFile>> {
             content: encrypted_content,
         });
     }
-    
+
     Ok(encrypted_files)
 }
 
 /// Decrypt multiple configuration files
 pub fn decrypt_files(encrypted_files: &[ConfigFile]) -> Result<Vec<ConfigFile>> {
-    use super::encryption::{derive_key_from_password, decrypt_data};
-    
+    use super::encryption::{decrypt_data, derive_key_from_password};
+
     // Get encryption password from environment or prompt
-    let password = std::env::var("LC_SYNC_PASSWORD")
-        .unwrap_or_else(|_| {
-            rpassword::prompt_password("Enter sync decryption password: ")
-                .expect("Failed to read password")
-        });
-    
+    let password = std::env::var("LC_SYNC_PASSWORD").unwrap_or_else(|_| {
+        rpassword::prompt_password("Enter sync decryption password: ")
+            .expect("Failed to read password")
+    });
+
     let key = derive_key_from_password(&password)?;
-    
+
     let mut decrypted_files = Vec::new();
     for file in encrypted_files {
         let decrypted_content = decrypt_data(&file.content, &key)?;
@@ -56,7 +54,7 @@ pub fn decrypt_files(encrypted_files: &[ConfigFile]) -> Result<Vec<ConfigFile>> 
             content: decrypted_content,
         });
     }
-    
+
     Ok(decrypted_files)
 }
 
@@ -68,7 +66,10 @@ pub async fn handle_sync_providers() -> Result<()> {
     println!("  • {} - AWS S3", "aws-s3".cyan());
     println!("  • {} - Cloudflare R2", "cloudflare".cyan());
     println!("  • {} - Backblaze B2", "backblaze".cyan());
-    println!("\n{}", "Configure a provider with: lc sync configure <provider>".italic());
+    println!(
+        "\n{}",
+        "Configure a provider with: lc sync configure <provider>".italic()
+    );
     Ok(())
 }
 
@@ -88,24 +89,28 @@ fn validate_sync_provider(provider: &str) -> Result<()> {
 pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Result<()> {
     use std::fs;
     use std::io::{self, Write};
-    
-    println!("📤 {} configuration to {}...", "Syncing".cyan(), provider.bold());
-    
+
+    println!(
+        "📤 {} configuration to {}...",
+        "Syncing".cyan(),
+        provider.bold()
+    );
+
     // Validate provider early
     validate_sync_provider(provider)?;
-    
+
     // Get lc config directory
     let config_dir = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?
         .join("lc");
-    
+
     if !config_dir.exists() {
         anyhow::bail!("Configuration directory does not exist: {:?}", config_dir);
     }
-    
+
     // Collect all configuration files
     let mut config_files = Vec::new();
-    
+
     // Collect provider configs
     let providers_dir = config_dir.join("providers");
     if providers_dir.exists() {
@@ -115,14 +120,11 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
             if path.extension().and_then(|s| s.to_str()) == Some("toml") {
                 let content = fs::read(&path)?;
                 let name = format!("providers/{}", path.file_name().unwrap().to_string_lossy());
-                config_files.push(ConfigFile {
-                    name,
-                    content,
-                });
+                config_files.push(ConfigFile { name, content });
             }
         }
     }
-    
+
     // Collect main config file if it exists
     let main_config = config_dir.join("config.toml");
     if main_config.exists() {
@@ -132,33 +134,33 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
             content,
         });
     }
-    
+
     if config_files.is_empty() {
         println!("{} No configuration files found to sync", "ℹ️".blue());
         return Ok(());
     }
-    
+
     println!("Found {} configuration files", config_files.len());
-    
+
     // Show files to be synced and confirm
     if !yes {
         println!("\nFiles to sync:");
         for file in &config_files {
             println!("  • {}", file.name);
         }
-        
+
         print!("\nContinue with sync? [y/N]: ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         if !input.trim().eq_ignore_ascii_case("y") {
             println!("Sync cancelled.");
             return Ok(());
         }
     }
-    
+
     // Encrypt files if requested
     let _files_to_upload = if encrypted {
         println!("🔐 Encrypting configuration files...");
@@ -166,7 +168,7 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
     } else {
         config_files
     };
-    
+
     #[cfg(feature = "s3-sync")]
     {
         use super::s3::upload_to_s3;
@@ -174,7 +176,7 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
         println!("{} Configuration synced successfully!", "✅".green());
         return Ok(());
     }
-    
+
     #[cfg(not(feature = "s3-sync"))]
     {
         anyhow::bail!("S3 sync feature not enabled. Build with --features s3-sync");
@@ -185,44 +187,51 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
 pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Result<()> {
     use std::fs;
     use std::io::{self, Write};
-    
-    println!("📥 {} configuration from {}...", "Syncing".cyan(), provider.bold());
-    
+
+    println!(
+        "📥 {} configuration from {}...",
+        "Syncing".cyan(),
+        provider.bold()
+    );
+
     // Validate provider early
     validate_sync_provider(provider)?;
-    
+
     // Get lc config directory
     let config_dir = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?
         .join("lc");
-    
+
     // Create config directory if it doesn't exist
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir)?;
     }
-    
+
     // Confirm before syncing
     if !yes {
-        println!("\n⚠️  {} This will overwrite local configuration files!", "Warning:".yellow());
+        println!(
+            "\n⚠️  {} This will overwrite local configuration files!",
+            "Warning:".yellow()
+        );
         print!("Continue with sync? [y/N]: ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         if !input.trim().eq_ignore_ascii_case("y") {
             println!("Sync cancelled.");
             return Ok(());
         }
     }
-    
+
     #[cfg(feature = "s3-sync")]
     {
         use super::s3::download_from_s3;
         let _downloaded_files: Vec<ConfigFile> = download_from_s3().await?;
-        
+
         println!("Downloaded {} configuration files", _downloaded_files.len());
-        
+
         // Decrypt files if they were encrypted
         let files_to_save = if _encrypted {
             println!("🔓 Decrypting configuration files...");
@@ -230,24 +239,24 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
         } else {
             _downloaded_files
         };
-        
+
         // Save files to config directory
         for file in files_to_save {
             let file_path = config_dir.join(&file.name);
-            
+
             // Ensure parent directory exists
             if let Some(parent) = file_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            
+
             fs::write(&file_path, &file.content)?;
             println!("  ✓ Saved {}", file.name);
         }
-        
+
         println!("{} Configuration synced successfully!", "✅".green());
         return Ok(());
     }
-    
+
     #[cfg(not(feature = "s3-sync"))]
     {
         anyhow::bail!("S3 sync feature not enabled. Build with --features s3-sync");

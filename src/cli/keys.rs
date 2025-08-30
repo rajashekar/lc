@@ -31,9 +31,7 @@ async fn add_key(name: String) -> Result<()> {
         || provider_cfg.endpoint.contains("aiplatform.googleapis.com");
 
     if is_google_sa {
-        println!(
-            "Detected Google Vertex AI provider. Please provide the Service Account JSON."
-        );
+        println!("Detected Google Vertex AI provider. Please provide the Service Account JSON.");
         println!("Options:");
         println!("  1. Paste the base64 version directly (ex: cat sa.json | base64)");
         println!("  2. Provide the path to the JSON file (ex: /path/to/sa.json)");
@@ -73,8 +71,8 @@ async fn add_key(name: String) -> Result<()> {
         };
 
         // Minimal validation
-        let parsed: serde_json::Value = serde_json::from_str(&sa_json)
-            .map_err(|e| anyhow::anyhow!("Invalid JSON: {}", e))?;
+        let parsed: serde_json::Value =
+            serde_json::from_str(&sa_json).map_err(|e| anyhow::anyhow!("Invalid JSON: {}", e))?;
         let sa_type = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
         let client_email = parsed
             .get("client_email")
@@ -152,10 +150,10 @@ async fn list_keys() -> Result<()> {
     }
 
     println!("\n{}", "API Key Status:".bold().blue());
-    
+
     // Load keys from centralized keys.toml
     let keys = crate::keys::KeysConfig::load().unwrap_or_else(|_| crate::keys::KeysConfig::new());
-    
+
     for (name, _provider_config) in &config.providers {
         // Check if provider has authentication in centralized keys
         let has_auth = keys.has_auth(name);

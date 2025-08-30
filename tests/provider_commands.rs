@@ -7,8 +7,8 @@ mod common;
 
 use chrono::Utc;
 use common::{assertions, create_config_with_providers, test_data};
-use lc::test_utils::get_test_provider_name;
 use lc::config::Config;
+use lc::test_utils::get_test_provider_name;
 use serial_test::serial;
 use std::collections::HashMap;
 
@@ -144,10 +144,8 @@ mod provider_update_tests {
 
         // Update existing provider
         let openai_name = get_test_provider_name("openai");
-        let result = config.add_provider(
-            openai_name.clone(),
-            "https://api.openai.com/v2".to_string(),
-        );
+        let result =
+            config.add_provider(openai_name.clone(), "https://api.openai.com/v2".to_string());
 
         assert!(result.is_ok());
         assertions::assert_provider_endpoint(&config, &openai_name, "https://api.openai.com/v2");
@@ -162,10 +160,7 @@ mod provider_update_tests {
             let openai_name = get_test_provider_name("openai");
 
             // Update existing provider
-            let result = config.add_provider(
-                openai_name,
-                "https://api.openai.com/v2".to_string(),
-            );
+            let result = config.add_provider(openai_name, "https://api.openai.com/v2".to_string());
 
             assert!(result.is_ok());
             assert_eq!(config.providers.len(), original_count);
@@ -383,7 +378,12 @@ mod provider_headers_tests {
                 "custom-value".to_string(),
             );
             assert!(result.is_ok());
-            assertions::assert_header_exists(&config, &openai_name, "X-Custom-Header", "custom-value");
+            assertions::assert_header_exists(
+                &config,
+                &openai_name,
+                "X-Custom-Header",
+                "custom-value",
+            );
 
             // Test removing header
             let result = config.remove_header(openai_name.clone(), "X-Custom-Header".to_string());

@@ -10,12 +10,8 @@ pub mod sync;
 
 // Re-export main sync functions from sync module
 pub use sync::{
-    handle_sync_providers,
-    handle_sync_to,
-    handle_sync_from,
+    decrypt_files, encrypt_files, handle_sync_from, handle_sync_providers, handle_sync_to,
     ConfigFile,
-    encrypt_files,
-    decrypt_files,
 };
 
 // Re-export config handler from config module
@@ -23,9 +19,5 @@ pub use config::handle_sync_configure;
 
 // Re-export encryption utilities from encryption module
 pub use encryption::{
-    derive_key_from_password,
-    encrypt_data,
-    decrypt_data,
-    encode_base64,
-    decode_base64,
+    decode_base64, decrypt_data, derive_key_from_password, encode_base64, encrypt_data,
 };

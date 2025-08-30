@@ -1,9 +1,9 @@
 //! Provider management commands
 
-use anyhow::Result;
-use crate::cli::{ProviderCommands, HeaderCommands, ProviderVarsCommands, ProviderPathCommands};
+use crate::cli::{HeaderCommands, ProviderCommands, ProviderPathCommands, ProviderVarsCommands};
 use crate::provider_installer::{AuthType, ProviderInstaller};
 use crate::{chat, config, debug_log};
+use anyhow::Result;
 use colored::Colorize;
 
 /// Handle provider-related commands
@@ -28,9 +28,9 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
         ProviderCommands::Available { official, tag } => {
             let installer = ProviderInstaller::new()?;
             let providers = installer.list_available().await?;
-            
+
             println!("\n{}", "Available Providers:".bold().blue());
-            
+
             let mut displayed_count = 0;
             for (id, metadata) in providers {
                 // Apply filters
@@ -42,21 +42,21 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                         continue;
                     }
                 }
-                
+
                 displayed_count += 1;
-                
+
                 print!("  {} {} - {}", "•".blue(), id.bold(), metadata.name);
-                
+
                 if metadata.official {
                     print!(" {}", "✓ official".green());
                 }
-                
+
                 if !metadata.tags.is_empty() {
                     print!(" [{}]", metadata.tags.join(", ").dimmed());
                 }
-                
+
                 println!("\n    {}", metadata.description.dimmed());
-                
+
                 // Show auth type
                 let auth_str = match metadata.auth_type {
                     AuthType::ApiKey => "API Key",
@@ -68,7 +68,7 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                 };
                 println!("    Auth: {}", auth_str.yellow());
             }
-            
+
             if displayed_count == 0 {
                 if official {
                     println!("No official providers found.");
@@ -78,7 +78,10 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                     println!("No providers available.");
                 }
             } else {
-                println!("\n{} Use 'lc providers install <name>' to install a provider", "💡".yellow());
+                println!(
+                    "\n{} Use 'lc providers install <name>' to install a provider",
+                    "💡".yellow()
+                );
             }
         }
         ProviderCommands::Add {
@@ -120,7 +123,8 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
             println!("\n{}", "Configured Providers:".bold().blue());
 
             // Load keys config to check authentication status
-            let keys = crate::keys::KeysConfig::load().unwrap_or_else(|_| crate::keys::KeysConfig::new());
+            let keys =
+                crate::keys::KeysConfig::load().unwrap_or_else(|_| crate::keys::KeysConfig::new());
 
             // Sort providers by name for easier lookup
             let mut sorted_providers: Vec<_> = config.providers.iter().collect();

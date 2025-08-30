@@ -9,7 +9,11 @@ fn test_regex_pattern_matching() {
     let mut provider_config = ProviderConfig {
         endpoint: "https://api.openai.com/v1".to_string(),
         api_key: Some("test-key".to_string()),
-        models: vec!["gpt-5".to_string(), "gpt-5-mini".to_string(), "gpt-5-turbo".to_string()],
+        models: vec![
+            "gpt-5".to_string(),
+            "gpt-5-mini".to_string(),
+            "gpt-5-turbo".to_string(),
+        ],
         models_path: "/models".to_string(),
         chat_path: "/chat/completions".to_string(),
         headers: HashMap::new(),
@@ -24,9 +28,9 @@ fn test_regex_pattern_matching() {
         embeddings_templates: None,
         models_templates: None,
         audio_path: None,
-                speech_path: None,
-                audio_templates: None,
-                speech_templates: None,
+        speech_path: None,
+        audio_templates: None,
+        speech_templates: None,
     };
 
     // Create chat endpoint templates
@@ -34,7 +38,9 @@ fn test_regex_pattern_matching() {
 
     // Add a pattern-based template
     let gpt5_template = TemplateConfig {
-        request: Some(r#"{"model": "{{ model }}", "max_completion_tokens": {{ max_tokens }}}"#.to_string()),
+        request: Some(
+            r#"{"model": "{{ model }}", "max_completion_tokens": {{ max_tokens }}}"#.to_string(),
+        ),
         response: None,
         stream_response: None,
     };
@@ -53,22 +59,34 @@ fn test_regex_pattern_matching() {
     // Test exact match takes precedence
     let template = provider_config.get_endpoint_template("chat", "gpt-5-nano");
     assert!(template.is_some());
-    assert_eq!(template.unwrap(), r#"{"model": "{{ model }}", "nano_tokens": {{ max_tokens }}}"#);
+    assert_eq!(
+        template.unwrap(),
+        r#"{"model": "{{ model }}", "nano_tokens": {{ max_tokens }}}"#
+    );
 
     // Test pattern matching for gpt-5
     let template = provider_config.get_endpoint_template("chat", "gpt-5");
     assert!(template.is_some());
-    assert_eq!(template.unwrap(), r#"{"model": "{{ model }}", "max_completion_tokens": {{ max_tokens }}}"#);
+    assert_eq!(
+        template.unwrap(),
+        r#"{"model": "{{ model }}", "max_completion_tokens": {{ max_tokens }}}"#
+    );
 
     // Test pattern matching for gpt-5-mini
     let template = provider_config.get_endpoint_template("chat", "gpt-5-mini");
     assert!(template.is_some());
-    assert_eq!(template.unwrap(), r#"{"model": "{{ model }}", "max_completion_tokens": {{ max_tokens }}}"#);
+    assert_eq!(
+        template.unwrap(),
+        r#"{"model": "{{ model }}", "max_completion_tokens": {{ max_tokens }}}"#
+    );
 
     // Test pattern matching for gpt-5-turbo
     let template = provider_config.get_endpoint_template("chat", "gpt-5-turbo");
     assert!(template.is_some());
-    assert_eq!(template.unwrap(), r#"{"model": "{{ model }}", "max_completion_tokens": {{ max_tokens }}}"#);
+    assert_eq!(
+        template.unwrap(),
+        r#"{"model": "{{ model }}", "max_completion_tokens": {{ max_tokens }}}"#
+    );
 
     // Test no match
     let template = provider_config.get_endpoint_template("chat", "gpt-4");
@@ -80,7 +98,11 @@ fn test_multiple_patterns() {
     let mut provider_config = ProviderConfig {
         endpoint: "https://api.example.com".to_string(),
         api_key: Some("test-key".to_string()),
-        models: vec!["model-v1".to_string(), "model-v2".to_string(), "other-model".to_string()],
+        models: vec![
+            "model-v1".to_string(),
+            "model-v2".to_string(),
+            "other-model".to_string(),
+        ],
         models_path: "/models".to_string(),
         chat_path: "/chat".to_string(),
         headers: HashMap::new(),
@@ -93,11 +115,11 @@ fn test_multiple_patterns() {
         chat_templates: None,
         images_templates: None,
         embeddings_templates: None,
-                models_templates: None,
-                audio_path: None,
-                speech_path: None,
-                audio_templates: None,
-                speech_templates: None,
+        models_templates: None,
+        audio_path: None,
+        speech_path: None,
+        audio_templates: None,
+        speech_templates: None,
     };
 
     // Create chat endpoint templates
@@ -165,11 +187,11 @@ fn test_default_template_fallback() {
         chat_templates: None,
         images_templates: None,
         embeddings_templates: None,
-                models_templates: None,
-                audio_path: None,
-                speech_path: None,
-                audio_templates: None,
-                speech_templates: None,
+        models_templates: None,
+        audio_path: None,
+        speech_path: None,
+        audio_templates: None,
+        speech_templates: None,
     };
 
     // Create chat endpoint templates with default
@@ -222,27 +244,33 @@ fn test_endpoint_specific_templates() {
         chat_templates: None,
         images_templates: None,
         embeddings_templates: None,
-                models_templates: None,
-                audio_path: None,
-                speech_path: None,
-                audio_templates: None,
-                speech_templates: None,
+        models_templates: None,
+        audio_path: None,
+        speech_path: None,
+        audio_templates: None,
+        speech_templates: None,
     };
 
     // Create different templates for different endpoints
     let mut chat_templates = HashMap::new();
-    chat_templates.insert("".to_string(), TemplateConfig {
-        request: Some(r#"{"endpoint": "chat"}"#.to_string()),
-        response: None,
-        stream_response: None,
-    });
+    chat_templates.insert(
+        "".to_string(),
+        TemplateConfig {
+            request: Some(r#"{"endpoint": "chat"}"#.to_string()),
+            response: None,
+            stream_response: None,
+        },
+    );
 
     let mut images_templates = HashMap::new();
-    images_templates.insert("".to_string(), TemplateConfig {
-        request: Some(r#"{"endpoint": "images"}"#.to_string()),
-        response: None,
-        stream_response: None,
-    });
+    images_templates.insert(
+        "".to_string(),
+        TemplateConfig {
+            request: Some(r#"{"endpoint": "images"}"#.to_string()),
+            response: None,
+            stream_response: None,
+        },
+    );
 
     provider_config.chat_templates = Some(chat_templates);
     provider_config.images_templates = Some(images_templates);

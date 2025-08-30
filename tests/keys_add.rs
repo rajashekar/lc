@@ -188,7 +188,7 @@ async fn test_keys_add_vertex_sa_json_success_persists_full_json() -> Result<()>
         // Encode as base64 for the test
         use base64::{Engine as _, engine::general_purpose};
         let sa_json_b64 = general_purpose::STANDARD.encode(sa_json);
-        
+
         // Try to add the key, but handle TOML parse errors gracefully
         let result = mock_keys_add_command("vertex_success".to_string(), Some(sa_json_b64)).await;
         match result {

@@ -1,5 +1,5 @@
 //! Test utilities for managing test providers and cleanup
-//! 
+//!
 //! This module provides utilities to ensure test providers use the "test-" prefix
 //! and are automatically cleaned up after tests complete.
 
@@ -15,7 +15,10 @@ static INIT: Once = Once::new();
 pub fn init_test_env() {
     INIT.call_once(|| {
         cleanup_test_providers().unwrap_or_else(|e| {
-            eprintln!("Warning: Failed to clean up test providers during init: {}", e);
+            eprintln!(
+                "Warning: Failed to clean up test providers during init: {}",
+                e
+            );
         });
     });
 }
@@ -24,19 +27,19 @@ pub fn init_test_env() {
 pub fn cleanup_test_providers() -> Result<(), Box<dyn std::error::Error>> {
     let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
     let config_dir = home_dir.join("Library/Application Support/lc/providers");
-    
+
     if !config_dir.exists() {
         return Ok(());
     }
-    
+
     let mut cleaned_count = 0;
-    
+
     // Read directory and remove any files that start with test- prefix
     for entry in fs::read_dir(&config_dir)? {
         let entry = entry?;
         let file_name = entry.file_name();
         let file_name_str = file_name.to_string_lossy();
-        
+
         if file_name_str.starts_with(TEST_PROVIDER_PREFIX) {
             let file_path = entry.path();
             if file_path.is_file() {
@@ -45,11 +48,11 @@ pub fn cleanup_test_providers() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    
+
     if cleaned_count > 0 {
         println!("Cleaned up {} test provider files", cleaned_count);
     }
-    
+
     Ok(())
 }
 
@@ -93,7 +96,10 @@ mod tests {
     fn test_provider_name_generation() {
         assert_eq!(get_test_provider_name("openai"), "test-openai");
         assert_eq!(get_test_provider_name("anthropic"), "test-anthropic");
-        assert_eq!(get_test_provider_name("custom-provider"), "test-custom-provider");
+        assert_eq!(
+            get_test_provider_name("custom-provider"),
+            "test-custom-provider"
+        );
     }
 
     #[test]

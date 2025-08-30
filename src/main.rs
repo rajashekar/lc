@@ -6,20 +6,19 @@ extern crate lc;
 #[allow(unused_imports)]
 use lc::{
     // Core modules
-    chat, 
-    
+    chat,
+
+    // CLI module
+    cli,
     // Data modules
     config,
     database::{ChatEntry, Database},
-    
-    // Models modules
-    model_metadata,
-    
+
     // Services modules
     mcp_daemon,
-    
-    // CLI module
-    cli,
+
+    // Models modules
+    model_metadata,
 };
 
 use anyhow::Result;
@@ -205,7 +204,14 @@ async fn main() -> Result<()> {
                 limit,
             }),
         ) => {
-            cli::usage::handle(command, days.map(|d| d as u64), tokens_only, requests_only, Some(limit)).await?;
+            cli::usage::handle(
+                command,
+                days.map(|d| d as u64),
+                tokens_only,
+                requests_only,
+                Some(limit),
+            )
+            .await?;
         }
         (true, Some(Commands::Config { command })) => {
             cli::config::handle(command).await?;
@@ -308,7 +314,15 @@ async fn main() -> Result<()> {
                 generate_key,
             }),
         ) => {
-            cli::proxy::handle(Some(port), Some(host), provider, model, api_key, generate_key).await?;
+            cli::proxy::handle(
+                Some(port),
+                Some(host),
+                provider,
+                model,
+                api_key,
+                generate_key,
+            )
+            .await?;
         }
         (true, Some(Commands::Mcp { command })) => {
             cli::mcp::handle(command).await?;
@@ -324,7 +338,7 @@ async fn main() -> Result<()> {
                 debug,
             }),
         ) => {
-            cli::vectors::handle_embed(Some(model), provider, database, files, text, debug).await?;
+            cli::embed::handle_embed_command(model, provider, database, files, text, debug).await?;
         }
         (
             true,
@@ -336,7 +350,8 @@ async fn main() -> Result<()> {
                 query,
             }),
         ) => {
-            cli::vectors::handle_similar(model, provider, Some(database), Some(limit), query).await?;
+            cli::embed::handle_similar_command(model, provider, database, limit, query)
+                .await?;
         }
         (true, Some(Commands::Vectors { command })) => {
             cli::vectors::handle(command).await?;
@@ -362,7 +377,16 @@ async fn main() -> Result<()> {
                 debug,
             }),
         ) => {
-            cli::image::handle(vec![prompt], model, provider, Some(size), Some(count), output, debug).await?;
+            cli::image::handle(
+                vec![prompt],
+                model,
+                provider,
+                Some(size),
+                Some(count),
+                output,
+                debug,
+            )
+            .await?;
         }
         (
             true,
@@ -404,8 +428,17 @@ async fn main() -> Result<()> {
                 debug,
             }),
         ) => {
-            cli::audio::handle_tts(text, model, provider, Some(voice), Some(format), speed, Some(output), debug)
-                .await?;
+            cli::audio::handle_tts(
+                text,
+                model,
+                provider,
+                Some(voice),
+                Some(format),
+                speed,
+                Some(output),
+                debug,
+            )
+            .await?;
         }
         (true, Some(Commands::DumpMetadata { provider, list })) => {
             cli::utils::handle_dump_metadata(provider, list).await?;
@@ -762,8 +795,59 @@ async fn handle_session_prompt(
 
     // Get provider and model - if not provided, try to infer from history
     let (provider_name, model_name) = if let (Some(p), Some(m)) = (&provider, &model) {
-        // Both provided explicitly
-        (p.clone(), m.clone())
+        // Load config to check for aliases
+        let config = config::Config::load()?;
+
+        // Check if model is an alias
+        if let Some(alias_target) = config.get_alias(&m) {
+            // Alias target should be in format "provider:model"
+            if alias_target.contains(':') {
+                let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let provider_from_alias = parts[0].to_string();
+                    // If provider is also specified, verify they match
+                    if p != &provider_from_alias {
+                        anyhow::bail!(
+                            "Provider mismatch: -p {} conflicts with alias '{}' which maps to {}",
+                            p,
+                            m,
+                            alias_target
+                        );
+                    }
+                    (provider_from_alias, alias_target.clone())
+                } else {
+                    (p.clone(), m.clone())
+                }
+            } else {
+                (p.clone(), m.clone())
+            }
+        } else {
+            // Not an alias, use as is
+            (p.clone(), m.clone())
+        }
+    } else if let Some(m) = &model {
+        // Only model provided, check if it's an alias
+        let config = config::Config::load()?;
+
+        if let Some(alias_target) = config.get_alias(&m) {
+            // Alias target should be in format "provider:model"
+            if alias_target.contains(':') {
+                let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let provider_from_alias = parts[0].to_string();
+                    (provider_from_alias, alias_target.clone())
+                } else {
+                    // Invalid alias format, use default provider
+                    (provider.unwrap_or_else(|| "openai".to_string()), m.clone())
+                }
+            } else {
+                // Invalid alias format, use default provider
+                (provider.unwrap_or_else(|| "openai".to_string()), m.clone())
+            }
+        } else {
+            // Not an alias, use with default provider if needed
+            (provider.unwrap_or_else(|| "openai".to_string()), m.clone())
+        }
     } else if let Some(first_msg) = history.first() {
         if let Some(full_model) = &first_msg.model {
             if full_model.contains(':') {
@@ -803,12 +887,15 @@ async fn handle_session_prompt(
     let client = chat::create_authenticated_client(&mut config, &provider_name).await?;
 
     // Strip provider prefix from model name for API call
+    // Handle cases where model name itself contains colons (e.g., gpt-oss:20b)
     let api_model_name = if model_name.contains(':') {
-        model_name
-            .split(':')
-            .nth(1)
-            .unwrap_or(&model_name)
-            .to_string()
+        // Split only on the first colon to separate provider from model
+        let parts: Vec<&str> = model_name.splitn(2, ':').collect();
+        if parts.len() > 1 {
+            parts[1].to_string()
+        } else {
+            model_name.clone()
+        }
     } else {
         model_name.clone()
     };

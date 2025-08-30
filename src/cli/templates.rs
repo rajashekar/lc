@@ -1,9 +1,9 @@
 //! Template management commands
 
-use anyhow::Result;
-use colored::Colorize;
 use crate::cli::TemplateCommands;
 use crate::config;
+use anyhow::Result;
+use colored::Colorize;
 
 /// Handle template-related commands
 pub async fn handle(command: TemplateCommands) -> Result<()> {

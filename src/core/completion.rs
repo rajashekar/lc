@@ -1,5 +1,5 @@
 //! Shell completion support for the lc CLI
-//! 
+//!
 //! This module provides both static completion generation and dynamic completion
 //! support for values that depend on the current configuration.
 
@@ -24,24 +24,28 @@ pub async fn generate_completions(shell: CompletionShell) -> Result<()> {
 
     // Generate basic completions
     generate(shell_type, &mut cmd, "lc", &mut io::stdout());
-    
+
     // Add custom completion functions for dynamic values
     match shell {
         CompletionShell::Bash => generate_bash_dynamic_completions(),
         CompletionShell::Zsh => generate_zsh_dynamic_completions(),
         CompletionShell::Fish => generate_fish_dynamic_completions(),
         _ => {
-            eprintln!("Note: Dynamic completions for providers are not yet supported for {:?}", shell);
+            eprintln!(
+                "Note: Dynamic completions for providers are not yet supported for {:?}",
+                shell
+            );
             eprintln!("Basic command completions have been generated.");
         }
     }
-    
+
     Ok(())
 }
 
 /// Generate dynamic completion functions for Bash
 fn generate_bash_dynamic_completions() {
-    println!(r#"
+    println!(
+        r#"
 # Dynamic completion functions for lc (Bash)
 _lc_complete_providers() {{
     local providers
@@ -179,12 +183,14 @@ complete -F _lc_enhanced lc
 # Instructions for setup
 # Add the above to your ~/.bashrc or ~/.bash_completion to enable dynamic completions
 # Then run: source ~/.bashrc
-"#);
+"#
+    );
 }
 
 /// Generate dynamic completion functions for Zsh
 fn generate_zsh_dynamic_completions() {
-    println!(r#"
+    println!(
+        r#"
 # Dynamic completion functions for lc (Zsh)
 _lc_providers() {{
     local providers
@@ -518,12 +524,14 @@ compdef _lc_with_aliases lc
 # Instructions for setup
 # Add the above to your ~/.zshrc or a file in your fpath to enable dynamic provider completion
 # Then run: source ~/.zshrc
-"#);
+"#
+    );
 }
 
 /// Generate dynamic completion functions for Fish
 fn generate_fish_dynamic_completions() {
-    println!(r#"
+    println!(
+        r#"
 # Dynamic completion functions for lc (Fish)
 function __lc_complete_providers
     lc providers list 2>/dev/null | grep "  •" | awk '{{print $2}}' 2>/dev/null
@@ -535,7 +543,8 @@ complete -c lc -s p -l provider -f -a "(__lc_complete_providers)" -d "Provider t
 # Instructions for setup
 # Add the above to ~/.config/fish/completions/lc.fish to enable dynamic provider completion
 # The file will be loaded automatically by Fish
-"#);
+"#
+    );
 }
 
 /// Get list of available providers for completion

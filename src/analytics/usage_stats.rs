@@ -1,8 +1,8 @@
+use crate::database::{ChatEntry, Database};
 use anyhow::Result;
-use chrono::{DateTime, Utc, Duration, Datelike};
+use chrono::{DateTime, Datelike, Duration, Utc};
 use colored::Colorize;
 use std::collections::HashMap;
-use crate::database::{Database, ChatEntry};
 
 #[derive(Debug, Clone)]
 pub struct UsageStats {
@@ -178,7 +178,6 @@ impl UsageAnalyzer {
     }
 }
 
-
 pub struct BarChart;
 
 impl BarChart {
@@ -195,12 +194,16 @@ impl BarChart {
         }
 
         println!("\n{}", title.bold().blue());
-        
+
         let display_data: Vec<_> = data.iter().take(max_items).collect();
         let max_value = display_data
             .iter()
             .map(|(_, requests, tokens)| {
-                if value_type == "tokens" { *tokens } else { *requests }
+                if value_type == "tokens" {
+                    *tokens
+                } else {
+                    *requests
+                }
             })
             .max()
             .unwrap_or(1);
@@ -212,7 +215,11 @@ impl BarChart {
             .unwrap_or(10);
 
         for (label, requests, tokens) in display_data {
-            let value = if value_type == "tokens" { *tokens } else { *requests };
+            let value = if value_type == "tokens" {
+                *tokens
+            } else {
+                *requests
+            };
             let bar_width = if max_value > 0 {
                 ((value as f64 / max_value as f64) * max_width as f64) as usize
             } else {
@@ -255,12 +262,16 @@ impl BarChart {
         }
 
         println!("\n{}", title.bold().blue());
-        
+
         let display_data: Vec<_> = data.iter().rev().take(max_items).rev().collect();
         let max_value = display_data
             .iter()
             .map(|(_, requests, tokens)| {
-                if value_type == "tokens" { *tokens } else { *requests }
+                if value_type == "tokens" {
+                    *tokens
+                } else {
+                    *requests
+                }
             })
             .max()
             .unwrap_or(1);
@@ -272,7 +283,11 @@ impl BarChart {
             .unwrap_or(10);
 
         for (label, requests, tokens) in display_data {
-            let value = if value_type == "tokens" { *tokens } else { *requests };
+            let value = if value_type == "tokens" {
+                *tokens
+            } else {
+                *requests
+            };
             let bar_width = if max_value > 0 {
                 ((value as f64 / max_value as f64) * max_width as f64) as usize
             } else {
@@ -318,10 +333,26 @@ pub fn display_usage_overview(stats: &UsageStats) {
     println!();
 
     // Basic stats
-    println!("{} {}", "Total Requests:".bold(), stats.total_requests.to_string().green());
-    println!("{} {}", "Total Tokens:".bold(), BarChart::format_tokens(stats.total_tokens).green());
-    println!("{} {}", "Input Tokens:".bold(), BarChart::format_tokens(stats.input_tokens).cyan());
-    println!("{} {}", "Output Tokens:".bold(), BarChart::format_tokens(stats.output_tokens).yellow());
+    println!(
+        "{} {}",
+        "Total Requests:".bold(),
+        stats.total_requests.to_string().green()
+    );
+    println!(
+        "{} {}",
+        "Total Tokens:".bold(),
+        BarChart::format_tokens(stats.total_tokens).green()
+    );
+    println!(
+        "{} {}",
+        "Input Tokens:".bold(),
+        BarChart::format_tokens(stats.input_tokens).cyan()
+    );
+    println!(
+        "{} {}",
+        "Output Tokens:".bold(),
+        BarChart::format_tokens(stats.output_tokens).yellow()
+    );
 
     if let Some((earliest, latest)) = stats.date_range {
         let duration = latest.signed_duration_since(earliest);
@@ -341,9 +372,21 @@ pub fn display_usage_overview(stats: &UsageStats) {
         let avg_output = stats.output_tokens / stats.total_requests;
         println!();
         println!("{}", "📈 Averages per Request".bold().blue());
-        println!("{} {}", "Total Tokens:".bold(), BarChart::format_tokens(avg_tokens).green());
-        println!("{} {}", "Input Tokens:".bold(), BarChart::format_tokens(avg_input).cyan());
-        println!("{} {}", "Output Tokens:".bold(), BarChart::format_tokens(avg_output).yellow());
+        println!(
+            "{} {}",
+            "Total Tokens:".bold(),
+            BarChart::format_tokens(avg_tokens).green()
+        );
+        println!(
+            "{} {}",
+            "Input Tokens:".bold(),
+            BarChart::format_tokens(avg_input).cyan()
+        );
+        println!(
+            "{} {}",
+            "Output Tokens:".bold(),
+            BarChart::format_tokens(avg_output).yellow()
+        );
     }
 }
 
@@ -375,7 +418,7 @@ mod tests {
             yearly_usage: Vec::new(),
             date_range: None,
         };
-        
+
         assert_eq!(stats.total_tokens, 0);
         assert_eq!(stats.total_requests, 0);
         assert!(stats.model_usage.is_empty());

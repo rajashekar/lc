@@ -1,7 +1,7 @@
 use clap::Parser;
 use lc::cli::Cli;
-use lc::utils::{is_code_file, read_and_format_attachments, resolve_model_and_provider};
 use lc::config::{Config, ProviderConfig};
+use lc::utils::{is_code_file, read_and_format_attachments, resolve_model_and_provider};
 use std::collections::HashMap;
 use std::fs;
 use tempfile::TempDir;
@@ -36,15 +36,15 @@ fn create_comprehensive_config() -> Config {
             cached_token: None,
             auth_type: None,
             vars: std::collections::HashMap::new(),
-        
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        audio_path: None,
-                speech_path: None,
-                audio_templates: None,
-                speech_templates: None,
+
+            chat_templates: None,
+            images_templates: None,
+            embeddings_templates: None,
+            models_templates: None,
+            audio_path: None,
+            speech_path: None,
+            audio_templates: None,
+            speech_templates: None,
         },
     );
 
@@ -63,15 +63,15 @@ fn create_comprehensive_config() -> Config {
             cached_token: None,
             auth_type: None,
             vars: std::collections::HashMap::new(),
-        
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        audio_path: None,
-                speech_path: None,
-                audio_templates: None,
-                speech_templates: None,
+
+            chat_templates: None,
+            images_templates: None,
+            embeddings_templates: None,
+            models_templates: None,
+            audio_path: None,
+            speech_path: None,
+            audio_templates: None,
+            speech_templates: None,
         },
     );
 
@@ -308,16 +308,16 @@ mod prompt_model_resolution_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        audio_path: None,
+
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
                 speech_path: None,
                 audio_templates: None,
                 speech_templates: None,
-        },
+            },
         );
 
         config.providers.insert(
@@ -335,16 +335,16 @@ mod prompt_model_resolution_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        audio_path: None,
+
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
                 speech_path: None,
                 audio_templates: None,
                 speech_templates: None,
-        },
+            },
         );
 
         // Set defaults
@@ -761,16 +761,16 @@ mod prompt_error_handling_tests {
                 cached_token: None,
                 auth_type: None,
                 vars: std::collections::HashMap::new(),
-            
-        chat_templates: None,
-        images_templates: None,
-        embeddings_templates: None,
-        models_templates: None,
-        audio_path: None,
+
+                chat_templates: None,
+                images_templates: None,
+                embeddings_templates: None,
+                models_templates: None,
+                audio_path: None,
                 speech_path: None,
                 audio_templates: None,
                 speech_templates: None,
-        },
+            },
         );
         config.default_provider = Some("test".to_string());
 
