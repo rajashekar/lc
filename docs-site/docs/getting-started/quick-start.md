@@ -157,19 +157,6 @@ lc "Your prompt here"
 
 Enhance your prompts with real-time web search results:
 
-### Quick Setup with Free DuckDuckGo
-
-```bash
-# Add DuckDuckGo (no API key required!)
-lc search provider add ddg https://api.duckduckgo.com/
-
-# Test search
-lc search query ddg "latest AI news" -f json
-
-# Use in prompts
-lc --use-search ddg "What are the latest developments in AI?"
-```
-
 ### Setup with Premium Providers
 
 ```bash

@@ -48,6 +48,8 @@ LLM Client was created to solve common pain points when working with LLMs:
 lc providers add openai https://api.openai.com/v1
 or
 lc p a openai https://api.openai.com/v1
+or
+lc providers install openai
 
 # Set your API key
 lc keys add openai
@@ -81,13 +83,6 @@ lc chat
 lc -m openai:gpt-4 "Explain quantum computing in simple terms"
 or
 lc -p openrouter -m "anthropic/claude-3.5-sonnet" "Write a haiku about coding"
-
-# Use MCP tools for internet access
-lc -t playwright "What's the latest news about AI?"
-
-# Use web search integration
-lc --use-search ddg "What are the latest AI developments?"  # Free!
-lc --use-search jina "Research quantum computing advances"  # AI-powered
 ```
 
 ## Next Steps
