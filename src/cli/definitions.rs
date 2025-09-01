@@ -1036,68 +1036,51 @@ pub enum WebChatProxyCommands {
 
 #[derive(Subcommand)]
 pub enum SyncCommands {
-    /// Configure cloud sync settings (alias: c)
+    /// List supported cloud providers (alias: p)
+    #[command(alias = "p")]
+    Providers,
+    /// Configure cloud provider settings (alias: c)
     #[command(alias = "c")]
     Configure {
+        /// Cloud provider name (e.g., s3, cloudflare, backblaze)
+        provider: String,
         #[command(subcommand)]
         command: Option<ConfigureCommands>,
     },
-    /// Push local configuration to cloud (alias: p)
-    #[command(alias = "p")]
-    Push {
-        /// Force push even if cloud is newer
-        #[arg(short = 'f', long = "force")]
-        force: bool,
+    /// Sync configuration to cloud provider
+    To {
+        /// Cloud provider name (e.g., s3, cloudflare, backblaze)
+        provider: String,
+        /// Encrypt files before uploading
+        #[arg(short = 'e', long = "encrypted")]
+        encrypted: bool,
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long = "yes")]
+        yes: bool,
     },
-    /// Pull configuration from cloud (alias: pu)
-    #[command(alias = "pu")]
-    Pull {
-        /// Force pull even if local is newer
-        #[arg(short = 'f', long = "force")]
-        force: bool,
+    /// Sync configuration from cloud provider
+    From {
+        /// Cloud provider name (e.g., s3, cloudflare, backblaze)
+        provider: String,
+        /// Decrypt files after downloading
+        #[arg(short = 'e', long = "encrypted")]
+        encrypted: bool,
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long = "yes")]
+        yes: bool,
     },
-    /// Show sync status and last sync time (alias: s)
-    #[command(alias = "s")]
-    Status,
 }
 
 #[derive(Subcommand)]
 pub enum ConfigureCommands {
-    /// Set cloud provider for sync (alias: p)
-    #[command(alias = "p")]
-    Provider {
-        /// Cloud provider (aws, gcp, azure)
-        provider: String,
-    },
-    /// Set S3-compatible bucket details (alias: s3)
-    #[command(alias = "s3")]
-    S3 {
-        /// Bucket name
-        bucket: String,
-        /// AWS region
-        #[arg(short = 'r', long = "region")]
-        region: String,
-        /// Custom endpoint URL (for S3-compatible services)
-        #[arg(short = 'e', long = "endpoint")]
-        endpoint: Option<String>,
-    },
-    /// Set Google Cloud Storage bucket (alias: gcs)
-    #[command(alias = "gcs")]
-    Gcs {
-        /// Bucket name
-        bucket: String,
-        /// Service account key file path
-        #[arg(short = 'k', long = "key-file")]
-        key_file: Option<String>,
-    },
-    /// Initial sync setup (alias: setup)
-    #[command(alias = "setup")]
+    /// Initial sync setup (alias: s)
+    #[command(alias = "s")]
     Setup,
-    /// Show current sync configuration (alias: show)
-    #[command(alias = "show")]
+    /// Show current sync configuration (alias: sh)
+    #[command(alias = "sh")]
     Show,
-    /// Remove sync configuration (alias: remove)
-    #[command(alias = "remove")]
+    /// Remove sync configuration (alias: r)
+    #[command(alias = "r")]
     Remove,
 }
 

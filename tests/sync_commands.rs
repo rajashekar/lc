@@ -126,6 +126,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_sync_to_invalid_provider() {
+        // Test with encrypted=false, yes=true to skip confirmation
         let result = lc::sync::handle_sync_to("invalid_provider", false, true).await;
         assert!(result.is_err());
         assert!(result
@@ -136,6 +137,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_sync_from_invalid_provider() {
+        // Test with encrypted=false, yes=true to skip confirmation
         let result = lc::sync::handle_sync_from("invalid_provider", false, true).await;
         assert!(result.is_err());
         assert!(result
@@ -183,7 +185,7 @@ mod cli_integration_tests {
     #[tokio::test]
     async fn test_sync_invalid_provider() {
         // Test invalid provider handling using direct API
-        // Use yes=true to avoid hanging on stdin prompt
+        // Use encrypted=false, yes=true to avoid hanging on stdin prompt
         let result = lc::sync::handle_sync_to("invalid_provider", false, true).await;
         assert!(result.is_err());
         assert!(result

@@ -111,13 +111,37 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
     // Collect all configuration files
     let mut config_files = Vec::new();
 
-    // Collect provider configs
+    // First, collect all .toml and .db files from the main config directory
+    for entry in fs::read_dir(&config_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.is_file() {
+            let file_name = path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+            let extension = path.extension().and_then(|e| e.to_str());
+            
+            // Include all .toml files and .db files (logs.db, embeddings.db, etc.)
+            let should_include = extension.map(|e| e == "toml" || e == "db").unwrap_or(false);
+            
+            if should_include {
+                let content = fs::read(&path)?;
+                config_files.push(ConfigFile {
+                    name: file_name.to_string(),
+                    content,
+                });
+            }
+        }
+    }
+
+    // Collect provider configs from providers/ subdirectory
     let providers_dir = config_dir.join("providers");
     if providers_dir.exists() {
         for entry in fs::read_dir(&providers_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
                 let content = fs::read(&path)?;
                 let name = format!("providers/{}", path.file_name().unwrap().to_string_lossy());
                 config_files.push(ConfigFile { name, content });
@@ -125,14 +149,18 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
         }
     }
 
-    // Collect main config file if it exists
-    let main_config = config_dir.join("config.toml");
-    if main_config.exists() {
-        let content = fs::read(&main_config)?;
-        config_files.push(ConfigFile {
-            name: "config.toml".to_string(),
-            content,
-        });
+    // Check for embeddings directory and include any database files there
+    let embeddings_dir = config_dir.join("embeddings");
+    if embeddings_dir.exists() {
+        for entry in fs::read_dir(&embeddings_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("db") {
+                let content = fs::read(&path)?;
+                let name = format!("embeddings/{}", path.file_name().unwrap().to_string_lossy());
+                config_files.push(ConfigFile { name, content });
+            }
+        }
     }
 
     if config_files.is_empty() {
@@ -171,8 +199,8 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
 
     #[cfg(feature = "s3-sync")]
     {
-        use super::s3::upload_to_s3;
-        upload_to_s3(&_files_to_upload).await?;
+        use super::s3::upload_to_s3_provider;
+        upload_to_s3_provider(&_files_to_upload, provider, encrypted).await?;
         println!("{} Configuration synced successfully!", "✅".green());
         return Ok(());
     }
@@ -227,8 +255,8 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
 
     #[cfg(feature = "s3-sync")]
     {
-        use super::s3::download_from_s3;
-        let _downloaded_files: Vec<ConfigFile> = download_from_s3().await?;
+        use super::s3::download_from_s3_provider;
+        let _downloaded_files: Vec<ConfigFile> = download_from_s3_provider(provider, _encrypted).await?;
 
         println!("Downloaded {} configuration files", _downloaded_files.len());
 

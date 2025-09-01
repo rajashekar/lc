@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod encryption;
+pub mod providers;
 
 #[cfg(feature = "s3-sync")]
 pub mod s3;

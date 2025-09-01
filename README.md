@@ -272,24 +272,25 @@ See [Template System Documentation](docs/TEMPLATE_SYSTEM.md) and [config_samples
 
 - `pdf`: Enables PDF file processing and analysis
 - `unix-sockets`: Enables Unix domain socket support for MCP daemon (Unix systems only)
+- `s3-sync`: Enables cloud synchronization support (S3 and S3-compatible storage)
 
 ### Build Options
 
 ```bash
-# Build with all default features
+# Build with all default features (includes PDF, Unix sockets, and S3 sync)
 cargo build --release
 
-# Build with minimal features (no PDF, no Unix sockets)
+# Build with minimal features (no PDF, no Unix sockets, no S3 sync)
 cargo build --release --no-default-features
 
-# Build with only PDF support (no Unix sockets)
+# Build with only PDF support
 cargo build --release --no-default-features --features pdf
 
-# Build with only Unix socket support (no PDF)
-cargo build --release --no-default-features --features unix-sockets
+# Build with PDF and S3 sync (no Unix sockets)
+cargo build --release --no-default-features --features "pdf,s3-sync"
 
 # Explicitly enable all features
-cargo build --release --features "pdf,unix-sockets"
+cargo build --release --features "pdf,unix-sockets,s3-sync"
 ```
 
 **Note:** The `unix-sockets` feature is only functional on Unix-like systems (Linux, macOS, BSD, WSL2). On Windows native command prompt/PowerShell, this feature has no effect and MCP daemon functionality is not available regardless of the feature flag. WSL2 provides full Unix compatibility.
@@ -298,20 +299,20 @@ cargo build --release --features "pdf,unix-sockets"
 
 #### Compilation on Windows
 
-Due to AWS SDK dependencies requiring specific C++ toolchain setup, the recommended build for Windows excludes S3 sync support:
-
-```bash
-# Recommended build for Windows (excludes S3 sync to avoid AWS LC compilation issues)
-cargo build --release --no-default-features --features "pdf unix-sockets"
-
-# Run tests on Windows
-cargo test --no-default-features --features "pdf unix-sockets"
-```
-
-If you need S3 sync functionality on Windows, ensure you have:
+S3 sync is now enabled by default on all platforms. On Windows, ensure you have:
 - Visual Studio 2019 or later with C++ build tools
 - Windows SDK installed
-- Then build with: `cargo build --release --features s3-sync`
+
+```bash
+# Standard build for Windows (includes S3 sync)
+cargo build --release
+
+# Build without S3 sync if you encounter compilation issues
+cargo build --release --no-default-features --features "pdf unix-sockets"
+
+# Run tests
+cargo test
+```
 
 #### Feature Availability
 
@@ -319,13 +320,13 @@ If you need S3 sync functionality on Windows, ensure you have:
 |---------|---------|-------|-------|------|
 | MCP Daemon | ❌ | ✅ | ✅ | ✅ |
 | Direct MCP | ✅ | ✅ | ✅ | ✅ |
-| S3 Sync | ⚠️* | ✅ | ✅ | ✅ |
+| S3 Sync | ✅* | ✅ | ✅ | ✅ |
 | PDF Processing | ✅ | ✅ | ✅ | ✅ |
 | Vision/Images | ✅ | ✅ | ✅ | ✅ |
 | Web Search | ✅ | ✅ | ✅ | ✅ |
 | Vector DB/RAG | ✅ | ✅ | ✅ | ✅ |
 
-*S3 Sync on Windows requires Visual Studio C++ build tools and is disabled by default to avoid compilation issues.
+*S3 Sync on Windows requires Visual Studio C++ build tools.
 
 ## Contributing
 

@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive tests to ensure capability flags match explicit provider data
 
 ### Changed
+- **BREAKING**: Restructured `lc sync` command to match documentation
+  - `lc sync push` → `lc sync to <provider>`
+  - `lc sync pull` → `lc sync from <provider>`
+  - `lc sync status` → removed (use `lc sync configure <provider> show` instead)
+  - Added `lc sync providers` to list supported cloud providers
+  - Configure commands now require provider name: `lc sync configure <provider> [setup|show|remove]`
+- S3 sync feature is now enabled by default on all platforms (no longer requires `--features s3-sync` build flag)
 - **BREAKING**: Stricter capability display policy for model icons
   - Capability icons (🔧 tools, 👁 vision, 🧠 reasoning, 💻 code, etc.) are now only displayed when explicitly provided by the provider's API response
   - Removed capability inference based on model names or patterns
@@ -31,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation site configuration for proper deployment
 - Eliminated assumptions in capability detection that could lead to misleading displays
 - Streaming output now appears in real time (disabled gzip on streaming requests)
+- Sync command now properly includes all .toml files (including keys.toml), .db files (logs.db), and embeddings directories
+- Sync command now correctly uses the specified provider's configuration instead of always using the "s3" provider
 
 ## [0.1.0] - 2025-01-XX
 

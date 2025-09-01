@@ -245,8 +245,12 @@ impl S3Provider {
             // Add file type metadata for better handling
             let file_type = if file.name.ends_with(".toml") {
                 "config"
-            } else if file.name == "logs.db" {
+            } else if file.name.ends_with(".db") {
                 "database"
+            } else if file.name.starts_with("embeddings/") {
+                "embeddings"
+            } else if file.name.starts_with("providers/") {
+                "provider-config"
             } else {
                 "unknown"
             };
@@ -402,7 +406,6 @@ impl S3Provider {
 
                         downloaded_files.push(ConfigFile {
                             name: filename.clone(),
-                            path: std::path::PathBuf::from(&filename),
                             content,
                         });
 

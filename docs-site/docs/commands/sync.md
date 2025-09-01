@@ -15,7 +15,14 @@ The sync command provides seamless configuration and data management by allowing
 ### What Gets Synced
 
 - **Configuration Files (.toml)**: All TOML configuration files in your lc config directory
-- **Chat Logs Database (logs.db)**: Complete chat history and session data
+  - `config.toml` - Main configuration
+  - `keys.toml` - API keys (encrypted recommended)
+  - `sync.toml` - Sync settings
+  - `mcp.toml` - MCP server configurations
+  - `providers/*.toml` - Provider-specific configurations
+- **Database Files (.db)**: All database files for logs and embeddings
+  - `logs.db` - Complete chat history and session data
+  - `embeddings/*.db` - Vector database files
 - **Encryption Support**: Optional AES256-GCM encryption for secure storage
 
 ## Usage
