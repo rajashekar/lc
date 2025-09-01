@@ -97,3 +97,7 @@ debug = true
 # Fix OpenSSL cross-compilation issues
 [target.'cfg(target_env = "musl")'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
+
+# Add vendored OpenSSL for ARM64 Linux cross-compilation
+[target.aarch64-unknown-linux-gnu.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }

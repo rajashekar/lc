@@ -148,10 +148,12 @@ jobs:
       
       - name: Install cross
         if: matrix.use_cross
-        run: cargo install cross
+        run: |
+          # Install cross-rs for cross-compilation
+          cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Verify system dependencies (Linux)
-        if: runner.os == 'Linux'
+      - name: Verify system dependencies (Linux native build)
+        if: runner.os == 'Linux' && !matrix.use_cross
         run: |
           pkg-config --version
           pkg-config --exists openssl && echo "OpenSSL found via pkg-config"
@@ -167,7 +169,9 @@ jobs:
       
       - name: Build (cross)
         if: matrix.use_cross
-        run: cross build --release --target ${{ matrix.target }}
+        run: |
+          # Use cross for cross-compilation which handles OpenSSL in Docker container
+          cross build --release --target ${{ matrix.target }}
       
       - name: Create tarball (Unix)
         if: runner.os != 'Windows'
