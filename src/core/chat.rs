@@ -698,13 +698,47 @@ pub async fn send_chat_request_with_tool_execution(
         // Make the API call
         let response = client.chat_with_tools(&request).await?;
 
-        // Track token usage if we have a counter
+        // Track input token usage if we have a counter
         if let Some(ref counter) = token_counter {
-            let input_tokens = counter.estimate_chat_tokens("", system_prompt, &[]) as i32;
+            // Count tokens for all messages in the request
+            let mut input_tokens = 0i32;
+            for msg in &request.messages {
+                match &msg.content_type {
+                    MessageContent::Text { content } => {
+                        if let Some(text) = content {
+                            input_tokens += counter.count_tokens(text) as i32;
+                        }
+                    }
+                    MessageContent::Multimodal { content } => {
+                        // Count text tokens from multimodal content
+                        for part in content {
+                            match part {
+                                crate::provider::ContentPart::Text { text } => {
+                                    input_tokens += counter.count_tokens(text) as i32;
+                                }
+                                crate::provider::ContentPart::ImageUrl { .. } => {
+                                    // Images are harder to count, use approximation
+                                    // Typical vision models charge ~85 tokens per low-detail image
+                                    input_tokens += 85; // Approximate for low-detail image
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             total_input_tokens += input_tokens;
+            crate::debug_log!("Iteration {} input tokens: {}", iteration, input_tokens);
         }
 
         if let Some(choice) = response.choices.first() {
+            // Track output tokens for this response
+            if let Some(ref counter) = token_counter {
+                if let Some(content) = &choice.message.content {
+                    let output_tokens = counter.count_tokens(content) as i32;
+                    total_output_tokens += output_tokens;
+                    crate::debug_log!("Iteration {} output tokens: {}", iteration, output_tokens);
+                }
+            }
             crate::debug_log!(
                 "Response choice - tool_calls: {}, content: {}",
                 choice.message.tool_calls.as_ref().map_or(0, |tc| tc.len()),
@@ -738,15 +772,47 @@ pub async fn send_chat_request_with_tool_execution(
                             tool_call.function.arguments
                         );
 
+                        // Parse arguments as JSON value
+                        let args_value: serde_json::Value =
+                            serde_json::from_str(&tool_call.function.arguments)?;
+
+                        // Validate arguments against tool schema
+                        if let Some(ref tool_defs) = tools {
+                            match validate_tool_arguments(
+                                &tool_call.function.name,
+                                &args_value,
+                                tool_defs,
+                            ) {
+                                Ok(_) => {
+                                    crate::debug_log!(
+                                        "Tool '{}' arguments validated successfully",
+                                        tool_call.function.name
+                                    );
+                                }
+                                Err(e) => {
+                                    let error_msg = format!(
+                                        "Tool argument validation failed for '{}': {}",
+                                        tool_call.function.name, e
+                                    );
+                                    eprintln!("⚠️  {}", error_msg);
+                                    crate::debug_log!("{}", error_msg);
+
+                                    // Add error as tool result and continue to next tool
+                                    conversation_messages.push(Message::tool_result(
+                                        tool_call.id.clone(),
+                                        error_msg,
+                                    ));
+                                    continue;
+                                }
+                            }
+                        }
+
                         // Find which MCP server has this function using daemon client
                         let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
                         let mut tool_result = None;
                         for server_name in mcp_server_names {
-                            // Parse arguments as JSON value instead of Vec<String>
-                            let args_value: serde_json::Value =
-                                serde_json::from_str(&tool_call.function.arguments)?;
                             match daemon_client
-                                .call_tool(server_name, &tool_call.function.name, args_value)
+                                .call_tool(server_name, &tool_call.function.name, args_value.clone())
                                 .await
                             {
                                 Ok(result) => {
@@ -805,11 +871,7 @@ pub async fn send_chat_request_with_tool_execution(
                                                  content.clone()
                                              });
 
-                            // Track output tokens
-                            if let Some(ref counter) = token_counter {
-                                total_output_tokens += counter.count_tokens(content) as i32;
-                            }
-
+                            // Output tokens already tracked above (line 725-730)
                             // Exit immediately when LLM provides content (final answer)
                             return Ok((
                                 content.clone(),
@@ -831,11 +893,7 @@ pub async fn send_chat_request_with_tool_execution(
                     }
                 );
 
-                // Track output tokens
-                if let Some(ref counter) = token_counter {
-                    total_output_tokens += counter.count_tokens(content) as i32;
-                }
-
+                // Output tokens already tracked above (line 725-730)
                 // Exit immediately when LLM provides content (final answer)
                 return Ok((
                     content.clone(),
@@ -857,6 +915,102 @@ pub async fn send_chat_request_with_tool_execution(
             anyhow::bail!("No response from API");
         }
     }
+}
+
+// Helper function to validate tool arguments against schema
+fn validate_tool_arguments(
+    tool_name: &str,
+    arguments: &serde_json::Value,
+    tools: &[crate::provider::Tool],
+) -> Result<()> {
+    // Find the tool definition
+    let tool_def = tools
+        .iter()
+        .find(|t| t.function.name == tool_name)
+        .ok_or_else(|| anyhow::anyhow!("Tool '{}' not found in tool definitions", tool_name))?;
+
+    let schema = &tool_def.function.parameters;
+
+    // Ensure arguments is an object
+    let args_obj = arguments.as_object()
+        .ok_or_else(|| anyhow::anyhow!("Tool arguments must be a JSON object, got: {}", arguments))?;
+
+    // Check required fields
+    if let Some(required) = schema.get("required").and_then(|r| r.as_array()) {
+        for req_field in required {
+            if let Some(field_name) = req_field.as_str() {
+                if !args_obj.contains_key(field_name) {
+                    return Err(anyhow::anyhow!(
+                        "Tool '{}' missing required argument: '{}'",
+                        tool_name,
+                        field_name
+                    ));
+                }
+            }
+        }
+    }
+
+    // Validate field types if properties are defined
+    if let Some(properties) = schema.get("properties").and_then(|p| p.as_object()) {
+        for (arg_name, arg_value) in args_obj {
+            // Check if this property is defined in the schema
+            if let Some(prop_schema) = properties.get(arg_name) {
+                // Validate type if specified
+                if let Some(expected_type) = prop_schema.get("type").and_then(|t| t.as_str()) {
+                    let actual_type = match arg_value {
+                        serde_json::Value::Null => "null",
+                        serde_json::Value::Bool(_) => "boolean",
+                        serde_json::Value::Number(_) => "number",
+                        serde_json::Value::String(_) => "string",
+                        serde_json::Value::Array(_) => "array",
+                        serde_json::Value::Object(_) => "object",
+                    };
+
+                    // Handle integer as a special case of number
+                    if expected_type == "integer" && arg_value.is_number() {
+                        if let Some(num) = arg_value.as_f64() {
+                            if num.fract() != 0.0 {
+                                return Err(anyhow::anyhow!(
+                                    "Tool '{}' argument '{}': expected integer, got number with decimal: {}",
+                                    tool_name,
+                                    arg_name,
+                                    num
+                                ));
+                            }
+                        }
+                    } else if expected_type != actual_type && !(expected_type == "number" && actual_type == "number") {
+                        return Err(anyhow::anyhow!(
+                            "Tool '{}' argument '{}': expected type '{}', got '{}'",
+                            tool_name,
+                            arg_name,
+                            expected_type,
+                            actual_type
+                        ));
+                    }
+                }
+
+                // Validate enum if specified
+                if let Some(enum_values) = prop_schema.get("enum").and_then(|e| e.as_array()) {
+                    if !enum_values.contains(arg_value) {
+                        return Err(anyhow::anyhow!(
+                            "Tool '{}' argument '{}': value must be one of {:?}, got: {}",
+                            tool_name,
+                            arg_name,
+                            enum_values,
+                            arg_value
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    crate::debug_log!(
+        "Tool '{}' arguments validated successfully",
+        tool_name
+    );
+
+    Ok(())
 }
 
 // Helper function to format tool result for display
@@ -1072,14 +1226,47 @@ pub async fn send_chat_request_with_tool_execution_messages(
                         .push(Message::assistant_with_tool_calls(tool_calls.clone()));
 
                     for tool_call in tool_calls {
+                        // Parse arguments as JSON value
+                        let args_value: serde_json::Value =
+                            serde_json::from_str(&tool_call.function.arguments)?;
+
+                        // Validate arguments against tool schema
+                        if let Some(ref tool_defs) = tools {
+                            match validate_tool_arguments(
+                                &tool_call.function.name,
+                                &args_value,
+                                tool_defs,
+                            ) {
+                                Ok(_) => {
+                                    crate::debug_log!(
+                                        "Tool '{}' arguments validated successfully",
+                                        tool_call.function.name
+                                    );
+                                }
+                                Err(e) => {
+                                    let error_msg = format!(
+                                        "Tool argument validation failed for '{}': {}",
+                                        tool_call.function.name, e
+                                    );
+                                    eprintln!("⚠️  {}", error_msg);
+                                    crate::debug_log!("{}", error_msg);
+
+                                    // Add error as tool result and continue to next tool
+                                    conversation_messages.push(Message::tool_result(
+                                        tool_call.id.clone(),
+                                        error_msg,
+                                    ));
+                                    continue;
+                                }
+                            }
+                        }
+
                         let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
                         let mut tool_result = None;
 
                         for server_name in mcp_server_names {
-                            let args_value: serde_json::Value =
-                                serde_json::from_str(&tool_call.function.arguments)?;
                             match daemon_client
-                                .call_tool(server_name, &tool_call.function.name, args_value)
+                                .call_tool(server_name, &tool_call.function.name, args_value.clone())
                                 .await
                             {
                                 Ok(result) => {
