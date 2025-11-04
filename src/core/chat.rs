@@ -1300,3 +1300,275 @@ pub async fn send_chat_request_with_tool_execution_messages(
         anyhow::bail!("No response from API");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::{Function, Tool};
+
+    #[test]
+    fn test_validate_tool_arguments_success() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "age": {"type": "integer"},
+                        "active": {"type": "boolean"}
+                    },
+                    "required": ["name", "age"]
+                }),
+            },
+        }];
+
+        let valid_args = serde_json::json!({
+            "name": "John",
+            "age": 30,
+            "active": true
+        });
+
+        let result = validate_tool_arguments("test_tool", &valid_args, &tools);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_missing_required() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "age": {"type": "integer"}
+                    },
+                    "required": ["name", "age"]
+                }),
+            },
+        }];
+
+        let invalid_args = serde_json::json!({
+            "name": "John"
+            // Missing required "age" field
+        });
+
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("missing required argument"));
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_wrong_type() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "age": {"type": "integer"}
+                    }
+                }),
+            },
+        }];
+
+        let invalid_args = serde_json::json!({
+            "name": "John",
+            "age": "thirty" // Should be integer
+        });
+
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("expected type"));
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_integer_vs_float() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "count": {"type": "integer"}
+                    }
+                }),
+            },
+        }];
+
+        // Should fail - float when integer expected
+        let invalid_args = serde_json::json!({
+            "count": 30.5
+        });
+
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("expected integer"));
+
+        // Should succeed - integer value
+        let valid_args = serde_json::json!({
+            "count": 30
+        });
+
+        let result = validate_tool_arguments("test_tool", &valid_args, &tools);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_enum_constraint() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["active", "inactive", "pending"]
+                        }
+                    }
+                }),
+            },
+        }];
+
+        // Should succeed - valid enum value
+        let valid_args = serde_json::json!({
+            "status": "active"
+        });
+        let result = validate_tool_arguments("test_tool", &valid_args, &tools);
+        assert!(result.is_ok());
+
+        // Should fail - invalid enum value
+        let invalid_args = serde_json::json!({
+            "status": "completed"
+        });
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be one of"));
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_tool_not_found() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {}
+                }),
+            },
+        }];
+
+        let args = serde_json::json!({});
+        let result = validate_tool_arguments("nonexistent_tool", &args, &tools);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_not_object() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {}
+                }),
+            },
+        }];
+
+        let invalid_args = serde_json::json!("not an object");
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must be a JSON object"));
+    }
+
+    #[test]
+    fn test_format_tool_result_with_text_content() {
+        let result = serde_json::json!({
+            "content": [
+                {"text": "Hello, world!"},
+                {"text": "This is a test."}
+            ]
+        });
+
+        let formatted = format_tool_result(&result);
+        assert!(formatted.contains("Hello, world!"));
+        assert!(formatted.contains("This is a test."));
+    }
+
+    #[test]
+    fn test_format_tool_result_truncation() {
+        // Create a large text that exceeds 10KB
+        let large_text = "A".repeat(15000);
+        let result = serde_json::json!({
+            "content": [
+                {"text": large_text}
+            ]
+        });
+
+        let formatted = format_tool_result(&result);
+        assert!(formatted.len() <= 10000 + 100); // 10KB + truncation message
+        assert!(formatted.contains("[Content truncated"));
+    }
+
+    #[test]
+    fn test_format_tool_result_fallback_to_json() {
+        let result = serde_json::json!({
+            "status": "success",
+            "data": {
+                "id": 123,
+                "name": "test"
+            }
+        });
+
+        let formatted = format_tool_result(&result);
+        // Should be pretty-printed JSON when no content array
+        assert!(formatted.contains("\"status\""));
+        assert!(formatted.contains("\"success\""));
+    }
+
+    #[test]
+    fn test_format_tool_result_multiple_items_truncation() {
+        // Create multiple items where the sum exceeds 10KB
+        let item1 = "B".repeat(6000);
+        let item2 = "C".repeat(6000);
+        let result = serde_json::json!({
+            "content": [
+                {"text": item1},
+                {"text": item2}
+            ]
+        });
+
+        let formatted = format_tool_result(&result);
+        assert!(formatted.len() <= 10000 + 100); // Should be truncated
+        assert!(formatted.contains("[Content truncated"));
+        // First item should be included
+        assert!(formatted.chars().filter(|&c| c == 'B').count() > 0);
+    }
+}
