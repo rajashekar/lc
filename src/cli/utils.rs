@@ -1,7 +1,7 @@
 //! Utility functions for CLI operations
 
-use anyhow::Result;
 use crate::models::dump_metadata::MetadataDumper;
+use anyhow::Result;
 
 /// Handle metadata dump command
 pub async fn handle_dump_metadata(provider: Option<String>, list: bool) -> Result<()> {

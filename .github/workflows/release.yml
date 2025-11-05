@@ -25,45 +25,45 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          name: Release ${{ github.ref }}
           body: |
             ## LLM Client ${{ steps.get_version.outputs.version }}
-            
+
             ### Installation
-            
+
             **Recommended (All Platforms)**:
             ```bash
             cargo install lc-cli
             ```
-            
+
             **macOS (Homebrew)** - Coming Soon:
             ```bash
             brew install lc
             ```
-            
+
             **Windows (Scoop)** - Coming Soon:
             ```bash
             scoop install lc
             ```
-            
+
             **Direct Download**:
             Download the appropriate binary below and add to your PATH.
-            
+
             ### System Requirements (Building from Source)
-            
+
             - **Linux**: `sudo apt install -y pkg-config libssl-dev build-essential`
             - **macOS**: `xcode-select --install`
             - **Windows**: Visual Studio Build Tools with C++ support
-            
+
             ### Changelog
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
           draft: false
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-and-upload:
     name: Build and Upload
@@ -76,26 +76,26 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact_name: lc
             asset_name: lc-linux-x86_64
-            
+
           # Linux ARM64
           - os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             artifact_name: lc
             asset_name: lc-linux-arm64
             use_cross: true
-          
+
           # macOS x86_64
           - os: macos-13
             target: x86_64-apple-darwin
             artifact_name: lc
             asset_name: lc-macos-x86_64
-            
+
           # macOS ARM64
           - os: macos-14
             target: aarch64-apple-darwin
             artifact_name: lc
             asset_name: lc-macos-arm64
-          
+
           # Windows x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -120,14 +120,14 @@ jobs:
           if ! xcode-select -p &>/dev/null; then
             xcode-select --install
           fi
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Cache Cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -138,14 +138,14 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Cache target directory
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-target-${{ matrix.target }}-release-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-target-${{ matrix.target }}-release-
             ${{ runner.os }}-target-${{ matrix.target }}-
-      
+
       - name: Install cross
         if: matrix.use_cross
         run: |
@@ -158,56 +158,43 @@ jobs:
           pkg-config --version
           pkg-config --exists openssl && echo "OpenSSL found via pkg-config"
           pkg-config --libs --cflags openssl
-      
+
       - name: Build (native)
         if: ${{ !matrix.use_cross && matrix.os != 'windows-latest' }}
         run: cargo build --release --target ${{ matrix.target }}
-      
-      - name: Build Windows (without S3 to avoid AWS LC issues)
+
+      - name: Build Windows (without unix-sockets for Windows)
         if: matrix.os == 'windows-latest'
-        run: cargo build --release --target ${{ matrix.target }} --no-default-features --features "pdf unix-sockets"
-      
+        run: cargo build --release --target ${{ matrix.target }} --no-default-features --features "pdf"
+
       - name: Build (cross)
         if: matrix.use_cross
         run: |
           # Use cross for cross-compilation which handles OpenSSL in Docker container
           cross build --release --target ${{ matrix.target }}
-      
+
       - name: Create tarball (Unix)
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
           tar czf ../../../${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
           cd ../../../
-          
+
       - name: Create zip (Windows)
         if: runner.os == 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
           7z a ../../../${{ matrix.asset_name }}.zip ${{ matrix.artifact_name }}
           cd ../../../
-      
-      - name: Upload Release Asset (Unix)
-        if: runner.os != 'Windows'
-        uses: actions/upload-release-asset@v1
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ matrix.asset_name }}.tar.gz
+            ${{ matrix.asset_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.asset_name }}.tar.gz
-          asset_name: ${{ matrix.asset_name }}.tar.gz
-          asset_content_type: application/gzip
-          
-      - name: Upload Release Asset (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.asset_name }}.zip
-          asset_name: ${{ matrix.asset_name }}.zip
-          asset_content_type: application/zip
 
   publish-crates:
     name: Publish to crates.io
@@ -215,12 +202,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev build-essential
-          
+
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo publish --token ${{ secrets.CRATES_TOKEN }}
 

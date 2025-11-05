@@ -83,7 +83,11 @@ impl S3Provider {
                 endpoint_url,
             }) = sync_config.get_provider(provider_name)
             {
-                println!("{} Using stored S3 configuration for '{}'", "✓".green(), provider_name);
+                println!(
+                    "{} Using stored S3 configuration for '{}'",
+                    "✓".green(),
+                    provider_name
+                );
                 return Ok(S3Config {
                     bucket_name: bucket_name.clone(),
                     region: region.clone(),
@@ -94,7 +98,11 @@ impl S3Provider {
             }
         }
 
-        println!("{} S3 Configuration Setup for '{}'", "🔧".blue(), provider_name);
+        println!(
+            "{} S3 Configuration Setup for '{}'",
+            "🔧".blue(),
+            provider_name
+        );
         println!("{} No stored configuration found. You can:", "💡".yellow());
         println!(
             "  - Set up configuration: {}",

@@ -8,11 +8,8 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::core::chat;
 use crate::database::Database;
-use crate::provider::{Message, MessageContent, ContentPart, ImageUrl};
-use crate::utils::{
-    cli_utils::resolve_model_and_provider,
-    input::MultiLineInput,
-};
+use crate::provider::{ContentPart, ImageUrl, Message, MessageContent};
+use crate::utils::{cli_utils::resolve_model_and_provider, input::MultiLineInput};
 
 /// Handle chat command - interactive chat mode
 pub async fn handle(
@@ -29,7 +26,7 @@ pub async fn handle(
     if debug {
         crate::cli::set_debug_mode(true);
     }
-    
+
     let config = Config::load()?;
     let db = Database::new()?;
 
@@ -274,7 +271,7 @@ pub async fn handle(
             // Use streaming chat
             print!("\r{}\r{} ", " ".repeat(12), "Assistant:".bold().blue());
             io::stdout().flush()?;
-            
+
             let result = if !messages.is_empty() {
                 chat::send_chat_request_with_streaming_messages(
                     &client,

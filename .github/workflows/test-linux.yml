@@ -6,11 +6,14 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+
 jobs:
   test-linux:
     name: Test Linux
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,9 +27,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu
+          components: rustfmt, clippy
 
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -36,29 +40,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Cache system packages
-        uses: actions/cache@v3
-        with:
-          path: |
-            /var/cache/apt
-            /var/lib/apt
-          key: ${{ runner.os }}-apt-${{ hashFiles('/etc/apt/sources.list') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
-
       - name: Verify system dependencies
         run: |
           pkg-config --version
           pkg-config --exists openssl && echo "OpenSSL found via pkg-config"
           pkg-config --libs --cflags openssl
 
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
       - name: Check compilation (with all features)
-        run: cargo check
+        run: cargo check --all-features
 
       - name: Run tests
         # Using --test-threads=1 to prevent race conditions in integration tests
         # that use shared file system resources and environment variables
-        run: cargo test -- --test-threads=1
+        run: cargo test --all-features -- --test-threads=1
 
       - name: Build release (with all features)
-        run: cargo build --release
+        run: cargo build --release --all-features

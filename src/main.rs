@@ -350,8 +350,7 @@ async fn main() -> Result<()> {
                 query,
             }),
         ) => {
-            cli::embed::handle_similar_command(model, provider, database, limit, query)
-                .await?;
+            cli::embed::handle_similar_command(model, provider, database, limit, query).await?;
         }
         (true, Some(Commands::Vectors { command })) => {
             cli::vectors::handle(command).await?;

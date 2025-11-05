@@ -571,8 +571,9 @@ impl OpenAIClient {
     /// Helper method to add standard headers to a request builder
     fn add_standard_headers(&self, mut req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         // Add Authorization header unless a custom Authorization header is already present
-        if !self.custom_headers.contains_key("Authorization") 
-            && !self.custom_headers.contains_key("authorization") {
+        if !self.custom_headers.contains_key("Authorization")
+            && !self.custom_headers.contains_key("authorization")
+        {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
 
@@ -599,8 +600,9 @@ impl OpenAIClient {
 
         // Add Authorization header unless a custom Authorization header is already present
         // This allows providers like Gemini to use custom authentication headers
-        if !self.custom_headers.contains_key("Authorization") 
-            && !self.custom_headers.contains_key("authorization") {
+        if !self.custom_headers.contains_key("Authorization")
+            && !self.custom_headers.contains_key("authorization")
+        {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
 
@@ -885,8 +887,9 @@ impl OpenAIClient {
         }
 
         // Add Authorization header unless a custom Authorization header is already present
-        if !self.custom_headers.contains_key("Authorization") 
-            && !self.custom_headers.contains_key("authorization") {
+        if !self.custom_headers.contains_key("Authorization")
+            && !self.custom_headers.contains_key("authorization")
+        {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
 

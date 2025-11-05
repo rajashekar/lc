@@ -34,15 +34,12 @@ pub async fn handle(
     let count_val = count.unwrap_or(1);
 
     // Resolve provider and model using the same logic as other commands
-    let (provider_name, model_name) = crate::utils::cli_utils::resolve_model_and_provider(
-        &config,
-        provider,
-        model,
-    )?;
+    let (provider_name, model_name) =
+        crate::utils::cli_utils::resolve_model_and_provider(&config, provider, model)?;
 
     // Get provider config with authentication from centralized keys
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-    
+
     // Allow either API key or resolved custom auth headers
     let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
         let k_l = k.to_lowercase();
@@ -59,7 +56,8 @@ pub async fn handle(
     }
 
     let mut config_mut = config.clone();
-    let client = crate::core::chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+    let client =
+        crate::core::chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
 
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {

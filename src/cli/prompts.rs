@@ -82,7 +82,7 @@ pub async fn handle_direct(
     // Process search if --use-search is specified
     let final_prompt = if let Some(search_spec) = use_search {
         debug_log!("Processing search with spec: {}", search_spec);
-        
+
         // Parse search spec (format: "provider" or "provider:query")
         let (search_provider, search_query) = if search_spec.contains(':') {
             let parts: Vec<&str> = search_spec.splitn(2, ':').collect();
@@ -94,26 +94,35 @@ pub async fn handle_direct(
         } else {
             (search_spec, prompt.clone())
         };
-        
-        debug_log!("Search provider: '{}', query: '{}'", search_provider, search_query);
-        
+
+        debug_log!(
+            "Search provider: '{}', query: '{}'",
+            search_provider,
+            search_query
+        );
+
         // Perform the search
         let search_engine = crate::search::SearchEngine::new()?;
-        let search_results = search_engine.search(&search_provider, &search_query, Some(5)).await?;
-        
+        let search_results = search_engine
+            .search(&search_provider, &search_query, Some(5))
+            .await?;
+
         // Extract context from search results
         let search_context = search_engine.extract_context_for_llm(&search_results, 5);
-        
+
         // Combine search context with original prompt
-        let combined_prompt = format!(
-            "{}\n\nUser's question: {}",
-            search_context,
-            prompt
+        let combined_prompt = format!("{}\n\nUser's question: {}", search_context, prompt);
+
+        debug_log!(
+            "Added search context, combined prompt length: {}",
+            combined_prompt.len()
         );
-        
-        debug_log!("Added search context, combined prompt length: {}", combined_prompt.len());
-        println!("🔍 Search completed: {} results from {}\n", search_results.results.len(), search_provider);
-        
+        println!(
+            "🔍 Search completed: {} results from {}\n",
+            search_results.results.len(),
+            search_provider
+        );
+
         combined_prompt
     } else {
         prompt.clone()
@@ -145,7 +154,7 @@ pub async fn handle_direct(
                 new_session_id
             }
         };
-        
+
         send_chat_request_with_streaming(
             &client,
             &api_model_name,
@@ -158,46 +167,47 @@ pub async fn handle_direct(
             mcp_tools.clone(),
         )
         .await?;
-        
+
         // Note: We can't save the response to database in streaming mode
         // as the response is streamed directly to stdout
         eprintln!("\nNote: Streaming responses are not saved to conversation history.");
     } else {
         debug_log!("Sending non-streaming chat request");
-        
+
         // Use tool execution if tools are available
-        let (response, input_tokens, output_tokens) = if mcp_tools.is_some() && !mcp_server_names.is_empty() {
-            // Convert server names to &str references
-            let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
-            
-            crate::core::chat::send_chat_request_with_tool_execution(
-                &client,
-                &api_model_name,
-                &final_prompt,
-                &[], // No history for direct prompt
-                system_prompt.as_deref(),
-                max_tokens_parsed,
-                temperature_parsed,
-                &provider_name,
-                mcp_tools.clone(),
-                &server_refs,
-                None, // Use default max_iterations
-            )
-            .await?
-        } else {
-            send_chat_request_with_validation(
-                &client,
-                &api_model_name,
-                &final_prompt,
-                &[], // No history for direct prompt
-                system_prompt.as_deref(),
-                max_tokens_parsed,
-                temperature_parsed,
-                &provider_name,
-                mcp_tools.clone(),
-            )
-            .await?
-        };
+        let (response, input_tokens, output_tokens) =
+            if mcp_tools.is_some() && !mcp_server_names.is_empty() {
+                // Convert server names to &str references
+                let server_refs: Vec<&str> = mcp_server_names.iter().map(|s| s.as_str()).collect();
+
+                crate::core::chat::send_chat_request_with_tool_execution(
+                    &client,
+                    &api_model_name,
+                    &final_prompt,
+                    &[], // No history for direct prompt
+                    system_prompt.as_deref(),
+                    max_tokens_parsed,
+                    temperature_parsed,
+                    &provider_name,
+                    mcp_tools.clone(),
+                    &server_refs,
+                    None, // Use default max_iterations
+                )
+                .await?
+            } else {
+                send_chat_request_with_validation(
+                    &client,
+                    &api_model_name,
+                    &final_prompt,
+                    &[], // No history for direct prompt
+                    system_prompt.as_deref(),
+                    max_tokens_parsed,
+                    temperature_parsed,
+                    &provider_name,
+                    mcp_tools.clone(),
+                )
+                .await?
+            };
 
         // Print the response
         println!("{}", response);

@@ -775,10 +775,7 @@ pub async fn send_chat_request_with_tool_execution(
                         .push(Message::assistant_with_tool_calls(tool_calls.clone()));
 
                     // Execute tool calls concurrently for better performance
-                    crate::debug_log!(
-                        "Executing {} tool calls concurrently",
-                        tool_calls.len()
-                    );
+                    crate::debug_log!("Executing {} tool calls concurrently", tool_calls.len());
 
                     let mut futures = Vec::new();
                     for tool_call in tool_calls.iter() {
@@ -891,16 +888,11 @@ async fn execute_single_tool_call(
     );
 
     // Parse arguments as JSON value
-    let args_value: serde_json::Value =
-        serde_json::from_str(&tool_call.function.arguments)?;
+    let args_value: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)?;
 
     // Validate arguments against tool schema
     if let Some(tool_defs) = tools {
-        if let Err(e) = validate_tool_arguments(
-            &tool_call.function.name,
-            &args_value,
-            tool_defs,
-        ) {
+        if let Err(e) = validate_tool_arguments(&tool_call.function.name, &args_value, tool_defs) {
             let error_msg = format!(
                 "Tool argument validation failed for '{}': {}",
                 tool_call.function.name, e
@@ -924,42 +916,41 @@ async fn execute_single_tool_call(
     let mut tool_result = None;
 
     // Use mapping if available for O(1) lookup, otherwise iterate
-    let servers_to_try: Vec<&str> = if let Some(server_name) = tool_server_map.get(&tool_call.function.name) {
-        vec![server_name.as_str()]
-    } else {
-        mcp_server_names.to_vec()
-    };
+    let servers_to_try: Vec<&str> =
+        if let Some(server_name) = tool_server_map.get(&tool_call.function.name) {
+            vec![server_name.as_str()]
+        } else {
+            mcp_server_names.to_vec()
+        };
 
     for server_name in servers_to_try {
         // Add timeout to prevent hanging
-        let call_future = daemon_client
-            .call_tool(server_name, &tool_call.function.name, args_value.clone());
+        let call_future =
+            daemon_client.call_tool(server_name, &tool_call.function.name, args_value.clone());
 
-        match tokio::time::timeout(Duration::from_secs(TOOL_EXECUTION_TIMEOUT_SECS), call_future).await {
+        match tokio::time::timeout(
+            Duration::from_secs(TOOL_EXECUTION_TIMEOUT_SECS),
+            call_future,
+        )
+        .await
+        {
             Ok(Ok(result)) => {
                 crate::debug_log!(
                     "Tool call successful on server '{}': {}",
                     server_name,
-                    serde_json::to_string(&result)
-                        .unwrap_or_else(|_| "invalid json".to_string())
+                    serde_json::to_string(&result).unwrap_or_else(|_| "invalid json".to_string())
                 );
                 tool_result = Some(format_tool_result(&result));
                 break;
             }
             Ok(Err(e)) => {
-                crate::debug_log!(
-                    "Tool call failed on server '{}': {}",
-                    server_name,
-                    e
-                );
+                crate::debug_log!("Tool call failed on server '{}': {}", server_name, e);
                 continue;
             }
             Err(_) => {
                 let timeout_msg = format!(
                     "Tool call to '{}' on server '{}' timed out after {} seconds",
-                    tool_call.function.name,
-                    server_name,
-                    TOOL_EXECUTION_TIMEOUT_SECS
+                    tool_call.function.name, server_name, TOOL_EXECUTION_TIMEOUT_SECS
                 );
                 eprintln!("⚠️  {}", timeout_msg);
                 crate::debug_log!("{}", timeout_msg);
@@ -1016,10 +1007,7 @@ async fn build_tool_server_map(
         }
     }
 
-    crate::debug_log!(
-        "Built tool-to-server mapping with {} entries",
-        map.len()
-    );
+    crate::debug_log!("Built tool-to-server mapping with {} entries", map.len());
 
     map
 }
@@ -1039,8 +1027,9 @@ fn validate_tool_arguments(
     let schema = &tool_def.function.parameters;
 
     // Ensure arguments is an object
-    let args_obj = arguments.as_object()
-        .ok_or_else(|| anyhow::anyhow!("Tool arguments must be a JSON object, got: {}", arguments))?;
+    let args_obj = arguments.as_object().ok_or_else(|| {
+        anyhow::anyhow!("Tool arguments must be a JSON object, got: {}", arguments)
+    })?;
 
     // Check required fields
     if let Some(required) = schema.get("required").and_then(|r| r.as_array()) {
@@ -1085,7 +1074,9 @@ fn validate_tool_arguments(
                                 ));
                             }
                         }
-                    } else if expected_type != actual_type && !(expected_type == "number" && actual_type == "number") {
+                    } else if expected_type != actual_type
+                        && !(expected_type == "number" && actual_type == "number")
+                    {
                         return Err(anyhow::anyhow!(
                             "Tool '{}' argument '{}': expected type '{}', got '{}'",
                             tool_name,
@@ -1112,10 +1103,7 @@ fn validate_tool_arguments(
         }
     }
 
-    crate::debug_log!(
-        "Tool '{}' arguments validated successfully",
-        tool_name
-    );
+    crate::debug_log!("Tool '{}' arguments validated successfully", tool_name);
 
     Ok(())
 }
@@ -1169,7 +1157,11 @@ fn format_tool_result(result: &serde_json::Value) -> String {
             MAX_TOOL_RESULT_LENGTH,
             json_result.len()
         );
-        format!("{}{}", &json_result[..MAX_TOOL_RESULT_LENGTH], truncation_msg)
+        format!(
+            "{}{}",
+            &json_result[..MAX_TOOL_RESULT_LENGTH],
+            truncation_msg
+        )
     } else {
         json_result
     }
@@ -1351,10 +1343,7 @@ pub async fn send_chat_request_with_tool_execution_messages(
                         .push(Message::assistant_with_tool_calls(tool_calls.clone()));
 
                     // Execute tool calls concurrently for better performance
-                    crate::debug_log!(
-                        "Executing {} tool calls concurrently",
-                        tool_calls.len()
-                    );
+                    crate::debug_log!("Executing {} tool calls concurrently", tool_calls.len());
 
                     let mut futures = Vec::new();
                     for tool_call in tool_calls.iter() {
@@ -1514,10 +1503,7 @@ mod tests {
 
         let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("expected integer"));
+        assert!(result.unwrap_err().to_string().contains("expected integer"));
 
         // Should succeed - integer value
         let valid_args = serde_json::json!({

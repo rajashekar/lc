@@ -30,7 +30,7 @@ pub async fn handle_transcribe(
     // Default to whisper-1 model if not specified
     let model_str = model.unwrap_or_else(|| "whisper-1".to_string());
     let format_str = format.unwrap_or_else(|| "text".to_string());
-    
+
     // Resolve provider and model
     let (provider_name, model_name) = if let Some(p) = provider {
         (p, model_str)
@@ -47,7 +47,7 @@ pub async fn handle_transcribe(
 
     // Get provider config with authentication
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-    
+
     // Check for API key or custom auth headers
     let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
         let k_l = k.to_lowercase();
@@ -64,7 +64,8 @@ pub async fn handle_transcribe(
     }
 
     let mut config_mut = config.clone();
-    let client = crate::core::chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+    let client =
+        crate::core::chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
 
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
@@ -98,7 +99,8 @@ pub async fn handle_transcribe(
         io::stdout().flush()?;
 
         // Process audio file (handles both local files and URLs)
-        let audio_data = if audio_file.starts_with("http://") || audio_file.starts_with("https://") {
+        let audio_data = if audio_file.starts_with("http://") || audio_file.starts_with("https://")
+        {
             crate::utils::audio::process_audio_url(audio_file)?
         } else {
             crate::utils::audio::process_audio_file(std::path::Path::new(audio_file))?
@@ -119,22 +121,22 @@ pub async fn handle_transcribe(
             Ok(response) => {
                 print!("\r{}\r", " ".repeat(20)); // Clear "Transcribing..."
                 println!("{} Transcription complete!", "✅".green());
-                
+
                 // Display or save transcription
                 let transcription_text = response.text;
-                
+
                 if let Some(ref output_file) = output {
                     // Append to output file if multiple files
                     let mut file = std::fs::OpenOptions::new()
                         .create(true)
                         .append(true)
                         .open(output_file)?;
-                    
+
                     if audio_files.len() > 1 {
                         writeln!(file, "\n=== {} ===", audio_file)?;
                     }
                     writeln!(file, "{}", transcription_text)?;
-                    
+
                     all_transcriptions.push(transcription_text);
                 } else {
                     // Print to stdout
@@ -144,7 +146,7 @@ pub async fn handle_transcribe(
                         println!("\n{} Transcription:", "📝".blue());
                     }
                     println!("{}", transcription_text);
-                    
+
                     all_transcriptions.push(transcription_text);
                 }
             }
@@ -188,13 +190,13 @@ pub async fn handle_tts(
     let model_str = model.unwrap_or_else(|| "tts-1".to_string());
     let voice_str = voice.unwrap_or_else(|| "alloy".to_string());
     let format_str = format.unwrap_or_else(|| "mp3".to_string());
-    
+
     // Generate default output filename
     let output_path = output.unwrap_or_else(|| {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
         format!("speech_{}.{}", timestamp, format_str)
     });
-    
+
     // Resolve provider and model
     let (provider_name, model_name) = if let Some(p) = provider {
         (p, model_str)
@@ -211,7 +213,7 @@ pub async fn handle_tts(
 
     // Get provider config with authentication
     let provider_config = config.get_provider_with_auth(&provider_name)?;
-    
+
     // Check for API key or custom auth headers
     let header_has_resolved_key = provider_config.headers.iter().any(|(k, v)| {
         let k_l = k.to_lowercase();
@@ -228,7 +230,8 @@ pub async fn handle_tts(
     }
 
     let mut config_mut = config.clone();
-    let client = crate::core::chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
+    let client =
+        crate::core::chat::create_authenticated_client(&mut config_mut, &provider_name).await?;
 
     // Save config if tokens were updated
     if config_mut.get_cached_token(&provider_name) != config.get_cached_token(&provider_name) {
@@ -268,20 +271,26 @@ pub async fn handle_tts(
     match client.generate_speech(&tts_request).await {
         Ok(audio_bytes) => {
             print!("\r{}\r", " ".repeat(25)); // Clear "Generating speech..."
-            
+
             // Determine the appropriate file extension and format
-            let detected_extension = crate::utils::audio::get_audio_file_extension(&audio_bytes, Some(&format_str));
-            let is_pcm_conversion_needed = crate::utils::audio::is_likely_pcm(&audio_bytes) || format_str.to_lowercase() == "pcm";
-            
+            let detected_extension =
+                crate::utils::audio::get_audio_file_extension(&audio_bytes, Some(&format_str));
+            let is_pcm_conversion_needed = crate::utils::audio::is_likely_pcm(&audio_bytes)
+                || format_str.to_lowercase() == "pcm";
+
             // Process audio data for better compatibility
             let (final_audio_data, final_extension, conversion_info) = if is_pcm_conversion_needed {
                 // Convert PCM to WAV for better playability
                 let wav_data = crate::utils::audio::pcm_to_wav(&audio_bytes, None, None, None);
-                (wav_data, "wav", Some("Converted PCM to WAV for better compatibility"))
+                (
+                    wav_data,
+                    "wav",
+                    Some("Converted PCM to WAV for better compatibility"),
+                )
             } else {
                 (audio_bytes, detected_extension, None)
             };
-            
+
             // Determine final output filename
             let final_output = if output_path.ends_with(&format!(".{}", final_extension)) {
                 output_path
@@ -290,7 +299,10 @@ pub async fn handle_tts(
                 let path = std::path::Path::new(&output_path);
                 if let Some(stem) = path.file_stem() {
                     if let Some(parent) = path.parent() {
-                        parent.join(format!("{}.{}", stem.to_string_lossy(), final_extension)).to_string_lossy().to_string()
+                        parent
+                            .join(format!("{}.{}", stem.to_string_lossy(), final_extension))
+                            .to_string_lossy()
+                            .to_string()
                     } else {
                         format!("{}.{}", stem.to_string_lossy(), final_extension)
                     }
@@ -298,29 +310,34 @@ pub async fn handle_tts(
                     format!("{}.{}", output_path, final_extension)
                 }
             };
-            
+
             // Save audio to file
             std::fs::write(&final_output, &final_audio_data)?;
-            
-            println!(
-                "{} Speech generated successfully!",
-                "✅".green()
-            );
+
+            println!("{} Speech generated successfully!", "✅".green());
             println!("{} Saved to: {}", "💾".green(), final_output);
-            
+
             // Show conversion info if applicable
             if let Some(info) = conversion_info {
                 println!("{} {}", "🔄".blue(), info);
             }
-            
+
             // Show file size
             let metadata = std::fs::metadata(&final_output)?;
             let size_kb = metadata.len() as f64 / 1024.0;
             println!("{} File size: {:.2} KB", "📊".blue(), size_kb);
-            
+
             // Show format info
-            println!("{} Format: {} ({})", "🎵".blue(), final_extension.to_uppercase(),
-                if is_pcm_conversion_needed { "24kHz, 16-bit, Mono" } else { "Original format" });
+            println!(
+                "{} Format: {} ({})",
+                "🎵".blue(),
+                final_extension.to_uppercase(),
+                if is_pcm_conversion_needed {
+                    "24kHz, 16-bit, Mono"
+                } else {
+                    "Original format"
+                }
+            );
         }
         Err(e) => {
             print!("\r{}\r", " ".repeat(25)); // Clear "Generating speech..."

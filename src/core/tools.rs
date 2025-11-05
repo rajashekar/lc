@@ -9,7 +9,7 @@ pub use crate::core::provider::Tool;
 pub async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<Tool>>, Vec<String>)> {
     use crate::services::mcp::McpConfig;
     use crate::services::mcp_daemon::DaemonClient;
-    
+
     let server_names: Vec<&str> = tools_str.split(',').map(|s| s.trim()).collect();
     let mut all_tools = Vec::new();
     let mut valid_server_names = Vec::new();
@@ -67,21 +67,24 @@ pub async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<Tool>>, Vec<
                         // Convert MCP tool to OpenAI tool format
                         // Simplify the schema to reduce token usage
                         let mut simplified_schema = serde_json::Map::new();
-                        
+
                         // Copy only essential fields from input_schema
                         if let Some(properties) = tool.input_schema.get("properties") {
-                            simplified_schema.insert("type".to_string(), serde_json::json!("object"));
+                            simplified_schema
+                                .insert("type".to_string(), serde_json::json!("object"));
                             simplified_schema.insert("properties".to_string(), properties.clone());
-                            
+
                             if let Some(required) = tool.input_schema.get("required") {
                                 simplified_schema.insert("required".to_string(), required.clone());
                             }
                         } else {
                             // If no properties, use minimal schema
-                            simplified_schema.insert("type".to_string(), serde_json::json!("object"));
-                            simplified_schema.insert("properties".to_string(), serde_json::json!({}));
+                            simplified_schema
+                                .insert("type".to_string(), serde_json::json!("object"));
+                            simplified_schema
+                                .insert("properties".to_string(), serde_json::json!({}));
                         }
-                        
+
                         let openai_tool = crate::core::provider::Tool {
                             tool_type: "function".to_string(),
                             function: crate::core::provider::Function {
@@ -131,17 +134,20 @@ pub async fn execute_mcp_tool(
     arguments: serde_json::Value,
 ) -> Result<serde_json::Value> {
     use crate::services::mcp_daemon::DaemonClient;
-    
+
     let daemon_client = DaemonClient::new()?;
-    
+
     crate::debug_log!(
         "Executing tool '{}' on server '{}' with arguments: {}",
         tool_name,
         server_name,
         arguments
     );
-    
-    match daemon_client.call_tool(server_name, tool_name, arguments).await {
+
+    match daemon_client
+        .call_tool(server_name, tool_name, arguments)
+        .await
+    {
         Ok(result) => {
             crate::debug_log!("Tool execution successful");
             Ok(result)

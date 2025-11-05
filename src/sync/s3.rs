@@ -7,12 +7,16 @@ use anyhow::Result;
 
 /// Upload configuration files to S3 using specified provider
 #[cfg(feature = "s3-sync")]
-pub async fn upload_to_s3_provider(files: &[ConfigFile], provider: &str, encrypted: bool) -> Result<()> {
+pub async fn upload_to_s3_provider(
+    files: &[ConfigFile],
+    provider: &str,
+    encrypted: bool,
+) -> Result<()> {
     use super::providers::S3Provider;
-    
+
     // Create S3 provider with the specified provider name
     let s3_provider = S3Provider::new_with_provider(provider).await?;
-    
+
     // Upload configs with correct encryption status
     s3_provider.upload_configs(files, encrypted).await
 }
@@ -21,10 +25,10 @@ pub async fn upload_to_s3_provider(files: &[ConfigFile], provider: &str, encrypt
 #[cfg(feature = "s3-sync")]
 pub async fn download_from_s3_provider(provider: &str, encrypted: bool) -> Result<Vec<ConfigFile>> {
     use super::providers::S3Provider;
-    
+
     // Create S3 provider with the specified provider name
     let s3_provider = S3Provider::new_with_provider(provider).await?;
-    
+
     // Download configs with correct encryption status
     s3_provider.download_configs(encrypted).await
 }

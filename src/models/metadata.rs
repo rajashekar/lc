@@ -669,7 +669,8 @@ impl ModelMetadataExtractor {
         }
 
         // Determine model type based on model ID or name patterns
-        metadata.model_type = self.determine_model_type(&metadata.id, metadata.display_name.as_deref());
+        metadata.model_type =
+            self.determine_model_type(&metadata.id, metadata.display_name.as_deref());
 
         Ok(metadata)
     }
@@ -915,7 +916,7 @@ impl ModelMetadataExtractor {
     fn determine_model_type(&self, model_id: &str, display_name: Option<&str>) -> ModelType {
         let id_lower = model_id.to_lowercase();
         let name_lower = display_name.map(|n| n.to_lowercase());
-        
+
         // Check for embedding model patterns
         let embedding_patterns = [
             "embed",
@@ -934,7 +935,7 @@ impl ModelMetadataExtractor {
             "embed-english",
             "embed-multilingual",
         ];
-        
+
         for pattern in &embedding_patterns {
             if id_lower.contains(pattern) {
                 return ModelType::Embedding;
@@ -945,7 +946,7 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Check for image generation model patterns
         let image_patterns = [
             "dall-e",
@@ -955,7 +956,7 @@ impl ModelMetadataExtractor {
             "imagen",
             "image",
         ];
-        
+
         for pattern in &image_patterns {
             if id_lower.contains(pattern) {
                 return ModelType::ImageGeneration;
@@ -966,16 +967,10 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Check for audio generation model patterns
-        let audio_patterns = [
-            "whisper",
-            "tts",
-            "audio",
-            "speech",
-            "voice",
-        ];
-        
+        let audio_patterns = ["whisper", "tts", "audio", "speech", "voice"];
+
         for pattern in &audio_patterns {
             if id_lower.contains(pattern) {
                 return ModelType::AudioGeneration;
@@ -986,14 +981,10 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Check for moderation model patterns
-        let moderation_patterns = [
-            "moderation",
-            "moderate",
-            "safety",
-        ];
-        
+        let moderation_patterns = ["moderation", "moderate", "safety"];
+
         for pattern in &moderation_patterns {
             if id_lower.contains(pattern) {
                 return ModelType::Moderation;
@@ -1004,7 +995,7 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Check for completion model patterns (older style models)
         let completion_patterns = [
             "davinci",
@@ -1017,7 +1008,7 @@ impl ModelMetadataExtractor {
             "code-davinci",
             "code-cushman",
         ];
-        
+
         for pattern in &completion_patterns {
             if id_lower.contains(pattern) && !id_lower.contains("embed") {
                 return ModelType::Completion;
@@ -1028,7 +1019,7 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Default to Chat for everything else (GPT, Claude, Llama, etc.)
         ModelType::Chat
     }

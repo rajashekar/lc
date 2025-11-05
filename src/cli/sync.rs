@@ -15,7 +15,11 @@ pub async fn handle(command: SyncCommands) -> Result<()> {
             // Handle provider-specific configuration
             crate::sync::handle_sync_configure(&provider, command).await?
         }
-        SyncCommands::To { provider, encrypted, yes } => {
+        SyncCommands::To {
+            provider,
+            encrypted,
+            yes,
+        } => {
             // Sync configuration to cloud provider
             println!("{} Syncing configuration to {}...", "📤".cyan(), provider);
             if encrypted {
@@ -23,7 +27,11 @@ pub async fn handle(command: SyncCommands) -> Result<()> {
             }
             crate::sync::handle_sync_to(&provider, encrypted, yes).await?
         }
-        SyncCommands::From { provider, encrypted, yes } => {
+        SyncCommands::From {
+            provider,
+            encrypted,
+            yes,
+        } => {
             // Sync configuration from cloud provider
             println!("{} Syncing configuration from {}...", "📥".cyan(), provider);
             if encrypted {
