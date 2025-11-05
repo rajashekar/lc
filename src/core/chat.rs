@@ -652,6 +652,9 @@ pub async fn send_chat_request_with_tool_execution(
     // Create token counter for tracking usage
     let token_counter = TokenCounter::new(model).ok();
 
+    // Build tool-to-server mapping for O(1) lookups
+    let tool_server_map = build_tool_server_map(&tools, mcp_server_names).await;
+
     // Add system prompt if provided
     if let Some(sys_prompt) = system_prompt {
         conversation_messages.push(Message {
@@ -762,100 +765,40 @@ pub async fn send_chat_request_with_tool_execution(
                     conversation_messages
                         .push(Message::assistant_with_tool_calls(tool_calls.clone()));
 
-                    // Execute each tool call
-                    for (i, tool_call) in tool_calls.iter().enumerate() {
-                        crate::debug_log!(
-                            "Executing tool call {}/{}: {} with args: {}",
-                            i + 1,
-                            tool_calls.len(),
-                            tool_call.function.name,
-                            tool_call.function.arguments
+                    // Execute tool calls concurrently for better performance
+                    crate::debug_log!(
+                        "Executing {} tool calls concurrently",
+                        tool_calls.len()
+                    );
+
+                    let mut futures = Vec::new();
+                    for tool_call in tool_calls.iter() {
+                        let future = execute_single_tool_call(
+                            tool_call,
+                            tools.as_ref(),
+                            mcp_server_names,
+                            &tool_server_map,
                         );
+                        futures.push(future);
+                    }
 
-                        // Parse arguments as JSON value
-                        let args_value: serde_json::Value =
-                            serde_json::from_str(&tool_call.function.arguments)?;
+                    // Wait for all tool calls to complete
+                    let results = futures_util::future::join_all(futures).await;
 
-                        // Validate arguments against tool schema
-                        if let Some(ref tool_defs) = tools {
-                            match validate_tool_arguments(
-                                &tool_call.function.name,
-                                &args_value,
-                                tool_defs,
-                            ) {
-                                Ok(_) => {
-                                    crate::debug_log!(
-                                        "Tool '{}' arguments validated successfully",
-                                        tool_call.function.name
-                                    );
-                                }
-                                Err(e) => {
-                                    let error_msg = format!(
-                                        "Tool argument validation failed for '{}': {}",
-                                        tool_call.function.name, e
-                                    );
-                                    eprintln!("⚠️  {}", error_msg);
-                                    crate::debug_log!("{}", error_msg);
-
-                                    // Add error as tool result and continue to next tool
-                                    conversation_messages.push(Message::tool_result(
-                                        tool_call.id.clone(),
-                                        error_msg,
-                                    ));
-                                    continue;
-                                }
+                    // Add all tool results to conversation
+                    for result in results {
+                        match result {
+                            Ok(exec_result) => {
+                                conversation_messages.push(Message::tool_result(
+                                    exec_result.tool_call_id,
+                                    exec_result.result_content,
+                                ));
+                            }
+                            Err(e) => {
+                                eprintln!("⚠️  Tool execution error: {}", e);
+                                crate::debug_log!("Tool execution error: {}", e);
                             }
                         }
-
-                        // Find which MCP server has this function using daemon client
-                        let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
-                        let mut tool_result = None;
-                        for server_name in mcp_server_names {
-                            match daemon_client
-                                .call_tool(server_name, &tool_call.function.name, args_value.clone())
-                                .await
-                            {
-                                Ok(result) => {
-                                    crate::debug_log!(
-                                        "Tool call successful on server '{}': {}",
-                                        server_name,
-                                        serde_json::to_string(&result)
-                                            .unwrap_or_else(|_| "invalid json".to_string())
-                                    );
-                                    tool_result = Some(format_tool_result(&result));
-                                    break;
-                                }
-                                Err(e) => {
-                                    crate::debug_log!(
-                                        "Tool call failed on server '{}': {}",
-                                        server_name,
-                                        e
-                                    );
-                                    continue;
-                                }
-                            }
-                        }
-
-                        let result_content = tool_result.unwrap_or_else(|| {
-                            format!(
-                                "Error: Function '{}' not found on any MCP server",
-                                tool_call.function.name
-                            )
-                        });
-
-                        crate::debug_log!(
-                            "Tool result for {}: {}",
-                            tool_call.function.name,
-                            if result_content.len() > 100 {
-                                format!("{}...", &result_content[..100])
-                            } else {
-                                result_content.clone()
-                            }
-                        );
-
-                        // Add tool result to conversation
-                        conversation_messages
-                            .push(Message::tool_result(tool_call.id.clone(), result_content));
                     }
 
                     // Continue the loop to get the LLM's response to the tool results
@@ -915,6 +858,160 @@ pub async fn send_chat_request_with_tool_execution(
             anyhow::bail!("No response from API");
         }
     }
+}
+
+/// Result of a single tool execution
+struct ToolExecutionResult {
+    tool_call_id: String,
+    result_content: String,
+}
+
+/// Execute a single tool call with validation, timeout, and error handling
+async fn execute_single_tool_call(
+    tool_call: &crate::provider::ToolCall,
+    tools: Option<&Vec<crate::provider::Tool>>,
+    mcp_server_names: &[&str],
+    tool_server_map: &std::collections::HashMap<String, String>,
+) -> Result<ToolExecutionResult> {
+    use std::time::Duration;
+
+    crate::debug_log!(
+        "Executing tool call: {} with args: {}",
+        tool_call.function.name,
+        tool_call.function.arguments
+    );
+
+    // Parse arguments as JSON value
+    let args_value: serde_json::Value =
+        serde_json::from_str(&tool_call.function.arguments)?;
+
+    // Validate arguments against tool schema
+    if let Some(tool_defs) = tools {
+        if let Err(e) = validate_tool_arguments(
+            &tool_call.function.name,
+            &args_value,
+            tool_defs,
+        ) {
+            let error_msg = format!(
+                "Tool argument validation failed for '{}': {}",
+                tool_call.function.name, e
+            );
+            eprintln!("⚠️  {}", error_msg);
+            crate::debug_log!("{}", error_msg);
+
+            return Ok(ToolExecutionResult {
+                tool_call_id: tool_call.id.clone(),
+                result_content: error_msg,
+            });
+        }
+        crate::debug_log!(
+            "Tool '{}' arguments validated successfully",
+            tool_call.function.name
+        );
+    }
+
+    // Find which MCP server has this function
+    let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
+    let mut tool_result = None;
+
+    // Use mapping if available for O(1) lookup, otherwise iterate
+    let servers_to_try: Vec<&str> = if let Some(server_name) = tool_server_map.get(&tool_call.function.name) {
+        vec![server_name.as_str()]
+    } else {
+        mcp_server_names.to_vec()
+    };
+
+    for server_name in servers_to_try {
+        // Add timeout to prevent hanging (30 seconds)
+        let call_future = daemon_client
+            .call_tool(server_name, &tool_call.function.name, args_value.clone());
+
+        match tokio::time::timeout(Duration::from_secs(30), call_future).await {
+            Ok(Ok(result)) => {
+                crate::debug_log!(
+                    "Tool call successful on server '{}': {}",
+                    server_name,
+                    serde_json::to_string(&result)
+                        .unwrap_or_else(|_| "invalid json".to_string())
+                );
+                tool_result = Some(format_tool_result(&result));
+                break;
+            }
+            Ok(Err(e)) => {
+                crate::debug_log!(
+                    "Tool call failed on server '{}': {}",
+                    server_name,
+                    e
+                );
+                continue;
+            }
+            Err(_) => {
+                let timeout_msg = format!(
+                    "Tool call to '{}' on server '{}' timed out after 30 seconds",
+                    tool_call.function.name,
+                    server_name
+                );
+                eprintln!("⚠️  {}", timeout_msg);
+                crate::debug_log!("{}", timeout_msg);
+                continue;
+            }
+        }
+    }
+
+    let result_content = tool_result.unwrap_or_else(|| {
+        format!(
+            "Error: Function '{}' not found on any MCP server",
+            tool_call.function.name
+        )
+    });
+
+    crate::debug_log!(
+        "Tool result for {}: {}",
+        tool_call.function.name,
+        if result_content.len() > 100 {
+            format!("{}...", &result_content[..100])
+        } else {
+            result_content.clone()
+        }
+    );
+
+    Ok(ToolExecutionResult {
+        tool_call_id: tool_call.id.clone(),
+        result_content,
+    })
+}
+
+/// Build a mapping of tool names to server names for O(1) lookups
+async fn build_tool_server_map(
+    tools: &Option<Vec<crate::provider::Tool>>,
+    mcp_server_names: &[&str],
+) -> std::collections::HashMap<String, String> {
+    use std::collections::HashMap;
+
+    let mut map = HashMap::new();
+
+    if tools.is_some() {
+        // Use daemon client to get tools from each server
+        if let Ok(daemon_client) = crate::mcp_daemon::DaemonClient::new() {
+            for server_name in mcp_server_names {
+                if let Ok(server_tools) = daemon_client.list_tools(server_name).await {
+                    if let Some(tools_from_server) = server_tools.get(*server_name) {
+                        for tool in tools_from_server {
+                            // Map tool name to server name
+                            map.insert(tool.name.to_string(), server_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    crate::debug_log!(
+        "Built tool-to-server mapping with {} entries",
+        map.len()
+    );
+
+    map
 }
 
 // Helper function to validate tool arguments against schema
@@ -1178,6 +1275,9 @@ pub async fn send_chat_request_with_tool_execution_messages(
 
     let mut conversation_messages = Vec::new();
 
+    // Build tool-to-server mapping for O(1) lookups
+    let tool_server_map = build_tool_server_map(&tools, mcp_server_names).await;
+
     // Add system prompt if provided and not already in messages
     if let Some(sys_prompt) = system_prompt {
         let has_system = messages.iter().any(|m| m.role == "system");
@@ -1225,67 +1325,40 @@ pub async fn send_chat_request_with_tool_execution_messages(
                     conversation_messages
                         .push(Message::assistant_with_tool_calls(tool_calls.clone()));
 
-                    for tool_call in tool_calls {
-                        // Parse arguments as JSON value
-                        let args_value: serde_json::Value =
-                            serde_json::from_str(&tool_call.function.arguments)?;
+                    // Execute tool calls concurrently for better performance
+                    crate::debug_log!(
+                        "Executing {} tool calls concurrently",
+                        tool_calls.len()
+                    );
 
-                        // Validate arguments against tool schema
-                        if let Some(ref tool_defs) = tools {
-                            match validate_tool_arguments(
-                                &tool_call.function.name,
-                                &args_value,
-                                tool_defs,
-                            ) {
-                                Ok(_) => {
-                                    crate::debug_log!(
-                                        "Tool '{}' arguments validated successfully",
-                                        tool_call.function.name
-                                    );
-                                }
-                                Err(e) => {
-                                    let error_msg = format!(
-                                        "Tool argument validation failed for '{}': {}",
-                                        tool_call.function.name, e
-                                    );
-                                    eprintln!("⚠️  {}", error_msg);
-                                    crate::debug_log!("{}", error_msg);
+                    let mut futures = Vec::new();
+                    for tool_call in tool_calls.iter() {
+                        let future = execute_single_tool_call(
+                            tool_call,
+                            tools.as_ref(),
+                            mcp_server_names,
+                            &tool_server_map,
+                        );
+                        futures.push(future);
+                    }
 
-                                    // Add error as tool result and continue to next tool
-                                    conversation_messages.push(Message::tool_result(
-                                        tool_call.id.clone(),
-                                        error_msg,
-                                    ));
-                                    continue;
-                                }
+                    // Wait for all tool calls to complete
+                    let results = futures_util::future::join_all(futures).await;
+
+                    // Add all tool results to conversation
+                    for result in results {
+                        match result {
+                            Ok(exec_result) => {
+                                conversation_messages.push(Message::tool_result(
+                                    exec_result.tool_call_id,
+                                    exec_result.result_content,
+                                ));
+                            }
+                            Err(e) => {
+                                eprintln!("⚠️  Tool execution error: {}", e);
+                                crate::debug_log!("Tool execution error: {}", e);
                             }
                         }
-
-                        let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
-                        let mut tool_result = None;
-
-                        for server_name in mcp_server_names {
-                            match daemon_client
-                                .call_tool(server_name, &tool_call.function.name, args_value.clone())
-                                .await
-                            {
-                                Ok(result) => {
-                                    tool_result = Some(format_tool_result(&result));
-                                    break;
-                                }
-                                Err(_) => continue,
-                            }
-                        }
-
-                        let result_content = tool_result.unwrap_or_else(|| {
-                            format!(
-                                "Error: Function '{}' not found on any MCP server",
-                                tool_call.function.name
-                            )
-                        });
-
-                        conversation_messages
-                            .push(Message::tool_result(tool_call.id.clone(), result_content));
                     }
 
                     continue;
