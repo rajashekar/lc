@@ -181,6 +181,7 @@ pub async fn handle_direct(
                 &provider_name,
                 mcp_tools.clone(),
                 &server_refs,
+                None, // Use default max_iterations
             )
             .await?
         } else {

@@ -6,6 +6,12 @@ use crate::token_utils::TokenCounter;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 
+// Agent execution constants
+const DEFAULT_MAX_ITERATIONS: u32 = 10;
+const TOOL_EXECUTION_TIMEOUT_SECS: u64 = 30;
+const MAX_TOOL_RESULT_LENGTH: usize = 10000;
+const IMAGE_TOKEN_ESTIMATE: i32 = 85; // Approximate tokens for low-detail image
+
 pub async fn send_chat_request_with_validation(
     client: &LLMClient,
     model: &str,
@@ -641,6 +647,7 @@ pub async fn send_chat_request_with_tool_execution(
     _provider_name: &str,
     tools: Option<Vec<crate::provider::Tool>>,
     mcp_server_names: &[&str],
+    max_iterations: Option<u32>,
 ) -> Result<(String, Option<i32>, Option<i32>)> {
     use crate::provider::{ChatRequest, Message};
     use crate::token_utils::TokenCounter;
@@ -675,7 +682,9 @@ pub async fn send_chat_request_with_tool_execution(
 
     // Add current prompt
     conversation_messages.push(Message::user(prompt.to_string()));
-    let max_iterations = 10; // Prevent infinite loops
+
+    // Use provided max_iterations or default
+    let max_iterations = max_iterations.unwrap_or(DEFAULT_MAX_ITERATIONS);
     let mut iteration = 0;
 
     loop {
@@ -722,7 +731,7 @@ pub async fn send_chat_request_with_tool_execution(
                                 crate::provider::ContentPart::ImageUrl { .. } => {
                                     // Images are harder to count, use approximation
                                     // Typical vision models charge ~85 tokens per low-detail image
-                                    input_tokens += 85; // Approximate for low-detail image
+                                    input_tokens += IMAGE_TOKEN_ESTIMATE;
                                 }
                             }
                         }
@@ -922,11 +931,11 @@ async fn execute_single_tool_call(
     };
 
     for server_name in servers_to_try {
-        // Add timeout to prevent hanging (30 seconds)
+        // Add timeout to prevent hanging
         let call_future = daemon_client
             .call_tool(server_name, &tool_call.function.name, args_value.clone());
 
-        match tokio::time::timeout(Duration::from_secs(30), call_future).await {
+        match tokio::time::timeout(Duration::from_secs(TOOL_EXECUTION_TIMEOUT_SECS), call_future).await {
             Ok(Ok(result)) => {
                 crate::debug_log!(
                     "Tool call successful on server '{}': {}",
@@ -947,9 +956,10 @@ async fn execute_single_tool_call(
             }
             Err(_) => {
                 let timeout_msg = format!(
-                    "Tool call to '{}' on server '{}' timed out after 30 seconds",
+                    "Tool call to '{}' on server '{}' timed out after {} seconds",
                     tool_call.function.name,
-                    server_name
+                    server_name,
+                    TOOL_EXECUTION_TIMEOUT_SECS
                 );
                 eprintln!("⚠️  {}", timeout_msg);
                 crate::debug_log!("{}", timeout_msg);
@@ -1112,15 +1122,16 @@ fn validate_tool_arguments(
 
 // Helper function to format tool result for display
 fn format_tool_result(result: &serde_json::Value) -> String {
-    const MAX_TOOL_RESULT_LENGTH: usize = 10000; // Limit tool results to 10KB
-    const TRUNCATION_MESSAGE: &str = "\n\n[Content truncated - exceeded maximum length]";
-    
     if let Some(content_array) = result.get("content") {
         if let Some(content_items) = content_array.as_array() {
             let mut formatted = String::new();
+            let mut original_length = 0usize;
+
             for item in content_items {
                 if let Some(text) = item.get("text") {
                     if let Some(text_str) = text.as_str() {
+                        original_length += text_str.len();
+
                         // Check if adding this text would exceed the limit
                         if formatted.len() + text_str.len() > MAX_TOOL_RESULT_LENGTH {
                             // Add as much as we can
@@ -1128,7 +1139,14 @@ fn format_tool_result(result: &serde_json::Value) -> String {
                             if remaining > 0 {
                                 formatted.push_str(&text_str[..remaining.min(text_str.len())]);
                             }
-                            formatted.push_str(TRUNCATION_MESSAGE);
+
+                            // Add detailed truncation message
+                            let truncation_msg = format!(
+                                "\n\n[TRUNCATED: Result too large. Showing first {} bytes of {} total. Consider requesting smaller chunks or specific fields.]",
+                                MAX_TOOL_RESULT_LENGTH,
+                                original_length
+                            );
+                            formatted.push_str(&truncation_msg);
                             break; // Stop processing more items
                         } else {
                             formatted.push_str(text_str);
@@ -1144,9 +1162,14 @@ fn format_tool_result(result: &serde_json::Value) -> String {
     // Fallback to pretty-printed JSON (also with truncation)
     let json_result = serde_json::to_string_pretty(result)
         .unwrap_or_else(|_| "Error formatting result".to_string());
-    
+
     if json_result.len() > MAX_TOOL_RESULT_LENGTH {
-        format!("{}{}", &json_result[..MAX_TOOL_RESULT_LENGTH], TRUNCATION_MESSAGE)
+        let truncation_msg = format!(
+            "\n\n[TRUNCATED: Result too large. Showing first {} bytes of {} total.]",
+            MAX_TOOL_RESULT_LENGTH,
+            json_result.len()
+        );
+        format!("{}{}", &json_result[..MAX_TOOL_RESULT_LENGTH], truncation_msg)
     } else {
         json_result
     }
@@ -1269,6 +1292,7 @@ pub async fn send_chat_request_with_tool_execution_messages(
     provider_name: &str,
     tools: Option<Vec<crate::provider::Tool>>,
     mcp_server_names: &[&str],
+    max_iterations: Option<u32>,
 ) -> Result<(String, Option<i32>, Option<i32>)> {
     crate::debug_log!("Sending chat request with tool execution and messages - provider: '{}', model: '{}', messages: {}",
                       provider_name, model, messages.len());
@@ -1296,7 +1320,8 @@ pub async fn send_chat_request_with_tool_execution_messages(
     // Add all provided messages
     conversation_messages.extend_from_slice(messages);
 
-    let max_iterations = 10;
+    // Use provided max_iterations or default
+    let max_iterations = max_iterations.unwrap_or(DEFAULT_MAX_ITERATIONS);
     let mut iteration = 0;
 
     loop {
@@ -1606,8 +1631,10 @@ mod tests {
         });
 
         let formatted = format_tool_result(&result);
-        assert!(formatted.len() <= 10000 + 100); // 10KB + truncation message
-        assert!(formatted.contains("[Content truncated"));
+        // Allow for longer truncation message (up to 200 chars for the detailed message)
+        assert!(formatted.len() <= MAX_TOOL_RESULT_LENGTH + 200);
+        assert!(formatted.contains("[TRUNCATED"));
+        assert!(formatted.contains("bytes"));
     }
 
     #[test]
@@ -1639,8 +1666,10 @@ mod tests {
         });
 
         let formatted = format_tool_result(&result);
-        assert!(formatted.len() <= 10000 + 100); // Should be truncated
-        assert!(formatted.contains("[Content truncated"));
+        // Allow for longer truncation message (up to 200 chars for the detailed message)
+        assert!(formatted.len() <= MAX_TOOL_RESULT_LENGTH + 200);
+        assert!(formatted.contains("[TRUNCATED"));
+        assert!(formatted.contains("bytes"));
         // First item should be included
         assert!(formatted.chars().filter(|&c| c == 'B').count() > 0);
     }
