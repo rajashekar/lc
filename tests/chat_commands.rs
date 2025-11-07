@@ -555,7 +555,10 @@ mod chat_template_resolution_tests {
         config.system_prompt = Some("t:greeting".to_string());
 
         // Test that system prompt resolves templates
-        let resolved_system_prompt = config.system_prompt.as_ref().map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
+        let resolved_system_prompt = config
+            .system_prompt
+            .as_ref()
+            .map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
 
         assert_eq!(
             resolved_system_prompt,
@@ -564,7 +567,10 @@ mod chat_template_resolution_tests {
 
         // Test with non-template system prompt
         config.system_prompt = Some("You are a helpful assistant.".to_string());
-        let resolved_system_prompt = config.system_prompt.as_ref().map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
+        let resolved_system_prompt = config
+            .system_prompt
+            .as_ref()
+            .map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
 
         assert_eq!(
             resolved_system_prompt,

@@ -178,7 +178,9 @@ pub async fn send_chat_request_with_validation(
     );
 
     // Calculate output tokens if we have a token counter
-    let output_tokens = token_counter.as_ref().map(|counter| counter.count_tokens(&response) as i32);
+    let output_tokens = token_counter
+        .as_ref()
+        .map(|counter| counter.count_tokens(&response) as i32);
 
     // Display token usage if available
     if let (Some(input), Some(output)) = (input_tokens, output_tokens) {

@@ -661,9 +661,10 @@ mod proxy_filtering_tests {
             .provider_filter
             .as_ref()
             .is_none_or(|f| provider == *f);
-        let model_passes = state.model_filter.as_ref().is_none_or(|f| {
-            format!("{}:{}", provider, model).contains(f) || model == *f
-        });
+        let model_passes = state
+            .model_filter
+            .as_ref()
+            .is_none_or(|f| format!("{}:{}", provider, model).contains(f) || model == *f);
 
         assert!(provider_passes);
         assert!(model_passes);
@@ -1095,10 +1096,12 @@ mod proxy_endpoint_tests {
         // Test that our endpoints match OpenAI's API structure
         let openai_endpoints = vec!["/v1/models", "/v1/chat/completions"];
 
-        let our_endpoints = ["/models",
+        let our_endpoints = [
+            "/models",
             "/v1/models",
             "/chat/completions",
-            "/v1/chat/completions"];
+            "/v1/chat/completions",
+        ];
 
         // Verify we support OpenAI's standard endpoints
         for openai_endpoint in openai_endpoints {

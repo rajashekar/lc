@@ -54,10 +54,7 @@ impl JinaProvider {
 
         // Check if full content reading is enabled
         let use_full_content = self.headers.contains_key("X-Engine")
-            && self
-                .headers
-                .get("X-Engine")
-                .is_some_and(|v| v == "direct");
+            && self.headers.get("X-Engine").is_some_and(|v| v == "direct");
 
         // Add headers
         for (name, value) in &self.headers {

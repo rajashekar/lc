@@ -334,13 +334,8 @@ mod similar_model_resolution_tests {
         // Create database with one model
         let db_name = format!("model_override_test_{}", std::process::id());
         let db = VectorDatabase::new(&db_name).unwrap();
-        db.add_vector(
-            "Test",
-            &[0.1, 0.2, 0.3],
-            "text-embedding-3-small",
-            "openai",
-        )
-        .unwrap();
+        db.add_vector("Test", &[0.1, 0.2, 0.3], "text-embedding-3-small", "openai")
+            .unwrap();
 
         // Test explicit model override
         let result = lc::utils::resolve_model_and_provider(

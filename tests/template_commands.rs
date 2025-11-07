@@ -722,7 +722,8 @@ mod template_validation_tests {
 
         // Various content types should be allowed
         let long_content = "Very long content ".repeat(100);
-        let test_contents = ["",
+        let test_contents = [
+            "",
             "Simple content",
             "Content with\nnewlines\nand\ttabs",
             "Content with special chars: !@#$%^&*()",
@@ -730,7 +731,8 @@ mod template_validation_tests {
             "Content with \"quotes\" and 'apostrophes'",
             &long_content,
             "JSON-like: {\"key\": \"value\", \"number\": 123}",
-            "Code-like: function test() { return 'hello'; }"];
+            "Code-like: function test() { return 'hello'; }",
+        ];
 
         for (i, content) in test_contents.iter().enumerate() {
             let name = format!("template_{}", i);

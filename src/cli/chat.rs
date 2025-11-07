@@ -237,7 +237,10 @@ pub async fn handle(
         print!("{}", "Thinking...".dimmed());
         io::stdout().flush()?;
 
-        let resolved_system_prompt = config.system_prompt.as_ref().map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
+        let resolved_system_prompt = config
+            .system_prompt
+            .as_ref()
+            .map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
 
         // Determine if streaming should be used (default to true for interactive chat)
         let mut use_streaming = stream || config.stream.unwrap_or(true);

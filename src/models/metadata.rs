@@ -752,9 +752,7 @@ impl ModelMetadataExtractor {
 
     fn apply_transform(&self, value: Value, transform: &str) -> Option<Value> {
         match transform {
-            "multiply_million" => {
-                value.as_f64().map(|num| Value::from(num * 1_000_000.0))
-            }
+            "multiply_million" => value.as_f64().map(|num| Value::from(num * 1_000_000.0)),
             _ => Some(value),
         }
     }

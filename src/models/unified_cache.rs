@@ -41,7 +41,8 @@ impl CachedProviderData {
         if self.cached_json.is_none() {
             self.cached_json = Some(serde_json::to_string_pretty(self)?);
         }
-        self.cached_json.as_deref()
+        self.cached_json
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Failed to get cached JSON"))
     }
 }
