@@ -375,7 +375,7 @@ pub async fn handle(command: McpCommands) -> Result<()> {
 
                 // Try to get connection status for each server
                 if let Ok(client) = daemon_client {
-                    for (name, _) in &servers {
+                    for name in servers.keys() {
                         // Try to list tools as a way to check if connected
                         if client.list_tools(name).await.is_ok() {
                             active_servers.push(name.clone());

@@ -74,7 +74,7 @@ impl TestEnvironment {
 pub fn get_test_binary_path() -> PathBuf {
     BUILD_ONCE.call_once(|| {
         let output = std::process::Command::new("cargo")
-            .args(&["build", "--bin", "lc"])
+            .args(["build", "--bin", "lc"])
             .output()
             .expect("Failed to build test binary");
 

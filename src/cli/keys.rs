@@ -154,7 +154,7 @@ async fn list_keys() -> Result<()> {
     // Load keys from centralized keys.toml
     let keys = crate::keys::KeysConfig::load().unwrap_or_else(|_| crate::keys::KeysConfig::new());
 
-    for (name, _provider_config) in &config.providers {
+    for name in config.providers.keys() {
         // Check if provider has authentication in centralized keys
         let has_auth = keys.has_auth(name);
         let status = if has_auth {

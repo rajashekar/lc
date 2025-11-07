@@ -488,8 +488,7 @@ impl ModelMetadataExtractor {
         let mut current = data;
 
         for part in parts {
-            if part.ends_with("[]") {
-                let field = &part[..part.len() - 2];
+            if let Some(field) = part.strip_suffix("[]") {
                 current = current
                     .get(field)
                     .context(format!("Field {} not found", field))?;
@@ -546,7 +545,7 @@ impl ModelMetadataExtractor {
     fn evaluate_select_condition(&self, value: &Value, condition: &str) -> Result<bool> {
         // Handle equality conditions like '. == "tool-calling"'
         if condition.starts_with(". == ") {
-            let expected = condition[5..].trim();
+            let expected = condition.strip_prefix(". == ").unwrap().trim();
 
             // Remove quotes if present
             let expected = if expected.starts_with('"') && expected.ends_with('"') {
@@ -691,7 +690,7 @@ impl ModelMetadataExtractor {
                         return Some(Value::Bool(true));
                     } else if !is_bool_field {
                         return Some(Value::Bool(result));
-                    } else if result == false {
+                    } else if !result {
                         found_false = true;
                     }
                 }
@@ -707,7 +706,7 @@ impl ModelMetadataExtractor {
                         return Some(Value::Bool(true));
                     } else if !is_bool_field {
                         return Some(Value::Bool(result));
-                    } else if result == false {
+                    } else if !result {
                         found_false = true;
                     }
                 }
@@ -754,11 +753,7 @@ impl ModelMetadataExtractor {
     fn apply_transform(&self, value: Value, transform: &str) -> Option<Value> {
         match transform {
             "multiply_million" => {
-                if let Some(num) = value.as_f64() {
-                    Some(Value::from(num * 1_000_000.0))
-                } else {
-                    None
-                }
+                value.as_f64().map(|num| Value::from(num * 1_000_000.0))
             }
             _ => Some(value),
         }

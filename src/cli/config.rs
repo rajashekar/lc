@@ -263,7 +263,7 @@ async fn handle_show_current_config() -> Result<()> {
                     // Find the specific model
                     if let Some(model_metadata) = models.iter().find(|m| m.id == *model) {
                         // Display model with metadata
-                        let _model_info = vec![model.clone()];
+                        let _model_info = [model.clone()];
 
                         // Build capability indicators
                         let mut capabilities = Vec::new();

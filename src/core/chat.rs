@@ -12,6 +12,7 @@ const TOOL_EXECUTION_TIMEOUT_SECS: u64 = 30;
 const MAX_TOOL_RESULT_LENGTH: usize = 10000;
 const IMAGE_TOKEN_ESTIMATE: i32 = 85; // Approximate tokens for low-detail image
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_validation(
     client: &LLMClient,
     model: &str,
@@ -177,11 +178,7 @@ pub async fn send_chat_request_with_validation(
     );
 
     // Calculate output tokens if we have a token counter
-    let output_tokens = if let Some(ref counter) = token_counter {
-        Some(counter.count_tokens(&response) as i32)
-    } else {
-        None
-    };
+    let output_tokens = token_counter.as_ref().map(|counter| counter.count_tokens(&response) as i32);
 
     // Display token usage if available
     if let (Some(input), Some(output)) = (input_tokens, output_tokens) {
@@ -211,6 +208,7 @@ pub async fn send_chat_request_with_validation(
     Ok((response, input_tokens, output_tokens))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_streaming(
     client: &LLMClient,
     model: &str,
@@ -636,6 +634,7 @@ pub async fn create_authenticated_client(
 }
 
 // New function to handle tool execution loop
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_tool_execution(
     client: &LLMClient,
     model: &str,
@@ -1169,6 +1168,7 @@ fn format_tool_result(result: &serde_json::Value) -> String {
 
 // Message-based versions of the chat functions for handling multimodal content
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_validation_messages(
     client: &LLMClient,
     model: &str,
@@ -1222,6 +1222,7 @@ pub async fn send_chat_request_with_validation_messages(
     Ok((response, None, None))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_streaming_messages(
     client: &LLMClient,
     model: &str,
@@ -1274,6 +1275,7 @@ pub async fn send_chat_request_with_streaming_messages(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_tool_execution_messages(
     client: &LLMClient,
     model: &str,

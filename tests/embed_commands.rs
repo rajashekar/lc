@@ -293,7 +293,7 @@ mod embed_validation_tests {
         // Test normal text
         let normal_text = "This is a normal text for embedding";
         assert!(!normal_text.is_empty());
-        assert!(normal_text.len() > 0);
+        assert!(!normal_text.is_empty());
 
         // Test very long text
         let long_text = "word ".repeat(20000);
@@ -322,12 +322,12 @@ mod embed_validation_tests {
     #[test]
     fn test_embedding_vector_validation() {
         // Test valid embedding vector
-        let valid_vector = vec![0.1, 0.2, 0.3, 0.4, 0.5];
+        let valid_vector = [0.1, 0.2, 0.3, 0.4, 0.5];
         assert!(!valid_vector.is_empty());
         assert!(valid_vector.iter().all(|&x: &f64| x.is_finite()));
 
         // Test vector with invalid values
-        let invalid_vector = vec![0.1, f64::NAN, 0.3, f64::INFINITY, 0.5];
+        let invalid_vector = [0.1, f64::NAN, 0.3, f64::INFINITY, 0.5];
         assert!(!invalid_vector.iter().all(|&x| x.is_finite()));
 
         // Test empty vector
@@ -685,7 +685,7 @@ mod embed_file_tests {
 
         // Create binary file separately
         let binary_file = temp_dir.path().join("binary.bin");
-        fs::write(&binary_file, &[0u8, 1u8, 2u8, 3u8, 4u8, 5u8])
+        fs::write(&binary_file, [0u8, 1u8, 2u8, 3u8, 4u8, 5u8])
             .expect("Failed to write binary file");
         file_paths.push(binary_file.to_string_lossy().to_string());
 
@@ -1061,12 +1061,12 @@ mod embed_file_tests {
         let file_paths = create_test_files(&temp_dir);
 
         // Simulate the complete file embedding workflow
-        let file_patterns: Vec<String> = file_paths.iter().cloned().collect();
+        let file_patterns: Vec<String> = file_paths.to_vec();
         let files = FileProcessor::expand_file_patterns(&file_patterns)
             .expect("Failed to expand file patterns");
 
         // Step 1: Filter text files (already done by expand_file_patterns)
-        assert!(files.len() > 0, "Should have text files to process");
+        assert!(!files.is_empty(), "Should have text files to process");
 
         // Step 2: Process each file
         for file_path in files {

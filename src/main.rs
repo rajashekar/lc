@@ -510,6 +510,7 @@ fn check_for_piped_input() -> Result<Option<String>> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 // Helper function to handle prompt with optional piped input
 async fn handle_prompt_with_optional_piped_input(
     prompt: String,
@@ -574,6 +575,7 @@ async fn handle_prompt_with_optional_piped_input(
 }
 
 // Helper function to handle piped input with continue support
+#[allow(clippy::too_many_arguments)]
 async fn handle_prompt_with_optional_piped_input_continue(
     piped_content: String,
     system_prompt: Option<String>,
@@ -632,6 +634,7 @@ async fn handle_prompt_with_optional_piped_input_continue(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_direct_prompt_with_session(
     prompt: String,
     provider: Option<String>,
@@ -749,6 +752,7 @@ async fn handle_direct_prompt_with_session(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_session_prompt(
     prompt: String,
     provider: Option<String>,
@@ -798,7 +802,7 @@ async fn handle_session_prompt(
         let config = config::Config::load()?;
 
         // Check if model is an alias
-        if let Some(alias_target) = config.get_alias(&m) {
+        if let Some(alias_target) = config.get_alias(m) {
             // Alias target should be in format "provider:model"
             if alias_target.contains(':') {
                 let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
@@ -828,7 +832,7 @@ async fn handle_session_prompt(
         // Only model provided, check if it's an alias
         let config = config::Config::load()?;
 
-        if let Some(alias_target) = config.get_alias(&m) {
+        if let Some(alias_target) = config.get_alias(m) {
             // Alias target should be in format "provider:model"
             if alias_target.contains(':') {
                 let parts: Vec<&str> = alias_target.splitn(2, ':').collect();

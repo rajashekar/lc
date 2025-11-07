@@ -4,6 +4,7 @@ use anyhow::Result;
 use colored::*;
 use std::io::{self, Write};
 
+#[allow(clippy::too_many_arguments)]
 /// Handle transcribe command
 pub async fn handle_transcribe(
     audio_files: Vec<String>,
@@ -169,6 +170,7 @@ pub async fn handle_transcribe(
 }
 
 /// Handle TTS (text-to-speech) command
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_tts(
     text: String,
     model: Option<String>,

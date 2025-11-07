@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::Result;
 
+#[allow(clippy::too_many_arguments)]
 /// Handle direct prompt command
 pub async fn handle_direct(
     prompt: String,
@@ -231,6 +232,7 @@ pub async fn handle_direct(
 }
 
 /// Handle direct prompt with piped input
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_with_piped_input(
     prompt: String,
     provider: Option<String>,

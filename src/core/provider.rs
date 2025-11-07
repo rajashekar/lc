@@ -382,7 +382,7 @@ impl OpenAIClient {
         // Create template processor if provider config has templates
         let template_processor = provider_config
             .as_ref()
-            .and_then(|config| Self::create_template_processor(config));
+            .and_then(Self::create_template_processor);
 
         Ok(Self {
             client,
@@ -808,11 +808,7 @@ impl OpenAIClient {
                         // Extract the model name/id - Gemini uses "name" field like "models/gemini-1.5-pro"
                         if let Some(name) = model_json.get("name").and_then(|v| v.as_str()) {
                             // Remove "models/" prefix if present
-                            let id = if name.starts_with("models/") {
-                                &name[7..]
-                            } else {
-                                name
-                            };
+                            let id = name.strip_prefix("models/").unwrap_or(name);
 
                             converted_models.push(Model {
                                 id: id.to_string(),
@@ -1522,8 +1518,8 @@ impl OpenAIClient {
                 buffer.drain(..=newline_pos);
 
                 // Handle Server-Sent Events format
-                if line.starts_with("data: ") {
-                    let data = &line[6..]; // Remove "data: " prefix
+                if let Some(data) = line.strip_prefix("data: ") {
+                    // Remove "data: " prefix
 
                     if data.trim() == "[DONE]" {
                         handle.write_all(b"\n")?;

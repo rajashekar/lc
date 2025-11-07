@@ -57,7 +57,7 @@ impl JinaProvider {
             && self
                 .headers
                 .get("X-Engine")
-                .map_or(false, |v| v == "direct");
+                .is_some_and(|v| v == "direct");
 
         // Add headers
         for (name, value) in &self.headers {
@@ -76,7 +76,7 @@ impl JinaProvider {
             && self
                 .headers
                 .get("Accept")
-                .map_or(false, |v| v.contains("application/json"));
+                .is_some_and(|v| v.contains("application/json"));
 
         if use_full_content {
             crate::debug_log!("Jina: Using X-Engine: direct for full content reading");

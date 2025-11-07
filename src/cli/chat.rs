@@ -11,6 +11,7 @@ use crate::database::Database;
 use crate::provider::{ContentPart, ImageUrl, Message, MessageContent};
 use crate::utils::{cli_utils::resolve_model_and_provider, input::MultiLineInput};
 
+#[allow(clippy::too_many_arguments)]
 /// Handle chat command - interactive chat mode
 pub async fn handle(
     model: Option<String>,
@@ -236,11 +237,7 @@ pub async fn handle(
         print!("{}", "Thinking...".dimmed());
         io::stdout().flush()?;
 
-        let resolved_system_prompt = if let Some(system_prompt) = &config.system_prompt {
-            Some(config.resolve_template_or_prompt(system_prompt))
-        } else {
-            None
-        };
+        let resolved_system_prompt = config.system_prompt.as_ref().map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
 
         // Determine if streaming should be used (default to true for interactive chat)
         let mut use_streaming = stream || config.stream.unwrap_or(true);
@@ -308,7 +305,7 @@ pub async fn handle(
                     if let Err(e) = db.save_chat_entry_with_tokens(
                         &session_id,
                         &current_model,
-                        &input,
+                        input,
                         "[Streamed Response]",
                         None,
                         None,
@@ -363,7 +360,7 @@ pub async fn handle(
                     if let Err(e) = db.save_chat_entry_with_tokens(
                         &session_id,
                         &current_model,
-                        &input,
+                        input,
                         &response,
                         input_tokens,
                         output_tokens,

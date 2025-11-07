@@ -96,7 +96,7 @@ async fn handle_provider(command: SearchProviderCommands) -> Result<()> {
 
                     if !provider.headers.is_empty() {
                         println!("    Headers:");
-                        for (key, _) in &provider.headers {
+                        for key in provider.headers.keys() {
                             println!("      - {}: ***", key.yellow());
                         }
                     } else {

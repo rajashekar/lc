@@ -4,14 +4,7 @@ fn test_lc_stream() {
     // We can't run the CLI on Windows due to stack overflow, but we can verify
     // the flag is defined in the codebase by checking if streaming functionality exists
 
-    // Simple test to verify streaming concepts are present
-    // This checks that streaming is a concept that exists in the code
-    assert!(
-        true,
-        "Stream flag functionality is implemented in the CLI code"
-    );
-
-    // Additional check: verify that the stream field exists in Config
+    // Verify that the stream field exists in Config
     use lc::config::Config;
     let config = Config {
         providers: std::collections::HashMap::new(),

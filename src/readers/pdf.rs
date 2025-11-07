@@ -7,6 +7,12 @@ extern crate pdf_extract;
 
 pub struct PdfReader;
 
+impl Default for PdfReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PdfReader {
     pub fn new() -> Self {
         Self
@@ -26,11 +32,8 @@ impl PdfReader {
                         return Ok("[image page]".to_string());
                     }
 
-                    // Preserve page breaks by converting form feed characters
-                    let formatted_text = text.replace('\x0C', "\u{000C}");
-
-                    // Ensure UTF-8 encoding
-                    Ok(formatted_text)
+                    // Form feed characters are already preserved in the text
+                    Ok(text)
                 }
                 Err(e) => {
                     // Check if this might be an encrypted PDF

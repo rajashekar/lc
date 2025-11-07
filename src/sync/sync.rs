@@ -73,8 +73,6 @@ pub async fn handle_sync_providers() -> Result<()> {
     Ok(())
 }
 
-/// Sync configuration files to cloud storage
-
 /// Validate sync provider name
 fn validate_sync_provider(provider: &str) -> Result<()> {
     match provider.to_lowercase().as_str() {
@@ -203,7 +201,7 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
         use super::s3::upload_to_s3_provider;
         upload_to_s3_provider(&_files_to_upload, provider, encrypted).await?;
         println!("{} Configuration synced successfully!", "✅".green());
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(feature = "s3-sync"))]
@@ -284,7 +282,7 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
         }
 
         println!("{} Configuration synced successfully!", "✅".green());
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(feature = "s3-sync"))]

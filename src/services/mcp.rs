@@ -39,6 +39,12 @@ pub struct McpConfig {
     pub servers: HashMap<String, McpServerConfig>,
 }
 
+impl Default for McpConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl McpConfig {
     pub fn new() -> Self {
         Self {
@@ -218,6 +224,12 @@ pub async fn close_global_server(server_name: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+impl Default for SdkMcpManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SdkMcpManager {

@@ -672,7 +672,7 @@ impl Config {
 
     /// Check if any providers have embedded API keys (for migration detection)
     pub fn has_providers_with_keys(&self) -> bool {
-        for (_name, provider_config) in &self.providers {
+        for provider_config in self.providers.values() {
             if let Some(api_key) = &provider_config.api_key {
                 if !api_key.is_empty() {
                     return true;
@@ -692,7 +692,7 @@ impl Config {
                 crate::keys::ProviderAuth::ApiKey(key) => {
                     // Check if provider has custom headers with ${api_key} placeholder
                     let mut has_custom_auth_header = false;
-                    for (_header_name, header_value) in &provider_config.headers {
+                    for header_value in provider_config.headers.values() {
                         if header_value.contains("${api_key}") {
                             has_custom_auth_header = true;
                             break;

@@ -5,6 +5,7 @@ use crate::{chat, config, debug_log};
 use anyhow::Result;
 use colored::Colorize;
 
+#[allow(clippy::too_many_arguments)]
 /// Handle model-related commands
 pub async fn handle(
     command: Option<ModelsCommands>,
@@ -35,6 +36,7 @@ pub async fn handle(
 }
 
 // Models command handlers
+#[allow(clippy::too_many_arguments)]
 async fn handle_models_command(
     command: Option<ModelsCommands>,
     query: Option<String>,
@@ -515,6 +517,7 @@ async fn dump_models_data() -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_model_filters_with_tags(
     models: Vec<crate::model_metadata::ModelMetadata>,
     query: &Option<String>,
@@ -535,11 +538,11 @@ fn apply_model_filters_with_tags(
                 || model
                     .display_name
                     .as_ref()
-                    .map_or(false, |name| name.to_lowercase().contains(&query_lower))
+                    .is_some_and(|name| name.to_lowercase().contains(&query_lower))
                 || model
                     .description
                     .as_ref()
-                    .map_or(false, |desc| desc.to_lowercase().contains(&query_lower))
+                    .is_some_and(|desc| desc.to_lowercase().contains(&query_lower))
         });
     }
 
@@ -573,7 +576,7 @@ fn apply_model_filters_with_tags(
     // Apply context length filter
     if let Some(ref ctx_str) = context_length {
         let min_ctx = parse_token_count(ctx_str)?;
-        filtered.retain(|model| model.context_length.map_or(false, |ctx| ctx >= min_ctx));
+        filtered.retain(|model| model.context_length.is_some_and(|ctx| ctx >= min_ctx));
     }
 
     // Apply input length filter
@@ -582,8 +585,8 @@ fn apply_model_filters_with_tags(
         filtered.retain(|model| {
             model
                 .max_input_tokens
-                .map_or(false, |input| input >= min_input)
-                || model.context_length.map_or(false, |ctx| ctx >= min_input)
+                .is_some_and(|input| input >= min_input)
+                || model.context_length.is_some_and(|ctx| ctx >= min_input)
         });
     }
 
@@ -593,7 +596,7 @@ fn apply_model_filters_with_tags(
         filtered.retain(|model| {
             model
                 .max_output_tokens
-                .map_or(false, |output| output >= min_output)
+                .is_some_and(|output| output >= min_output)
         });
     }
 
@@ -602,7 +605,7 @@ fn apply_model_filters_with_tags(
         filtered.retain(|model| {
             model
                 .input_price_per_m
-                .map_or(true, |price| price <= max_input_price)
+                .is_none_or(|price| price <= max_input_price)
         });
     }
 
@@ -610,7 +613,7 @@ fn apply_model_filters_with_tags(
         filtered.retain(|model| {
             model
                 .output_price_per_m
-                .map_or(true, |price| price <= max_output_price)
+                .is_none_or(|price| price <= max_output_price)
         });
     }
 

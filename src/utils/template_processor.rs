@@ -614,7 +614,7 @@ impl Filter for BaseMessagesFilter {
                                 "tool_calls" => {
                                     // Only include tool_calls if it's not null and not empty
                                     if !value.is_null()
-                                        && value.as_array().map_or(true, |arr| !arr.is_empty())
+                                        && value.as_array().is_none_or(|arr| !arr.is_empty())
                                     {
                                         cleaned_obj.insert(key.clone(), value.clone());
                                     }
@@ -622,7 +622,7 @@ impl Filter for BaseMessagesFilter {
                                 "tool_call_id" => {
                                     // Only include tool_call_id if it's not null and not empty
                                     if !value.is_null()
-                                        && value.as_str().map_or(false, |s| !s.is_empty())
+                                        && value.as_str().is_some_and(|s| !s.is_empty())
                                     {
                                         cleaned_obj.insert(key.clone(), value.clone());
                                     }
@@ -669,7 +669,7 @@ impl Filter for AnthropicMessagesFilter {
                         // Add text content if present
                         if let Some(text_content) = obj.get("content") {
                             if !text_content.is_null()
-                                && text_content.as_str().map_or(false, |s| !s.is_empty())
+                                && text_content.as_str().is_some_and(|s| !s.is_empty())
                             {
                                 let text_part = serde_json::json!({
                                     "type": "text",
@@ -739,7 +739,7 @@ impl Filter for AnthropicMessagesFilter {
                         // Include tool_calls if present and not empty
                         if let Some(tool_calls) = obj.get("tool_calls") {
                             if !tool_calls.is_null()
-                                && tool_calls.as_array().map_or(true, |arr| !arr.is_empty())
+                                && tool_calls.as_array().is_none_or(|arr| !arr.is_empty())
                             {
                                 anthropic_msg.insert("tool_calls".to_string(), tool_calls.clone());
                             }
@@ -748,7 +748,7 @@ impl Filter for AnthropicMessagesFilter {
                         // Include tool_call_id if present and not empty
                         if let Some(tool_call_id) = obj.get("tool_call_id") {
                             if !tool_call_id.is_null()
-                                && tool_call_id.as_str().map_or(false, |s| !s.is_empty())
+                                && tool_call_id.as_str().is_some_and(|s| !s.is_empty())
                             {
                                 anthropic_msg
                                     .insert("tool_call_id".to_string(), tool_call_id.clone());
@@ -800,7 +800,7 @@ impl Filter for GeminiMessagesFilter {
                         // Add text content if present
                         if let Some(text_content) = obj.get("content") {
                             if !text_content.is_null()
-                                && text_content.as_str().map_or(false, |s| !s.is_empty())
+                                && text_content.as_str().is_some_and(|s| !s.is_empty())
                             {
                                 let text_part = serde_json::json!({
                                     "text": text_content
@@ -840,7 +840,7 @@ impl Filter for GeminiMessagesFilter {
                         // Include tool_calls if present and not empty (for function calling)
                         if let Some(tool_calls) = obj.get("tool_calls") {
                             if !tool_calls.is_null()
-                                && tool_calls.as_array().map_or(true, |arr| !arr.is_empty())
+                                && tool_calls.as_array().is_none_or(|arr| !arr.is_empty())
                             {
                                 gemini_msg.insert("tool_calls".to_string(), tool_calls.clone());
                             }
@@ -849,7 +849,7 @@ impl Filter for GeminiMessagesFilter {
                         // Include tool_call_id if present and not empty
                         if let Some(tool_call_id) = obj.get("tool_call_id") {
                             if !tool_call_id.is_null()
-                                && tool_call_id.as_str().map_or(false, |s| !s.is_empty())
+                                && tool_call_id.as_str().is_some_and(|s| !s.is_empty())
                             {
                                 gemini_msg.insert("tool_call_id".to_string(), tool_call_id.clone());
                             }

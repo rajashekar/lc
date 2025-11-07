@@ -7,6 +7,7 @@ pub mod providers;
 #[cfg(feature = "s3-sync")]
 pub mod s3;
 
+#[allow(clippy::module_inception)]
 pub mod sync;
 
 // Re-export main sync functions from sync module

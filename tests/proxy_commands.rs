@@ -660,8 +660,8 @@ mod proxy_filtering_tests {
         let provider_passes = state
             .provider_filter
             .as_ref()
-            .map_or(true, |f| provider == *f);
-        let model_passes = state.model_filter.as_ref().map_or(true, |f| {
+            .is_none_or(|f| provider == *f);
+        let model_passes = state.model_filter.as_ref().is_none_or(|f| {
             format!("{}:{}", provider, model).contains(f) || model == *f
         });
 
@@ -752,7 +752,7 @@ mod proxy_validation_tests {
 
         for temp in valid_temperatures {
             assert!(
-                temp >= 0.0 && temp <= 2.0,
+                (0.0..=2.0).contains(&temp),
                 "Temperature {} should be valid",
                 temp
             );
@@ -760,7 +760,7 @@ mod proxy_validation_tests {
 
         for temp in invalid_temperatures {
             assert!(
-                !(temp >= 0.0 && temp <= 2.0),
+                !(0.0..=2.0).contains(&temp),
                 "Temperature {} should be invalid",
                 temp
             );
@@ -775,7 +775,7 @@ mod proxy_validation_tests {
         }
 
         for tokens in invalid_max_tokens {
-            assert!(!(tokens > 0), "Max tokens {} should be invalid", tokens);
+            assert!((tokens <= 0), "Max tokens {} should be invalid", tokens);
         }
     }
 
@@ -1095,12 +1095,10 @@ mod proxy_endpoint_tests {
         // Test that our endpoints match OpenAI's API structure
         let openai_endpoints = vec!["/v1/models", "/v1/chat/completions"];
 
-        let our_endpoints = vec![
-            "/models",
+        let our_endpoints = ["/models",
             "/v1/models",
             "/chat/completions",
-            "/v1/chat/completions",
-        ];
+            "/v1/chat/completions"];
 
         // Verify we support OpenAI's standard endpoints
         for openai_endpoint in openai_endpoints {
@@ -1147,7 +1145,7 @@ mod proxy_server_configuration_tests {
         for host in valid_hosts {
             assert!(!host.is_empty());
             // Basic validation - real validation would be more complex
-            assert!(host.chars().all(|c| c.is_ascii()));
+            assert!(host.is_ascii());
         }
     }
 

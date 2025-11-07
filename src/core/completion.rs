@@ -578,10 +578,7 @@ pub fn get_available_models() -> Vec<String> {
 /// Get list of available vector databases for completion
 #[allow(dead_code)]
 pub fn get_available_vectordbs() -> Vec<String> {
-    match crate::vector_db::VectorDatabase::list_databases() {
-        Ok(databases) => databases,
-        Err(_) => Vec::new(),
-    }
+    crate::vector_db::VectorDatabase::list_databases().unwrap_or_default()
 }
 
 #[cfg(test)]

@@ -336,7 +336,7 @@ mod similar_model_resolution_tests {
         let db = VectorDatabase::new(&db_name).unwrap();
         db.add_vector(
             "Test",
-            &vec![0.1, 0.2, 0.3],
+            &[0.1, 0.2, 0.3],
             "text-embedding-3-small",
             "openai",
         )
@@ -430,7 +430,7 @@ mod similar_parameter_validation_tests {
             .unwrap();
 
         // Test various query vectors
-        let test_queries = vec![
+        let test_queries = [
             vec![1.0, 0.0, 0.0],      // Same dimensions
             vec![0.5, 0.5, 0.5],      // Same dimensions, different values
             vec![1.0, 0.0],           // Different dimensions (fewer)
@@ -544,7 +544,7 @@ mod similar_error_handling_tests {
         let provider = "openai";
 
         // Add some normal data
-        db.add_vector("Normal text", &vec![0.1, 0.2, 0.3], model, provider)
+        db.add_vector("Normal text", &[0.1, 0.2, 0.3], model, provider)
             .unwrap();
 
         // Normal query should work
@@ -759,9 +759,9 @@ mod similar_integration_tests {
         let model = "text-embedding-3-small";
         let provider = "openai";
 
-        db.add_vector("First text", &vec![0.1, 0.2, 0.3], model, provider)
+        db.add_vector("First text", &[0.1, 0.2, 0.3], model, provider)
             .unwrap();
-        db.add_vector("Second text", &vec![0.2, 0.3, 0.4], model, provider)
+        db.add_vector("Second text", &[0.2, 0.3, 0.4], model, provider)
             .unwrap();
 
         // Verify model consistency

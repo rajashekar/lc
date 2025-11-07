@@ -455,7 +455,7 @@ fn test_search_output_formats() -> Result<()> {
 
     // Add a provider (type auto-detected from URL)
     Command::new(get_test_binary_path())
-        .args(&[
+        .args([
             "search",
             "provider",
             "add",
@@ -466,7 +466,7 @@ fn test_search_output_formats() -> Result<()> {
 
     // Set a dummy API key
     Command::new(get_test_binary_path())
-        .args(&[
+        .args([
             "search",
             "provider",
             "set",
@@ -478,14 +478,14 @@ fn test_search_output_formats() -> Result<()> {
 
     // Test JSON format (will fail with invalid key, but should recognize format)
     let output = Command::new(get_test_binary_path())
-        .args(&[
+        .args([
             "run", "--", "search", "query", "brave", "test", "-f", "json",
         ])
         .output()?;
 
     // Test markdown format
     let output2 = Command::new(get_test_binary_path())
-        .args(&["search", "query", "brave", "test", "-f", "md"])
+        .args(["search", "query", "brave", "test", "-f", "md"])
         .output()?;
 
     // Both should fail due to invalid API key, but formats should be accepted
@@ -507,7 +507,7 @@ fn test_search_result_count() -> Result<()> {
 
     // Add a provider (type auto-detected from URL)
     Command::new(get_test_binary_path())
-        .args(&[
+        .args([
             "search",
             "provider",
             "add",
@@ -518,11 +518,10 @@ fn test_search_result_count() -> Result<()> {
 
     // Test custom result count
     let _output = Command::new(get_test_binary_path())
-        .args(&["search", "query", "brave", "test", "-n", "10"])
+        .args(["search", "query", "brave", "test", "-n", "10"])
         .output()?;
 
     // Should accept the count parameter even if search fails
-    assert!(true);
 
     cleanup_config()?;
     restore_config()?;
