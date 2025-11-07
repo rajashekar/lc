@@ -445,7 +445,7 @@ mod models_sorting_tests {
 
     #[test]
     fn test_models_sorting_by_provider_and_name() {
-        let mut models = vec![
+        let mut models = [
             ModelMetadata {
                 id: "zebra-model".to_string(),
                 provider: "zebra".to_string(),
