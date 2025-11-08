@@ -73,8 +73,6 @@ pub async fn handle_sync_providers() -> Result<()> {
     Ok(())
 }
 
-/// Sync configuration files to cloud storage
-
 /// Validate sync provider name
 fn validate_sync_provider(provider: &str) -> Result<()> {
     match provider.to_lowercase().as_str() {
@@ -115,16 +113,17 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
     for entry in fs::read_dir(&config_dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.is_file() {
-            let file_name = path.file_name()
+            let file_name = path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown");
             let extension = path.extension().and_then(|e| e.to_str());
-            
+
             // Include all .toml files and .db files (logs.db, embeddings.db, etc.)
             let should_include = extension.map(|e| e == "toml" || e == "db").unwrap_or(false);
-            
+
             if should_include {
                 let content = fs::read(&path)?;
                 config_files.push(ConfigFile {
@@ -202,7 +201,7 @@ pub async fn handle_sync_to(provider: &str, encrypted: bool, yes: bool) -> Resul
         use super::s3::upload_to_s3_provider;
         upload_to_s3_provider(&_files_to_upload, provider, encrypted).await?;
         println!("{} Configuration synced successfully!", "✅".green());
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(feature = "s3-sync"))]
@@ -256,7 +255,8 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
     #[cfg(feature = "s3-sync")]
     {
         use super::s3::download_from_s3_provider;
-        let _downloaded_files: Vec<ConfigFile> = download_from_s3_provider(provider, _encrypted).await?;
+        let _downloaded_files: Vec<ConfigFile> =
+            download_from_s3_provider(provider, _encrypted).await?;
 
         println!("Downloaded {} configuration files", _downloaded_files.len());
 
@@ -282,7 +282,7 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
         }
 
         println!("{} Configuration synced successfully!", "✅".green());
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(feature = "s3-sync"))]

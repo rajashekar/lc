@@ -323,7 +323,7 @@ impl Database {
         let mut stmt =
             conn_ref.prepare("SELECT value FROM session_state WHERE key = 'current_session'")?;
 
-        let mut rows = stmt.query_map([], |row| Ok(row.get::<_, String>(0)?))?;
+        let mut rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
 
         if let Some(row) = rows.next() {
             Ok(Some(row?))

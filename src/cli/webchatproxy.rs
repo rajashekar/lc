@@ -2,7 +2,6 @@
 
 use crate::cli::WebChatProxyCommands;
 use anyhow::Result;
-use colored::*;
 use axum::{
     extract::State,
     http::StatusCode,
@@ -10,6 +9,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use colored::*;
 use std::sync::Arc;
 
 // App state for the web server
@@ -21,20 +21,23 @@ struct AppState {
 /// Handle webchat proxy commands
 pub async fn handle(command: WebChatProxyCommands) -> Result<()> {
     match command {
-        WebChatProxyCommands::Start { port, host, cors } => {
-            handle_start(port, host, cors).await
-        }
+        WebChatProxyCommands::Start { port, host, cors } => handle_start(port, host, cors).await,
     }
 }
 
 async fn handle_start(port: u16, host: String, cors: bool) -> Result<()> {
-    println!(
-        "{} Starting Web Chat Proxy server...",
-        "🌐".blue()
-    );
+    println!("{} Starting Web Chat Proxy server...", "🌐".blue());
     println!("  {} {}:{}", "Address:".bold(), host, port);
-    println!("  {} {}", "CORS:".bold(), if cors { "Enabled".green() } else { "Disabled".yellow() });
-    
+    println!(
+        "  {} {}",
+        "CORS:".bold(),
+        if cors {
+            "Enabled".green()
+        } else {
+            "Disabled".yellow()
+        }
+    );
+
     println!("\n{}", "Available endpoints:".bold().blue());
     println!("  {} http://{}:{}/", "•".blue(), host, port);
     println!("    Web interface for chat");
@@ -44,11 +47,16 @@ async fn handle_start(port: u16, host: String, cors: bool) -> Result<()> {
     println!("    OpenAI-compatible models endpoint");
     println!("  {} http://{}:{}/chat/completions", "•".blue(), host, port);
     println!("    Chat completions endpoint");
-    println!("  {} http://{}:{}/v1/chat/completions", "•".blue(), host, port);
+    println!(
+        "  {} http://{}:{}/v1/chat/completions",
+        "•".blue(),
+        host,
+        port
+    );
     println!("    OpenAI-compatible chat endpoint");
-    
+
     println!("\n{} Press Ctrl+C to stop the server\n", "💡".yellow());
-    
+
     // Start the webchat proxy server
     start_webchat_server(host, port, cors).await
 }
@@ -56,7 +64,7 @@ async fn handle_start(port: u16, host: String, cors: bool) -> Result<()> {
 async fn start_webchat_server(host: String, port: u16, cors: bool) -> Result<()> {
     let config = crate::config::Config::load()?;
     let state = Arc::new(AppState { config });
-    
+
     // Build the router
     let mut app = Router::new()
         .route("/", get(serve_index))
@@ -65,26 +73,26 @@ async fn start_webchat_server(host: String, port: u16, cors: bool) -> Result<()>
         .route("/chat/completions", post(chat_completions))
         .route("/v1/chat/completions", post(chat_completions))
         .with_state(state);
-    
+
     // Add CORS if enabled
     if cors {
         use tower_http::cors::CorsLayer;
         app = app.layer(CorsLayer::permissive());
     }
-    
+
     let addr = format!("{}:{}", host, port);
     println!("{} Server listening on http://{}", "✓".green(), addr);
-    
+
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }
 
 // Serve a simple HTML interface
 async fn serve_index() -> Html<&'static str> {
-    
-    Html(r#"
+    Html(
+        r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -262,33 +270,34 @@ async fn serve_index() -> Html<&'static str> {
     </script>
 </body>
 </html>
-    "#)
+    "#,
+    )
 }
 
 // List available models
 async fn list_models(
     State(_state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    use crate::services::proxy::{ProxyModel, ProxyModelsResponse};
     use crate::models::cache::ModelsCache;
-    
+    use crate::services::proxy::{ProxyModel, ProxyModelsResponse};
+
     let mut models = Vec::new();
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or(std::time::Duration::from_secs(0))
         .as_secs();
-    
+
     // Use models cache for fast response
     let cache = ModelsCache::load().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Get cached models
     let cached_models = cache.get_all_models();
-    
+
     for cached_model in cached_models {
         let provider_name = &cached_model.provider;
         let model_name = &cached_model.model;
         let model_id = format!("{}:{}", provider_name, model_name);
-        
+
         models.push(ProxyModel {
             id: model_id,
             object: "model".to_string(),
@@ -296,13 +305,15 @@ async fn list_models(
             owned_by: provider_name.clone(),
         });
     }
-    
+
     let response = ProxyModelsResponse {
         object: "list".to_string(),
         data: models,
     };
-    
-    Ok(Json(serde_json::to_value(response).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?))
+
+    Ok(Json(
+        serde_json::to_value(response).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    ))
 }
 
 // Handle chat completions
@@ -310,23 +321,24 @@ async fn chat_completions(
     State(state): State<Arc<AppState>>,
     Json(request): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    use crate::services::proxy::{ProxyChatRequest, ProxyChatResponse, ProxyChoice, ProxyUsage};
     use crate::core::provider::{ChatRequest, Message, MessageContent};
-    
+    use crate::services::proxy::{ProxyChatRequest, ProxyChatResponse, ProxyChoice, ProxyUsage};
+
     // Parse the request
-    let proxy_request: ProxyChatRequest = serde_json::from_value(request)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+    let proxy_request: ProxyChatRequest =
+        serde_json::from_value(request).map_err(|_| StatusCode::BAD_REQUEST)?;
+
     // Parse model string to get provider and model
-    let (provider_name, model_name) = crate::services::proxy::parse_model_string(&proxy_request.model, &state.config)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+    let (provider_name, model_name) =
+        crate::services::proxy::parse_model_string(&proxy_request.model, &state.config)
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+
     // Create client for the provider
     let mut config_mut = state.config.clone();
     let client = crate::core::chat::create_authenticated_client(&mut config_mut, &provider_name)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Convert to internal chat request format
     let chat_request = ChatRequest {
         model: model_name.clone(),
@@ -336,19 +348,19 @@ async fn chat_completions(
         tools: None,
         stream: None,
     };
-    
+
     // Send the request
     let response_text = client
         .chat(&chat_request)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Create response in OpenAI format
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or(std::time::Duration::from_secs(0))
         .as_secs();
-    
+
     let response = ProxyChatResponse {
         id: format!("chatcmpl-{}", uuid::Uuid::new_v4()),
         object: "chat.completion".to_string(),
@@ -372,7 +384,8 @@ async fn chat_completions(
             total_tokens: 0,
         },
     };
-    
-    Ok(Json(serde_json::to_value(response).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?))
-}
 
+    Ok(Json(
+        serde_json::to_value(response).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    ))
+}

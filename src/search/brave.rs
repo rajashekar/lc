@@ -99,7 +99,7 @@ pub async fn search(
             // Append extra snippets if available
             if let Some(extra) = &brave_result.extra_snippets {
                 if !extra.is_empty() {
-                    snippet.push_str(" ");
+                    snippet.push(' ');
                     snippet.push_str(&extra.join(" "));
                 }
             }

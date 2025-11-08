@@ -38,10 +38,10 @@ async fn handle_provider(command: SearchProviderCommands) -> Result<()> {
                         "✓".green(),
                         format!("{:?}", provider_type).cyan()
                     );
-                    
+
                     config.add_provider(name.clone(), url, provider_type.clone())?;
                     config.save()?;
-                    
+
                     println!(
                         "{} Search provider '{}' added successfully",
                         "✓".green(),
@@ -73,33 +73,30 @@ async fn handle_provider(command: SearchProviderCommands) -> Result<()> {
         }
         SearchProviderCommands::List => {
             let providers = config.list_providers();
-            
+
             if providers.is_empty() {
                 println!("{} No search providers configured", "📋".blue());
                 println!(
                     "\n{}",
-                    "Add one with: lc search provider add <name> <url>".italic().dimmed()
+                    "Add one with: lc search provider add <name> <url>"
+                        .italic()
+                        .dimmed()
                 );
             } else {
                 println!("{} Configured search providers:", "📋".blue());
                 println!();
-                
+
                 for (name, provider) in providers {
                     let is_default = config.get_default_provider() == Some(name);
                     let default_marker = if is_default { " (default)" } else { "" };
-                    
-                    println!(
-                        "  {} {}{}",
-                        "•".cyan(),
-                        name.bold(),
-                        default_marker.green()
-                    );
+
+                    println!("  {} {}{}", "•".cyan(), name.bold(), default_marker.green());
                     println!("    Type: {:?}", provider.provider_type);
                     println!("    URL: {}", provider.url.dimmed());
-                    
+
                     if !provider.headers.is_empty() {
                         println!("    Headers:");
-                        for (key, _) in &provider.headers {
+                        for key in provider.headers.keys() {
                             println!("      - {}: ***", key.yellow());
                         }
                     } else {
@@ -115,10 +112,10 @@ async fn handle_provider(command: SearchProviderCommands) -> Result<()> {
                 "🗑".red(),
                 name.bold()
             );
-            
+
             config.delete_provider(&name)?;
             config.save()?;
-            
+
             println!(
                 "{} Search provider '{}' removed successfully",
                 "✓".green(),
@@ -136,10 +133,10 @@ async fn handle_provider(command: SearchProviderCommands) -> Result<()> {
                 header_name.yellow(),
                 provider.bold()
             );
-            
+
             config.set_header(&provider, header_name.clone(), header_value)?;
             config.save()?;
-            
+
             println!(
                 "{} Header '{}' set successfully for '{}'",
                 "✓".green(),
@@ -159,10 +156,10 @@ async fn handle_query(provider: String, query: String, format: String, count: us
         provider.bold(),
         query.cyan()
     );
-    
+
     let engine = SearchEngine::new()?;
     let results = engine.search(&provider, &query, Some(count)).await?;
-    
+
     match format.as_str() {
         "json" => {
             println!("{}", engine.format_results_json(&results)?);
@@ -178,21 +175,25 @@ async fn handle_query(provider: String, query: String, format: String, count: us
             );
         }
     }
-    
+
     Ok(())
 }
 
 fn show_provider_setup_help(name: &str, provider_type: SearchProviderType) {
     println!();
     println!("{} Next steps:", "ℹ".blue());
-    
+
     match provider_type {
         SearchProviderType::Brave => {
             println!("  1. Get your API key from: https://brave.com/search/api/");
             println!("  2. Set the API key:");
             println!(
                 "     {}",
-                format!("lc search provider set {} X-Subscription-Token YOUR_API_KEY", name).bold()
+                format!(
+                    "lc search provider set {} X-Subscription-Token YOUR_API_KEY",
+                    name
+                )
+                .bold()
             );
         }
         SearchProviderType::Exa => {
@@ -220,7 +221,10 @@ fn show_provider_setup_help(name: &str, provider_type: SearchProviderType) {
             );
         }
         SearchProviderType::DuckDuckGo => {
-            println!("  {} No API key required! You can start searching immediately:", "✓".green());
+            println!(
+                "  {} No API key required! You can start searching immediately:",
+                "✓".green()
+            );
             println!(
                 "     {}",
                 format!("lc search query {} \"your query\"", name).bold()
@@ -231,7 +235,11 @@ fn show_provider_setup_help(name: &str, provider_type: SearchProviderType) {
             println!("  2. Set the API key:");
             println!(
                 "     {}",
-                format!("lc search provider set {} Authorization \"Bearer YOUR_API_KEY\"", name).bold()
+                format!(
+                    "lc search provider set {} Authorization \"Bearer YOUR_API_KEY\"",
+                    name
+                )
+                .bold()
             );
             println!("  3. (Optional) Enable full content reading:");
             println!(
@@ -253,6 +261,6 @@ fn show_provider_setup_help(name: &str, provider_type: SearchProviderType) {
             );
         }
     }
-    
+
     println!();
 }

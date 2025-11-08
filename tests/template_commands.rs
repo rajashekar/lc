@@ -722,7 +722,7 @@ mod template_validation_tests {
 
         // Various content types should be allowed
         let long_content = "Very long content ".repeat(100);
-        let test_contents = vec![
+        let test_contents = [
             "",
             "Simple content",
             "Content with\nnewlines\nand\ttabs",

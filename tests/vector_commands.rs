@@ -808,9 +808,9 @@ mod vector_integration_tests {
         let provider = "openai";
 
         // Add different data to each database
-        db1.add_vector("Database 1 text", &vec![1.0, 0.0, 0.0], model, provider)
+        db1.add_vector("Database 1 text", &[1.0, 0.0, 0.0], model, provider)
             .unwrap();
-        db2.add_vector("Database 2 text", &vec![0.0, 1.0, 0.0], model, provider)
+        db2.add_vector("Database 2 text", &[0.0, 1.0, 0.0], model, provider)
             .unwrap();
 
         // Verify isolation

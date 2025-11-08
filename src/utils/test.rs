@@ -64,6 +64,12 @@ pub fn get_test_provider_name(base_name: &str) -> String {
 /// RAII guard for test cleanup
 pub struct TestGuard;
 
+impl Default for TestGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestGuard {
     pub fn new() -> Self {
         init_test_env();

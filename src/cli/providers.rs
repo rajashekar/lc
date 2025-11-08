@@ -16,7 +16,7 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
         ProviderCommands::Upgrade { name } => {
             let installer = ProviderInstaller::new()?;
             if let Some(provider_name) = name.as_deref() {
-                installer.update_provider(&provider_name).await?;
+                installer.update_provider(provider_name).await?;
             } else {
                 installer.update_all_providers().await?;
             }
@@ -337,7 +337,7 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                 } => {
                     let mut updated = false;
                     if let Some(path) = models_path.as_deref() {
-                        config.set_provider_models_path(&provider, &path)?;
+                        config.set_provider_models_path(&provider, path)?;
                         println!(
                             "{} Models path set to '{}' for provider '{}'",
                             "✓".green(),
@@ -347,7 +347,7 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                         updated = true;
                     }
                     if let Some(path) = chat_path.as_deref() {
-                        config.set_provider_chat_path(&provider, &path)?;
+                        config.set_provider_chat_path(&provider, path)?;
                         println!(
                             "{} Chat path set to '{}' for provider '{}'",
                             "✓".green(),
@@ -357,7 +357,7 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                         updated = true;
                     }
                     if let Some(path) = images_path.as_deref() {
-                        config.set_provider_images_path(&provider, &path)?;
+                        config.set_provider_images_path(&provider, path)?;
                         println!(
                             "{} Images path set to '{}' for provider '{}'",
                             "✓".green(),
@@ -367,7 +367,7 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                         updated = true;
                     }
                     if let Some(path) = embeddings_path.as_deref() {
-                        config.set_provider_embeddings_path(&provider, &path)?;
+                        config.set_provider_embeddings_path(&provider, path)?;
                         println!(
                             "{} Embeddings path set to '{}' for provider '{}'",
                             "✓".green(),

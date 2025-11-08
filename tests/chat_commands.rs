@@ -555,11 +555,10 @@ mod chat_template_resolution_tests {
         config.system_prompt = Some("t:greeting".to_string());
 
         // Test that system prompt resolves templates
-        let resolved_system_prompt = if let Some(system_prompt) = &config.system_prompt {
-            Some(config.resolve_template_or_prompt(system_prompt))
-        } else {
-            None
-        };
+        let resolved_system_prompt = config
+            .system_prompt
+            .as_ref()
+            .map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
 
         assert_eq!(
             resolved_system_prompt,
@@ -568,11 +567,10 @@ mod chat_template_resolution_tests {
 
         // Test with non-template system prompt
         config.system_prompt = Some("You are a helpful assistant.".to_string());
-        let resolved_system_prompt = if let Some(system_prompt) = &config.system_prompt {
-            Some(config.resolve_template_or_prompt(system_prompt))
-        } else {
-            None
-        };
+        let resolved_system_prompt = config
+            .system_prompt
+            .as_ref()
+            .map(|system_prompt| config.resolve_template_or_prompt(system_prompt));
 
         assert_eq!(
             resolved_system_prompt,
@@ -1303,30 +1301,24 @@ mod chat_session_continuation_tests {
         assert_eq!(session_id, "user-provided-session");
 
         // Case 2: --continue flag set, no --cid (would use existing session)
-        let provided_cid: Option<String> = None;
         let continue_flag = true;
 
-        let session_id = provided_cid.unwrap_or_else(|| {
-            if continue_flag {
-                "existing-session-from-db".to_string()
-            } else {
-                uuid::Uuid::new_v4().to_string()
-            }
-        });
+        let session_id = if continue_flag {
+            "existing-session-from-db".to_string()
+        } else {
+            uuid::Uuid::new_v4().to_string()
+        };
 
         assert_eq!(session_id, "existing-session-from-db");
 
         // Case 3: Neither flag set (should generate new session)
-        let provided_cid: Option<String> = None;
         let continue_flag = false;
 
-        let session_id = provided_cid.unwrap_or_else(|| {
-            if continue_flag {
-                "existing-session-from-db".to_string()
-            } else {
-                uuid::Uuid::new_v4().to_string()
-            }
-        });
+        let session_id = if continue_flag {
+            "existing-session-from-db".to_string()
+        } else {
+            uuid::Uuid::new_v4().to_string()
+        };
 
         // Should be a new UUID (36 characters)
         assert_eq!(session_id.len(), 36);

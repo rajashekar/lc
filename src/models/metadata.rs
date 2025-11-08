@@ -488,8 +488,7 @@ impl ModelMetadataExtractor {
         let mut current = data;
 
         for part in parts {
-            if part.ends_with("[]") {
-                let field = &part[..part.len() - 2];
+            if let Some(field) = part.strip_suffix("[]") {
                 current = current
                     .get(field)
                     .context(format!("Field {} not found", field))?;
@@ -546,7 +545,7 @@ impl ModelMetadataExtractor {
     fn evaluate_select_condition(&self, value: &Value, condition: &str) -> Result<bool> {
         // Handle equality conditions like '. == "tool-calling"'
         if condition.starts_with(". == ") {
-            let expected = condition[5..].trim();
+            let expected = condition.strip_prefix(". == ").unwrap().trim();
 
             // Remove quotes if present
             let expected = if expected.starts_with('"') && expected.ends_with('"') {
@@ -669,7 +668,8 @@ impl ModelMetadataExtractor {
         }
 
         // Determine model type based on model ID or name patterns
-        metadata.model_type = self.determine_model_type(&metadata.id, metadata.display_name.as_deref());
+        metadata.model_type =
+            self.determine_model_type(&metadata.id, metadata.display_name.as_deref());
 
         Ok(metadata)
     }
@@ -690,7 +690,7 @@ impl ModelMetadataExtractor {
                         return Some(Value::Bool(true));
                     } else if !is_bool_field {
                         return Some(Value::Bool(result));
-                    } else if result == false {
+                    } else if !result {
                         found_false = true;
                     }
                 }
@@ -706,7 +706,7 @@ impl ModelMetadataExtractor {
                         return Some(Value::Bool(true));
                     } else if !is_bool_field {
                         return Some(Value::Bool(result));
-                    } else if result == false {
+                    } else if !result {
                         found_false = true;
                     }
                 }
@@ -752,13 +752,7 @@ impl ModelMetadataExtractor {
 
     fn apply_transform(&self, value: Value, transform: &str) -> Option<Value> {
         match transform {
-            "multiply_million" => {
-                if let Some(num) = value.as_f64() {
-                    Some(Value::from(num * 1_000_000.0))
-                } else {
-                    None
-                }
-            }
+            "multiply_million" => value.as_f64().map(|num| Value::from(num * 1_000_000.0)),
             _ => Some(value),
         }
     }
@@ -915,7 +909,7 @@ impl ModelMetadataExtractor {
     fn determine_model_type(&self, model_id: &str, display_name: Option<&str>) -> ModelType {
         let id_lower = model_id.to_lowercase();
         let name_lower = display_name.map(|n| n.to_lowercase());
-        
+
         // Check for embedding model patterns
         let embedding_patterns = [
             "embed",
@@ -934,7 +928,7 @@ impl ModelMetadataExtractor {
             "embed-english",
             "embed-multilingual",
         ];
-        
+
         for pattern in &embedding_patterns {
             if id_lower.contains(pattern) {
                 return ModelType::Embedding;
@@ -945,7 +939,7 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Check for image generation model patterns
         let image_patterns = [
             "dall-e",
@@ -955,7 +949,7 @@ impl ModelMetadataExtractor {
             "imagen",
             "image",
         ];
-        
+
         for pattern in &image_patterns {
             if id_lower.contains(pattern) {
                 return ModelType::ImageGeneration;
@@ -966,16 +960,10 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Check for audio generation model patterns
-        let audio_patterns = [
-            "whisper",
-            "tts",
-            "audio",
-            "speech",
-            "voice",
-        ];
-        
+        let audio_patterns = ["whisper", "tts", "audio", "speech", "voice"];
+
         for pattern in &audio_patterns {
             if id_lower.contains(pattern) {
                 return ModelType::AudioGeneration;
@@ -986,14 +974,10 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Check for moderation model patterns
-        let moderation_patterns = [
-            "moderation",
-            "moderate",
-            "safety",
-        ];
-        
+        let moderation_patterns = ["moderation", "moderate", "safety"];
+
         for pattern in &moderation_patterns {
             if id_lower.contains(pattern) {
                 return ModelType::Moderation;
@@ -1004,7 +988,7 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Check for completion model patterns (older style models)
         let completion_patterns = [
             "davinci",
@@ -1017,7 +1001,7 @@ impl ModelMetadataExtractor {
             "code-davinci",
             "code-cushman",
         ];
-        
+
         for pattern in &completion_patterns {
             if id_lower.contains(pattern) && !id_lower.contains("embed") {
                 return ModelType::Completion;
@@ -1028,7 +1012,7 @@ impl ModelMetadataExtractor {
                 }
             }
         }
-        
+
         // Default to Chat for everything else (GPT, Claude, Llama, etc.)
         ModelType::Chat
     }

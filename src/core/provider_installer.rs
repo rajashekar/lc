@@ -417,7 +417,7 @@ impl ProviderInstaller {
         let required_fields = ["endpoint", "models_path", "chat_path"];
 
         for field in &required_fields {
-            if !config.get(field).is_some() {
+            if config.get(field).is_none() {
                 anyhow::bail!("Provider config missing required field: {}", field);
             }
         }

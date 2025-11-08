@@ -10,7 +10,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
     match command {
         VectorCommands::List => {
             let databases = VectorDatabase::list_databases()?;
-            
+
             if databases.is_empty() {
                 println!("No vector databases found.");
                 println!(
@@ -19,19 +19,19 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                 );
             } else {
                 println!("\n{} Vector databases:", "📊".bold().blue());
-                
+
                 for db_name in databases {
                     match VectorDatabase::new(&db_name) {
                         Ok(db) => {
                             let count = db.count().unwrap_or(0);
                             let model_info = db.get_model_info().unwrap_or(None);
-                            
+
                             print!("  {} {} ({} vectors)", "•".blue(), db_name.bold(), count);
-                            
+
                             if let Some((model, provider)) = model_info {
                                 print!(" - {}:{}", provider.dimmed(), model.dimmed());
                             }
-                            
+
                             println!();
                         }
                         Err(_) => {
@@ -47,7 +47,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
             if databases.contains(&name) {
                 anyhow::bail!("Vector database '{}' already exists", name);
             }
-            
+
             // Create empty database
             let _ = VectorDatabase::new(&name)?;
             println!(
@@ -66,7 +66,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
             if !databases.contains(&name) {
                 anyhow::bail!("Vector database '{}' not found", name);
             }
-            
+
             // Ask for confirmation unless --yes is provided
             if !yes {
                 println!(
@@ -77,16 +77,16 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                 print!("Type 'yes' to confirm: ");
                 use std::io::{self, Write};
                 io::stdout().flush()?;
-                
+
                 let mut input = String::new();
                 io::stdin().read_line(&mut input)?;
-                
+
                 if input.trim().to_lowercase() != "yes" {
                     println!("Deletion cancelled.");
                     return Ok(());
                 }
             }
-            
+
             VectorDatabase::delete_database(&name)?;
             println!(
                 "{} Vector database '{}' deleted successfully",
@@ -100,14 +100,14 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
             if !databases.contains(&name) {
                 anyhow::bail!("Vector database '{}' not found", name);
             }
-            
+
             let db = VectorDatabase::new(&name)?;
             let count = db.count()?;
             let model_info = db.get_model_info()?;
-            
+
             println!("\n{} Database: {}", "ℹ️".bold().blue(), name.bold());
             println!("  Vector count: {}", count);
-            
+
             if let Some((model, provider)) = model_info {
                 println!("  Model: {}", model);
                 println!("  Provider: {}", provider);
@@ -115,7 +115,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                 println!("  Model: {}", "Not set".dimmed());
                 println!("  Provider: {}", "Not set".dimmed());
             }
-            
+
             // Show recent entries if any
             if count > 0 {
                 println!("\n{} Recent entries:", "📝".bold().blue());
@@ -126,10 +126,10 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                     } else {
                         entry.text.clone()
                     };
-                    
+
                     let source_info = if let Some(ref file_path) = entry.file_path {
-                        if let (Some(chunk_idx), Some(total_chunks)) = 
-                            (entry.chunk_index, entry.total_chunks) 
+                        if let (Some(chunk_idx), Some(total_chunks)) =
+                            (entry.chunk_index, entry.total_chunks)
                         {
                             format!(" [{}:{}/{}]", file_path, chunk_idx + 1, total_chunks)
                         } else {
@@ -138,7 +138,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                     } else {
                         String::new()
                     };
-                    
+
                     println!(
                         "  {}. {}{} ({})",
                         i + 1,
@@ -151,7 +151,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                             .dimmed()
                     );
                 }
-                
+
                 if vectors.len() > 10 {
                     println!("  ... and {} more", vectors.len() - 10);
                 }
@@ -162,17 +162,17 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
             if !databases.contains(&name) {
                 anyhow::bail!("Vector database '{}' not found", name);
             }
-            
+
             let db = VectorDatabase::new(&name)?;
             let count = db.count()?;
             let model_info = db.get_model_info()?;
-            
+
             println!("\n{} Vector database: {}", "📊".bold().blue(), name.bold());
             println!("Vectors: {}", count);
-            
+
             if let Some((model, provider)) = model_info {
                 println!("Model: {}:{}", provider, model);
-                
+
                 // Try to get dimensions from first vector
                 if count > 0 {
                     let vectors = db.get_all_vectors()?;
@@ -183,7 +183,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
             } else {
                 println!("Model: {}", "Not set".dimmed());
             }
-            
+
             // Get database file size
             let embeddings_dir = VectorDatabase::embeddings_dir()?;
             let db_path = embeddings_dir.join(format!("{}.db", name));
@@ -191,7 +191,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                 let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
                 println!("Size: {:.2} MB", size_mb);
             }
-            
+
             if count > 0 {
                 println!("\n{} Recent entries:", "📝".bold().blue());
                 let vectors = db.get_all_vectors()?;
@@ -201,10 +201,10 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                     } else {
                         entry.text.clone()
                     };
-                    
+
                     let source_info = if let Some(ref file_path) = entry.file_path {
-                        if let (Some(chunk_idx), Some(total_chunks)) = 
-                            (entry.chunk_index, entry.total_chunks) 
+                        if let (Some(chunk_idx), Some(total_chunks)) =
+                            (entry.chunk_index, entry.total_chunks)
                         {
                             format!(" [{}:{}/{}]", file_path, chunk_idx + 1, total_chunks)
                         } else {
@@ -213,7 +213,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                     } else {
                         String::new()
                     };
-                    
+
                     println!(
                         "  {}. {}{} ({})",
                         i + 1,
@@ -226,7 +226,7 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                             .dimmed()
                     );
                 }
-                
+
                 if vectors.len() > 5 {
                     println!("  ... and {} more", vectors.len() - 5);
                 }
@@ -238,15 +238,15 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
             if !databases.contains(&name) {
                 anyhow::bail!("Vector database '{}' not found", name);
             }
-            
+
             let db = VectorDatabase::new(&name)?;
             let count = db.count()?;
-            
+
             if count == 0 {
                 println!("Vector database '{}' is already empty.", name);
                 return Ok(());
             }
-            
+
             // Ask for confirmation unless --yes is provided
             if !yes {
                 println!(
@@ -258,20 +258,20 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
                 print!("Type 'yes' to confirm: ");
                 use std::io::{self, Write};
                 io::stdout().flush()?;
-                
+
                 let mut input = String::new();
                 io::stdin().read_line(&mut input)?;
-                
+
                 if input.trim().to_lowercase() != "yes" {
                     println!("Clear operation cancelled.");
                     return Ok(());
                 }
             }
-            
+
             // Delete and recreate the database to clear it
             VectorDatabase::delete_database(&name)?;
             let _ = VectorDatabase::new(&name)?;
-            
+
             println!(
                 "{} Vector database '{}' cleared successfully ({} vectors removed)",
                 "✓".green(),
@@ -280,6 +280,6 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
             );
         }
     }
-    
+
     Ok(())
 }

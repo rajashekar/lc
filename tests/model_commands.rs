@@ -278,7 +278,7 @@ mod models_filtering_tests {
                 m.id.to_lowercase().contains("gpt")
                     || m.display_name
                         .as_ref()
-                        .map_or(false, |name| name.to_lowercase().contains("gpt"))
+                        .is_some_and(|name| name.to_lowercase().contains("gpt"))
             })
             .collect();
 
@@ -350,7 +350,7 @@ mod models_filtering_tests {
         // Filter models with context length >= 100k
         let large_context_models: Vec<_> = models
             .iter()
-            .filter(|m| m.context_length.map_or(false, |ctx| ctx >= 100000))
+            .filter(|m| m.context_length.is_some_and(|ctx| ctx >= 100000))
             .collect();
 
         assert_eq!(large_context_models.len(), 3); // gpt-4-vision, o1-preview, claude-3-sonnet
@@ -368,7 +368,7 @@ mod models_filtering_tests {
         // Filter models with input price <= $5/M
         let affordable_models: Vec<_> = models
             .iter()
-            .filter(|m| m.input_price_per_m.map_or(true, |price| price <= 5.0))
+            .filter(|m| m.input_price_per_m.is_none_or(|price| price <= 5.0))
             .collect();
 
         assert_eq!(affordable_models.len(), 1); // claude-3-sonnet ($3/M)
@@ -382,7 +382,7 @@ mod models_filtering_tests {
         // Filter models with output price <= $20/M
         let affordable_output_models: Vec<_> = models
             .iter()
-            .filter(|m| m.output_price_per_m.map_or(true, |price| price <= 20.0))
+            .filter(|m| m.output_price_per_m.is_none_or(|price| price <= 20.0))
             .collect();
 
         assert_eq!(affordable_output_models.len(), 2); // whisper-1 (None), claude-3-sonnet ($15/M)
@@ -416,8 +416,8 @@ mod models_filtering_tests {
             .filter(|m| {
                 m.supports_vision
                     && (m.supports_tools || m.supports_function_calling)
-                    && m.context_length.map_or(false, |ctx| ctx > 100000)
-                    && m.input_price_per_m.map_or(false, |price| price < 5.0)
+                    && m.context_length.is_some_and(|ctx| ctx > 100000)
+                    && m.input_price_per_m.is_some_and(|price| price < 5.0)
             })
             .collect();
 
@@ -445,7 +445,7 @@ mod models_sorting_tests {
 
     #[test]
     fn test_models_sorting_by_provider_and_name() {
-        let mut models = vec![
+        let mut models = [
             ModelMetadata {
                 id: "zebra-model".to_string(),
                 provider: "zebra".to_string(),

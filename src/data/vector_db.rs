@@ -190,6 +190,7 @@ impl VectorDatabase {
         self.add_vector_with_metadata(text, vector, model, provider, None, None, None)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_vector_with_metadata(
         &self,
         text: &str,
@@ -580,7 +581,7 @@ impl FileProcessor {
         // Check for high ratio of printable ASCII characters
         let printable_count = buffer[..bytes_read]
             .iter()
-            .filter(|&&b| b >= 32 && b <= 126 || b == 9 || b == 10 || b == 13)
+            .filter(|&&b| (32..=126).contains(&b) || b == 9 || b == 10 || b == 13)
             .count();
 
         let printable_ratio = printable_count as f64 / bytes_read as f64;
@@ -693,7 +694,7 @@ impl FileProcessor {
             // Ensure we're making progress - if new start is not greater than current start,
             // move forward by at least 1 character to prevent infinite loops
             if new_start <= start {
-                start = start + 1;
+                start += 1;
                 debug_log!(
                     "Preventing infinite loop: moving start from {} to {}",
                     new_start,

@@ -98,8 +98,18 @@ pub async fn handle(
 
     println!("\n{}", "Available endpoints:".bold().blue());
     println!("  {} http://{}:{}/models", "•".blue(), host_str, port_val);
-    println!("  {} http://{}:{}/v1/models", "•".blue(), host_str, port_val);
-    println!("  {} http://{}:{}/chat/completions", "•".blue(), host_str, port_val);
+    println!(
+        "  {} http://{}:{}/v1/models",
+        "•".blue(),
+        host_str,
+        port_val
+    );
+    println!(
+        "  {} http://{}:{}/chat/completions",
+        "•".blue(),
+        host_str,
+        port_val
+    );
     println!(
         "  {} http://{}:{}/v1/chat/completions",
         "•".blue(),
@@ -110,14 +120,8 @@ pub async fn handle(
     println!("\n{} Press Ctrl+C to stop the server\n", "💡".yellow());
 
     // Start the proxy server
-    crate::services::proxy::start_proxy_server(
-        host_str,
-        port_val,
-        provider,
-        model,
-        final_api_key,
-    )
-    .await?;
+    crate::services::proxy::start_proxy_server(host_str, port_val, provider, model, final_api_key)
+        .await?;
 
     Ok(())
 }

@@ -382,7 +382,7 @@ impl OpenAIClient {
         // Create template processor if provider config has templates
         let template_processor = provider_config
             .as_ref()
-            .and_then(|config| Self::create_template_processor(config));
+            .and_then(Self::create_template_processor);
 
         Ok(Self {
             client,
@@ -571,8 +571,9 @@ impl OpenAIClient {
     /// Helper method to add standard headers to a request builder
     fn add_standard_headers(&self, mut req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         // Add Authorization header unless a custom Authorization header is already present
-        if !self.custom_headers.contains_key("Authorization") 
-            && !self.custom_headers.contains_key("authorization") {
+        if !self.custom_headers.contains_key("Authorization")
+            && !self.custom_headers.contains_key("authorization")
+        {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
 
@@ -599,8 +600,9 @@ impl OpenAIClient {
 
         // Add Authorization header unless a custom Authorization header is already present
         // This allows providers like Gemini to use custom authentication headers
-        if !self.custom_headers.contains_key("Authorization") 
-            && !self.custom_headers.contains_key("authorization") {
+        if !self.custom_headers.contains_key("Authorization")
+            && !self.custom_headers.contains_key("authorization")
+        {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
 
@@ -806,11 +808,7 @@ impl OpenAIClient {
                         // Extract the model name/id - Gemini uses "name" field like "models/gemini-1.5-pro"
                         if let Some(name) = model_json.get("name").and_then(|v| v.as_str()) {
                             // Remove "models/" prefix if present
-                            let id = if name.starts_with("models/") {
-                                &name[7..]
-                            } else {
-                                name
-                            };
+                            let id = name.strip_prefix("models/").unwrap_or(name);
 
                             converted_models.push(Model {
                                 id: id.to_string(),
@@ -885,8 +883,9 @@ impl OpenAIClient {
         }
 
         // Add Authorization header unless a custom Authorization header is already present
-        if !self.custom_headers.contains_key("Authorization") 
-            && !self.custom_headers.contains_key("authorization") {
+        if !self.custom_headers.contains_key("Authorization")
+            && !self.custom_headers.contains_key("authorization")
+        {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
 
@@ -1519,8 +1518,8 @@ impl OpenAIClient {
                 buffer.drain(..=newline_pos);
 
                 // Handle Server-Sent Events format
-                if line.starts_with("data: ") {
-                    let data = &line[6..]; // Remove "data: " prefix
+                if let Some(data) = line.strip_prefix("data: ") {
+                    // Remove "data: " prefix
 
                     if data.trim() == "[DONE]" {
                         handle.write_all(b"\n")?;

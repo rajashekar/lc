@@ -4,9 +4,9 @@ use anyhow::Result;
 use colored::*;
 
 use crate::chat;
+use crate::cli::set_debug_mode;
 use crate::config;
 use crate::data::vector_db::{FileProcessor, VectorDatabase};
-use crate::cli::set_debug_mode;
 use crate::provider::EmbeddingRequest;
 use crate::utils::resolve_model_and_provider;
 
@@ -228,7 +228,7 @@ pub async fn handle_embed_command(
                             Ok(vector_db) => {
                                 match vector_db.add_vector(
                                     &text_content,
-                                    &embedding,
+                                    embedding,
                                     &resolved_model,
                                     &provider_name,
                                 ) {

@@ -42,8 +42,7 @@ impl CachedProviderData {
             self.cached_json = Some(serde_json::to_string_pretty(self)?);
         }
         self.cached_json
-            .as_ref()
-            .map(|s| s.as_str())
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Failed to get cached JSON"))
     }
 }
@@ -505,7 +504,7 @@ impl UnifiedCache {
 
         println!("Refreshing models cache for all providers...");
 
-        for (provider_name, _provider_config) in &config.providers {
+        for provider_name in config.providers.keys() {
             // Skip providers that have neither API key nor custom headers (after loading centralized auth)
             let pc_auth = match config.get_provider_with_auth(provider_name) {
                 Ok(cfg) => cfg,

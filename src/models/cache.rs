@@ -21,6 +21,12 @@ pub struct CachedModel {
     pub model: String,
 }
 
+impl Default for ModelsCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModelsCache {
     pub fn new() -> Self {
         Self {

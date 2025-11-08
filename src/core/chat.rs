@@ -6,6 +6,13 @@ use crate::token_utils::TokenCounter;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 
+// Agent execution constants
+const DEFAULT_MAX_ITERATIONS: u32 = 10;
+const TOOL_EXECUTION_TIMEOUT_SECS: u64 = 30;
+const MAX_TOOL_RESULT_LENGTH: usize = 10000;
+const IMAGE_TOKEN_ESTIMATE: i32 = 85; // Approximate tokens for low-detail image
+
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_validation(
     client: &LLMClient,
     model: &str,
@@ -171,11 +178,9 @@ pub async fn send_chat_request_with_validation(
     );
 
     // Calculate output tokens if we have a token counter
-    let output_tokens = if let Some(ref counter) = token_counter {
-        Some(counter.count_tokens(&response) as i32)
-    } else {
-        None
-    };
+    let output_tokens = token_counter
+        .as_ref()
+        .map(|counter| counter.count_tokens(&response) as i32);
 
     // Display token usage if available
     if let (Some(input), Some(output)) = (input_tokens, output_tokens) {
@@ -205,6 +210,7 @@ pub async fn send_chat_request_with_validation(
     Ok((response, input_tokens, output_tokens))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_streaming(
     client: &LLMClient,
     model: &str,
@@ -630,6 +636,7 @@ pub async fn create_authenticated_client(
 }
 
 // New function to handle tool execution loop
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_tool_execution(
     client: &LLMClient,
     model: &str,
@@ -641,6 +648,7 @@ pub async fn send_chat_request_with_tool_execution(
     _provider_name: &str,
     tools: Option<Vec<crate::provider::Tool>>,
     mcp_server_names: &[&str],
+    max_iterations: Option<u32>,
 ) -> Result<(String, Option<i32>, Option<i32>)> {
     use crate::provider::{ChatRequest, Message};
     use crate::token_utils::TokenCounter;
@@ -651,6 +659,9 @@ pub async fn send_chat_request_with_tool_execution(
 
     // Create token counter for tracking usage
     let token_counter = TokenCounter::new(model).ok();
+
+    // Build tool-to-server mapping for O(1) lookups
+    let tool_server_map = build_tool_server_map(&tools, mcp_server_names).await;
 
     // Add system prompt if provided
     if let Some(sys_prompt) = system_prompt {
@@ -672,7 +683,9 @@ pub async fn send_chat_request_with_tool_execution(
 
     // Add current prompt
     conversation_messages.push(Message::user(prompt.to_string()));
-    let max_iterations = 10; // Prevent infinite loops
+
+    // Use provided max_iterations or default
+    let max_iterations = max_iterations.unwrap_or(DEFAULT_MAX_ITERATIONS);
     let mut iteration = 0;
 
     loop {
@@ -698,13 +711,47 @@ pub async fn send_chat_request_with_tool_execution(
         // Make the API call
         let response = client.chat_with_tools(&request).await?;
 
-        // Track token usage if we have a counter
+        // Track input token usage if we have a counter
         if let Some(ref counter) = token_counter {
-            let input_tokens = counter.estimate_chat_tokens("", system_prompt, &[]) as i32;
+            // Count tokens for all messages in the request
+            let mut input_tokens = 0i32;
+            for msg in &request.messages {
+                match &msg.content_type {
+                    MessageContent::Text { content } => {
+                        if let Some(text) = content {
+                            input_tokens += counter.count_tokens(text) as i32;
+                        }
+                    }
+                    MessageContent::Multimodal { content } => {
+                        // Count text tokens from multimodal content
+                        for part in content {
+                            match part {
+                                crate::provider::ContentPart::Text { text } => {
+                                    input_tokens += counter.count_tokens(text) as i32;
+                                }
+                                crate::provider::ContentPart::ImageUrl { .. } => {
+                                    // Images are harder to count, use approximation
+                                    // Typical vision models charge ~85 tokens per low-detail image
+                                    input_tokens += IMAGE_TOKEN_ESTIMATE;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             total_input_tokens += input_tokens;
+            crate::debug_log!("Iteration {} input tokens: {}", iteration, input_tokens);
         }
 
         if let Some(choice) = response.choices.first() {
+            // Track output tokens for this response
+            if let Some(ref counter) = token_counter {
+                if let Some(content) = &choice.message.content {
+                    let output_tokens = counter.count_tokens(content) as i32;
+                    total_output_tokens += output_tokens;
+                    crate::debug_log!("Iteration {} output tokens: {}", iteration, output_tokens);
+                }
+            }
             crate::debug_log!(
                 "Response choice - tool_calls: {}, content: {}",
                 choice.message.tool_calls.as_ref().map_or(0, |tc| tc.len()),
@@ -728,68 +775,37 @@ pub async fn send_chat_request_with_tool_execution(
                     conversation_messages
                         .push(Message::assistant_with_tool_calls(tool_calls.clone()));
 
-                    // Execute each tool call
-                    for (i, tool_call) in tool_calls.iter().enumerate() {
-                        crate::debug_log!(
-                            "Executing tool call {}/{}: {} with args: {}",
-                            i + 1,
-                            tool_calls.len(),
-                            tool_call.function.name,
-                            tool_call.function.arguments
-                        );
+                    // Execute tool calls concurrently for better performance
+                    crate::debug_log!("Executing {} tool calls concurrently", tool_calls.len());
 
-                        // Find which MCP server has this function using daemon client
-                        let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
-                        let mut tool_result = None;
-                        for server_name in mcp_server_names {
-                            // Parse arguments as JSON value instead of Vec<String>
-                            let args_value: serde_json::Value =
-                                serde_json::from_str(&tool_call.function.arguments)?;
-                            match daemon_client
-                                .call_tool(server_name, &tool_call.function.name, args_value)
-                                .await
-                            {
-                                Ok(result) => {
-                                    crate::debug_log!(
-                                        "Tool call successful on server '{}': {}",
-                                        server_name,
-                                        serde_json::to_string(&result)
-                                            .unwrap_or_else(|_| "invalid json".to_string())
-                                    );
-                                    tool_result = Some(format_tool_result(&result));
-                                    break;
-                                }
-                                Err(e) => {
-                                    crate::debug_log!(
-                                        "Tool call failed on server '{}': {}",
-                                        server_name,
-                                        e
-                                    );
-                                    continue;
-                                }
+                    let mut futures = Vec::new();
+                    for tool_call in tool_calls.iter() {
+                        let future = execute_single_tool_call(
+                            tool_call,
+                            tools.as_ref(),
+                            mcp_server_names,
+                            &tool_server_map,
+                        );
+                        futures.push(future);
+                    }
+
+                    // Wait for all tool calls to complete
+                    let results = futures_util::future::join_all(futures).await;
+
+                    // Add all tool results to conversation
+                    for result in results {
+                        match result {
+                            Ok(exec_result) => {
+                                conversation_messages.push(Message::tool_result(
+                                    exec_result.tool_call_id,
+                                    exec_result.result_content,
+                                ));
+                            }
+                            Err(e) => {
+                                eprintln!("⚠️  Tool execution error: {}", e);
+                                crate::debug_log!("Tool execution error: {}", e);
                             }
                         }
-
-                        let result_content = tool_result.unwrap_or_else(|| {
-                            format!(
-                                "Error: Function '{}' not found on any MCP server",
-                                tool_call.function.name
-                            )
-                        });
-
-                        crate::debug_log!(
-                            "Tool result for {}: {}",
-                            tool_call.function.name,
-                            if result_content.len() > 100 {
-                                format!("{}...", &result_content[..100])
-                            } else {
-                                result_content.clone()
-                            }
-                        );
-
-                        // Add tool result to conversation
-                        conversation_messages
-                            .push(Message::tool_result(tool_call.id.clone(), result_content));
                     }
 
                     // Continue the loop to get the LLM's response to the tool results
@@ -805,11 +821,7 @@ pub async fn send_chat_request_with_tool_execution(
                                                  content.clone()
                                              });
 
-                            // Track output tokens
-                            if let Some(ref counter) = token_counter {
-                                total_output_tokens += counter.count_tokens(content) as i32;
-                            }
-
+                            // Output tokens already tracked above (line 725-730)
                             // Exit immediately when LLM provides content (final answer)
                             return Ok((
                                 content.clone(),
@@ -831,11 +843,7 @@ pub async fn send_chat_request_with_tool_execution(
                     }
                 );
 
-                // Track output tokens
-                if let Some(ref counter) = token_counter {
-                    total_output_tokens += counter.count_tokens(content) as i32;
-                }
-
+                // Output tokens already tracked above (line 725-730)
                 // Exit immediately when LLM provides content (final answer)
                 return Ok((
                     content.clone(),
@@ -859,17 +867,260 @@ pub async fn send_chat_request_with_tool_execution(
     }
 }
 
+/// Result of a single tool execution
+struct ToolExecutionResult {
+    tool_call_id: String,
+    result_content: String,
+}
+
+/// Execute a single tool call with validation, timeout, and error handling
+async fn execute_single_tool_call(
+    tool_call: &crate::provider::ToolCall,
+    tools: Option<&Vec<crate::provider::Tool>>,
+    mcp_server_names: &[&str],
+    tool_server_map: &std::collections::HashMap<String, String>,
+) -> Result<ToolExecutionResult> {
+    use std::time::Duration;
+
+    crate::debug_log!(
+        "Executing tool call: {} with args: {}",
+        tool_call.function.name,
+        tool_call.function.arguments
+    );
+
+    // Parse arguments as JSON value
+    let args_value: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)?;
+
+    // Validate arguments against tool schema
+    if let Some(tool_defs) = tools {
+        if let Err(e) = validate_tool_arguments(&tool_call.function.name, &args_value, tool_defs) {
+            let error_msg = format!(
+                "Tool argument validation failed for '{}': {}",
+                tool_call.function.name, e
+            );
+            eprintln!("⚠️  {}", error_msg);
+            crate::debug_log!("{}", error_msg);
+
+            return Ok(ToolExecutionResult {
+                tool_call_id: tool_call.id.clone(),
+                result_content: error_msg,
+            });
+        }
+        crate::debug_log!(
+            "Tool '{}' arguments validated successfully",
+            tool_call.function.name
+        );
+    }
+
+    // Find which MCP server has this function
+    let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
+    let mut tool_result = None;
+
+    // Use mapping if available for O(1) lookup, otherwise iterate
+    let servers_to_try: Vec<&str> =
+        if let Some(server_name) = tool_server_map.get(&tool_call.function.name) {
+            vec![server_name.as_str()]
+        } else {
+            mcp_server_names.to_vec()
+        };
+
+    for server_name in servers_to_try {
+        // Add timeout to prevent hanging
+        let call_future =
+            daemon_client.call_tool(server_name, &tool_call.function.name, args_value.clone());
+
+        match tokio::time::timeout(
+            Duration::from_secs(TOOL_EXECUTION_TIMEOUT_SECS),
+            call_future,
+        )
+        .await
+        {
+            Ok(Ok(result)) => {
+                crate::debug_log!(
+                    "Tool call successful on server '{}': {}",
+                    server_name,
+                    serde_json::to_string(&result).unwrap_or_else(|_| "invalid json".to_string())
+                );
+                tool_result = Some(format_tool_result(&result));
+                break;
+            }
+            Ok(Err(e)) => {
+                crate::debug_log!("Tool call failed on server '{}': {}", server_name, e);
+                continue;
+            }
+            Err(_) => {
+                let timeout_msg = format!(
+                    "Tool call to '{}' on server '{}' timed out after {} seconds",
+                    tool_call.function.name, server_name, TOOL_EXECUTION_TIMEOUT_SECS
+                );
+                eprintln!("⚠️  {}", timeout_msg);
+                crate::debug_log!("{}", timeout_msg);
+                continue;
+            }
+        }
+    }
+
+    let result_content = tool_result.unwrap_or_else(|| {
+        format!(
+            "Error: Function '{}' not found on any MCP server",
+            tool_call.function.name
+        )
+    });
+
+    crate::debug_log!(
+        "Tool result for {}: {}",
+        tool_call.function.name,
+        if result_content.len() > 100 {
+            format!("{}...", &result_content[..100])
+        } else {
+            result_content.clone()
+        }
+    );
+
+    Ok(ToolExecutionResult {
+        tool_call_id: tool_call.id.clone(),
+        result_content,
+    })
+}
+
+/// Build a mapping of tool names to server names for O(1) lookups
+async fn build_tool_server_map(
+    tools: &Option<Vec<crate::provider::Tool>>,
+    mcp_server_names: &[&str],
+) -> std::collections::HashMap<String, String> {
+    use std::collections::HashMap;
+
+    let mut map = HashMap::new();
+
+    if tools.is_some() {
+        // Use daemon client to get tools from each server
+        if let Ok(daemon_client) = crate::mcp_daemon::DaemonClient::new() {
+            for server_name in mcp_server_names {
+                if let Ok(server_tools) = daemon_client.list_tools(server_name).await {
+                    if let Some(tools_from_server) = server_tools.get(*server_name) {
+                        for tool in tools_from_server {
+                            // Map tool name to server name
+                            map.insert(tool.name.to_string(), server_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    crate::debug_log!("Built tool-to-server mapping with {} entries", map.len());
+
+    map
+}
+
+// Helper function to validate tool arguments against schema
+fn validate_tool_arguments(
+    tool_name: &str,
+    arguments: &serde_json::Value,
+    tools: &[crate::provider::Tool],
+) -> Result<()> {
+    // Find the tool definition
+    let tool_def = tools
+        .iter()
+        .find(|t| t.function.name == tool_name)
+        .ok_or_else(|| anyhow::anyhow!("Tool '{}' not found in tool definitions", tool_name))?;
+
+    let schema = &tool_def.function.parameters;
+
+    // Ensure arguments is an object
+    let args_obj = arguments.as_object().ok_or_else(|| {
+        anyhow::anyhow!("Tool arguments must be a JSON object, got: {}", arguments)
+    })?;
+
+    // Check required fields
+    if let Some(required) = schema.get("required").and_then(|r| r.as_array()) {
+        for req_field in required {
+            if let Some(field_name) = req_field.as_str() {
+                if !args_obj.contains_key(field_name) {
+                    return Err(anyhow::anyhow!(
+                        "Tool '{}' missing required argument: '{}'",
+                        tool_name,
+                        field_name
+                    ));
+                }
+            }
+        }
+    }
+
+    // Validate field types if properties are defined
+    if let Some(properties) = schema.get("properties").and_then(|p| p.as_object()) {
+        for (arg_name, arg_value) in args_obj {
+            // Check if this property is defined in the schema
+            if let Some(prop_schema) = properties.get(arg_name) {
+                // Validate type if specified
+                if let Some(expected_type) = prop_schema.get("type").and_then(|t| t.as_str()) {
+                    let actual_type = match arg_value {
+                        serde_json::Value::Null => "null",
+                        serde_json::Value::Bool(_) => "boolean",
+                        serde_json::Value::Number(_) => "number",
+                        serde_json::Value::String(_) => "string",
+                        serde_json::Value::Array(_) => "array",
+                        serde_json::Value::Object(_) => "object",
+                    };
+
+                    // Handle integer as a special case of number
+                    if expected_type == "integer" && arg_value.is_number() {
+                        if let Some(num) = arg_value.as_f64() {
+                            if num.fract() != 0.0 {
+                                return Err(anyhow::anyhow!(
+                                    "Tool '{}' argument '{}': expected integer, got number with decimal: {}",
+                                    tool_name,
+                                    arg_name,
+                                    num
+                                ));
+                            }
+                        }
+                    } else if expected_type != actual_type
+                        && !(expected_type == "number" && actual_type == "number")
+                    {
+                        return Err(anyhow::anyhow!(
+                            "Tool '{}' argument '{}': expected type '{}', got '{}'",
+                            tool_name,
+                            arg_name,
+                            expected_type,
+                            actual_type
+                        ));
+                    }
+                }
+
+                // Validate enum if specified
+                if let Some(enum_values) = prop_schema.get("enum").and_then(|e| e.as_array()) {
+                    if !enum_values.contains(arg_value) {
+                        return Err(anyhow::anyhow!(
+                            "Tool '{}' argument '{}': value must be one of {:?}, got: {}",
+                            tool_name,
+                            arg_name,
+                            enum_values,
+                            arg_value
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    crate::debug_log!("Tool '{}' arguments validated successfully", tool_name);
+
+    Ok(())
+}
+
 // Helper function to format tool result for display
 fn format_tool_result(result: &serde_json::Value) -> String {
-    const MAX_TOOL_RESULT_LENGTH: usize = 10000; // Limit tool results to 10KB
-    const TRUNCATION_MESSAGE: &str = "\n\n[Content truncated - exceeded maximum length]";
-    
     if let Some(content_array) = result.get("content") {
         if let Some(content_items) = content_array.as_array() {
             let mut formatted = String::new();
+            let mut original_length = 0usize;
+
             for item in content_items {
                 if let Some(text) = item.get("text") {
                     if let Some(text_str) = text.as_str() {
+                        original_length += text_str.len();
+
                         // Check if adding this text would exceed the limit
                         if formatted.len() + text_str.len() > MAX_TOOL_RESULT_LENGTH {
                             // Add as much as we can
@@ -877,7 +1128,14 @@ fn format_tool_result(result: &serde_json::Value) -> String {
                             if remaining > 0 {
                                 formatted.push_str(&text_str[..remaining.min(text_str.len())]);
                             }
-                            formatted.push_str(TRUNCATION_MESSAGE);
+
+                            // Add detailed truncation message
+                            let truncation_msg = format!(
+                                "\n\n[TRUNCATED: Result too large. Showing first {} bytes of {} total. Consider requesting smaller chunks or specific fields.]",
+                                MAX_TOOL_RESULT_LENGTH,
+                                original_length
+                            );
+                            formatted.push_str(&truncation_msg);
                             break; // Stop processing more items
                         } else {
                             formatted.push_str(text_str);
@@ -893,9 +1151,18 @@ fn format_tool_result(result: &serde_json::Value) -> String {
     // Fallback to pretty-printed JSON (also with truncation)
     let json_result = serde_json::to_string_pretty(result)
         .unwrap_or_else(|_| "Error formatting result".to_string());
-    
+
     if json_result.len() > MAX_TOOL_RESULT_LENGTH {
-        format!("{}{}", &json_result[..MAX_TOOL_RESULT_LENGTH], TRUNCATION_MESSAGE)
+        let truncation_msg = format!(
+            "\n\n[TRUNCATED: Result too large. Showing first {} bytes of {} total.]",
+            MAX_TOOL_RESULT_LENGTH,
+            json_result.len()
+        );
+        format!(
+            "{}{}",
+            &json_result[..MAX_TOOL_RESULT_LENGTH],
+            truncation_msg
+        )
     } else {
         json_result
     }
@@ -903,6 +1170,7 @@ fn format_tool_result(result: &serde_json::Value) -> String {
 
 // Message-based versions of the chat functions for handling multimodal content
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_validation_messages(
     client: &LLMClient,
     model: &str,
@@ -956,6 +1224,7 @@ pub async fn send_chat_request_with_validation_messages(
     Ok((response, None, None))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_streaming_messages(
     client: &LLMClient,
     model: &str,
@@ -1008,6 +1277,7 @@ pub async fn send_chat_request_with_streaming_messages(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_chat_request_with_tool_execution_messages(
     client: &LLMClient,
     model: &str,
@@ -1018,11 +1288,15 @@ pub async fn send_chat_request_with_tool_execution_messages(
     provider_name: &str,
     tools: Option<Vec<crate::provider::Tool>>,
     mcp_server_names: &[&str],
+    max_iterations: Option<u32>,
 ) -> Result<(String, Option<i32>, Option<i32>)> {
     crate::debug_log!("Sending chat request with tool execution and messages - provider: '{}', model: '{}', messages: {}",
                       provider_name, model, messages.len());
 
     let mut conversation_messages = Vec::new();
+
+    // Build tool-to-server mapping for O(1) lookups
+    let tool_server_map = build_tool_server_map(&tools, mcp_server_names).await;
 
     // Add system prompt if provided and not already in messages
     if let Some(sys_prompt) = system_prompt {
@@ -1042,7 +1316,8 @@ pub async fn send_chat_request_with_tool_execution_messages(
     // Add all provided messages
     conversation_messages.extend_from_slice(messages);
 
-    let max_iterations = 10;
+    // Use provided max_iterations or default
+    let max_iterations = max_iterations.unwrap_or(DEFAULT_MAX_ITERATIONS);
     let mut iteration = 0;
 
     loop {
@@ -1071,34 +1346,37 @@ pub async fn send_chat_request_with_tool_execution_messages(
                     conversation_messages
                         .push(Message::assistant_with_tool_calls(tool_calls.clone()));
 
-                    for tool_call in tool_calls {
-                        let daemon_client = crate::mcp_daemon::DaemonClient::new()?;
-                        let mut tool_result = None;
+                    // Execute tool calls concurrently for better performance
+                    crate::debug_log!("Executing {} tool calls concurrently", tool_calls.len());
 
-                        for server_name in mcp_server_names {
-                            let args_value: serde_json::Value =
-                                serde_json::from_str(&tool_call.function.arguments)?;
-                            match daemon_client
-                                .call_tool(server_name, &tool_call.function.name, args_value)
-                                .await
-                            {
-                                Ok(result) => {
-                                    tool_result = Some(format_tool_result(&result));
-                                    break;
-                                }
-                                Err(_) => continue,
+                    let mut futures = Vec::new();
+                    for tool_call in tool_calls.iter() {
+                        let future = execute_single_tool_call(
+                            tool_call,
+                            tools.as_ref(),
+                            mcp_server_names,
+                            &tool_server_map,
+                        );
+                        futures.push(future);
+                    }
+
+                    // Wait for all tool calls to complete
+                    let results = futures_util::future::join_all(futures).await;
+
+                    // Add all tool results to conversation
+                    for result in results {
+                        match result {
+                            Ok(exec_result) => {
+                                conversation_messages.push(Message::tool_result(
+                                    exec_result.tool_call_id,
+                                    exec_result.result_content,
+                                ));
+                            }
+                            Err(e) => {
+                                eprintln!("⚠️  Tool execution error: {}", e);
+                                crate::debug_log!("Tool execution error: {}", e);
                             }
                         }
-
-                        let result_content = tool_result.unwrap_or_else(|| {
-                            format!(
-                                "Error: Function '{}' not found on any MCP server",
-                                tool_call.function.name
-                            )
-                        });
-
-                        conversation_messages
-                            .push(Message::tool_result(tool_call.id.clone(), result_content));
                     }
 
                     continue;
@@ -1111,5 +1389,278 @@ pub async fn send_chat_request_with_tool_execution_messages(
         }
 
         anyhow::bail!("No response from API");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::{Function, Tool};
+
+    #[test]
+    fn test_validate_tool_arguments_success() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "age": {"type": "integer"},
+                        "active": {"type": "boolean"}
+                    },
+                    "required": ["name", "age"]
+                }),
+            },
+        }];
+
+        let valid_args = serde_json::json!({
+            "name": "John",
+            "age": 30,
+            "active": true
+        });
+
+        let result = validate_tool_arguments("test_tool", &valid_args, &tools);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_missing_required() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "age": {"type": "integer"}
+                    },
+                    "required": ["name", "age"]
+                }),
+            },
+        }];
+
+        let invalid_args = serde_json::json!({
+            "name": "John"
+            // Missing required "age" field
+        });
+
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("missing required argument"));
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_wrong_type() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "age": {"type": "integer"}
+                    }
+                }),
+            },
+        }];
+
+        let invalid_args = serde_json::json!({
+            "name": "John",
+            "age": "thirty" // Should be integer
+        });
+
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("expected type"));
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_integer_vs_float() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "count": {"type": "integer"}
+                    }
+                }),
+            },
+        }];
+
+        // Should fail - float when integer expected
+        let invalid_args = serde_json::json!({
+            "count": 30.5
+        });
+
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("expected integer"));
+
+        // Should succeed - integer value
+        let valid_args = serde_json::json!({
+            "count": 30
+        });
+
+        let result = validate_tool_arguments("test_tool", &valid_args, &tools);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_enum_constraint() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["active", "inactive", "pending"]
+                        }
+                    }
+                }),
+            },
+        }];
+
+        // Should succeed - valid enum value
+        let valid_args = serde_json::json!({
+            "status": "active"
+        });
+        let result = validate_tool_arguments("test_tool", &valid_args, &tools);
+        assert!(result.is_ok());
+
+        // Should fail - invalid enum value
+        let invalid_args = serde_json::json!({
+            "status": "completed"
+        });
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be one of"));
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_tool_not_found() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {}
+                }),
+            },
+        }];
+
+        let args = serde_json::json!({});
+        let result = validate_tool_arguments("nonexistent_tool", &args, &tools);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_validate_tool_arguments_not_object() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "test_tool".to_string(),
+                description: "A test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {}
+                }),
+            },
+        }];
+
+        let invalid_args = serde_json::json!("not an object");
+        let result = validate_tool_arguments("test_tool", &invalid_args, &tools);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must be a JSON object"));
+    }
+
+    #[test]
+    fn test_format_tool_result_with_text_content() {
+        let result = serde_json::json!({
+            "content": [
+                {"text": "Hello, world!"},
+                {"text": "This is a test."}
+            ]
+        });
+
+        let formatted = format_tool_result(&result);
+        assert!(formatted.contains("Hello, world!"));
+        assert!(formatted.contains("This is a test."));
+    }
+
+    #[test]
+    fn test_format_tool_result_truncation() {
+        // Create a large text that exceeds 10KB
+        let large_text = "A".repeat(15000);
+        let result = serde_json::json!({
+            "content": [
+                {"text": large_text}
+            ]
+        });
+
+        let formatted = format_tool_result(&result);
+        // Allow for longer truncation message (up to 200 chars for the detailed message)
+        assert!(formatted.len() <= MAX_TOOL_RESULT_LENGTH + 200);
+        assert!(formatted.contains("[TRUNCATED"));
+        assert!(formatted.contains("bytes"));
+    }
+
+    #[test]
+    fn test_format_tool_result_fallback_to_json() {
+        let result = serde_json::json!({
+            "status": "success",
+            "data": {
+                "id": 123,
+                "name": "test"
+            }
+        });
+
+        let formatted = format_tool_result(&result);
+        // Should be pretty-printed JSON when no content array
+        assert!(formatted.contains("\"status\""));
+        assert!(formatted.contains("\"success\""));
+    }
+
+    #[test]
+    fn test_format_tool_result_multiple_items_truncation() {
+        // Create multiple items where the sum exceeds 10KB
+        let item1 = "B".repeat(6000);
+        let item2 = "C".repeat(6000);
+        let result = serde_json::json!({
+            "content": [
+                {"text": item1},
+                {"text": item2}
+            ]
+        });
+
+        let formatted = format_tool_result(&result);
+        // Allow for longer truncation message (up to 200 chars for the detailed message)
+        assert!(formatted.len() <= MAX_TOOL_RESULT_LENGTH + 200);
+        assert!(formatted.contains("[TRUNCATED"));
+        assert!(formatted.contains("bytes"));
+        // First item should be included
+        assert!(formatted.chars().filter(|&c| c == 'B').count() > 0);
     }
 }

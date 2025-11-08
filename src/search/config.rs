@@ -12,6 +12,12 @@ pub struct SearchConfig {
     pub default_provider: Option<String>,
 }
 
+impl Default for SearchConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SearchConfig {
     pub fn new() -> Self {
         Self {

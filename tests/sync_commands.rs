@@ -172,7 +172,6 @@ mod cli_integration_tests {
     fn test_sync_help_command() {
         // Test the underlying sync functionality instead of CLI
         // Verify that sync concepts exist in the codebase
-        assert!(true, "Sync help functionality is implemented");
     }
 
     #[tokio::test]
