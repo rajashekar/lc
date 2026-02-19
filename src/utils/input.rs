@@ -1,7 +1,9 @@
 use anyhow::Result;
 use colored::Colorize;
 use crossterm::{
+    cursor::MoveLeft,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+    execute,
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use std::io::{self, Write};
@@ -133,8 +135,38 @@ impl MultiLineInput {
 
                 // Print the character
                 print!("{}", c);
-                io::stdout().flush()?;
 
+                // Redraw the rest of the line if we inserted in the middle
+                let rest = &self.current_line[self.cursor_pos..];
+                if !rest.is_empty() {
+                    print!("{}", rest);
+                    // Move cursor back to correct position
+                    let width = rest.chars().count() as u16;
+                    execute!(io::stdout(), MoveLeft(width))?;
+                }
+
+                io::stdout().flush()?;
+                Ok(InputAction::Continue)
+            }
+            KeyCode::Delete => {
+                if self.cursor_pos < self.current_line.len() {
+                    // Remove character at cursor
+                    self.current_line.remove(self.cursor_pos);
+
+                    // Print rest of line
+                    let rest = &self.current_line[self.cursor_pos..];
+                    print!("{}", rest);
+
+                    // Clear the character that was shifted left
+                    print!(" ");
+
+                    // Move cursor back to correct position
+                    // We printed rest (len) + space (1)
+                    let width = rest.chars().count() as u16 + 1;
+                    execute!(io::stdout(), MoveLeft(width))?;
+
+                    io::stdout().flush()?;
+                }
                 Ok(InputAction::Continue)
             }
             KeyCode::Backspace => {
@@ -143,8 +175,21 @@ impl MultiLineInput {
                     self.current_line.remove(self.cursor_pos - 1);
                     self.cursor_pos -= 1;
 
-                    // Move cursor back, print space to clear character, move back again
-                    print!("\x08 \x08");
+                    // Move cursor back to position of deleted char
+                    print!("\x08");
+
+                    // Print rest of line
+                    let rest = &self.current_line[self.cursor_pos..];
+                    print!("{}", rest);
+
+                    // Clear the character that was shifted left
+                    print!(" ");
+
+                    // Move cursor back to correct position
+                    // We printed rest (len) + space (1)
+                    let width = rest.chars().count() as u16 + 1;
+                    execute!(io::stdout(), MoveLeft(width))?;
+
                     io::stdout().flush()?;
                 } else if !self.lines.is_empty() {
                     // If at beginning of current line and there are previous lines,
