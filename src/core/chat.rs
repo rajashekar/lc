@@ -364,7 +364,9 @@ pub async fn send_chat_request_with_streaming(
 }
 
 // Cache for provider model metadata to avoid repeated file reads and parsing
-static PROVIDER_METADATA_CACHE: OnceLock<RwLock<HashMap<String, Vec<crate::model_metadata::ModelMetadata>>>> = OnceLock::new();
+static PROVIDER_METADATA_CACHE: OnceLock<
+    RwLock<HashMap<String, Vec<crate::model_metadata::ModelMetadata>>>,
+> = OnceLock::new();
 
 async fn get_model_metadata(
     provider_name: &str,
