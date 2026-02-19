@@ -540,8 +540,8 @@ mod alias_validation_tests {
             let result = config.add_alias("test".to_string(), target.to_string());
             // Will fail due to provider validation, but format validation should pass
             // The error should be about provider not existing, not format
-            if result.is_err() {
-                let error_msg = format!("{}", result.unwrap_err());
+            if let Err(e) = result {
+                let error_msg = format!("{}", e);
                 assert!(!error_msg.contains("format"));
             }
         }

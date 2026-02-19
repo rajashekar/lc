@@ -77,13 +77,15 @@ pub async fn handle(
     if !processed_images.is_empty() {
         println!("{} Initial images: {}", "🖼️".blue(), processed_images.len());
     }
-    if mcp_tools.is_some() && !mcp_server_names.is_empty() {
-        println!(
-            "{} Tools: {} (from MCP servers: {})",
-            "🔧".blue(),
-            mcp_tools.as_ref().unwrap().len(),
-            mcp_server_names.join(", ")
-        );
+    if let Some(tools_list) = &mcp_tools {
+        if !mcp_server_names.is_empty() {
+            println!(
+                "{} Tools: {} (from MCP servers: {})",
+                "🔧".blue(),
+                tools_list.len(),
+                mcp_server_names.join(", ")
+            );
+        }
     }
     println!("{} Type /help for commands, /exit to quit", "💡".yellow());
     println!(

@@ -21,7 +21,6 @@ pub mod prompts;
 pub mod providers;
 pub mod proxy;
 pub mod search;
-pub mod sync;
 pub mod templates;
 pub mod usage;
 pub mod utils;

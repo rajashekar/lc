@@ -358,9 +358,6 @@ async fn main() -> Result<()> {
         (true, Some(Commands::WebChatProxy { command })) => {
             cli::webchatproxy::handle(command).await?;
         }
-        (true, Some(Commands::Sync { command })) => {
-            cli::sync::handle(command).await?;
-        }
         (true, Some(Commands::Search { command })) => {
             cli::search::handle(command).await?;
         }

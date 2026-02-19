@@ -73,7 +73,6 @@ These dependencies are required for Rust crates that link against OpenSSL and na
 - 🔍 **Web Search** - Integrated web search with multiple providers (Brave, Exa, Serper) for enhanced context
 - 👁️ **Vision Support** - Process and analyze images with vision-capable models
 - � **PDF Support** - Read and process PDF files with optional dependency
-- 🔐 **Secure** - Encrypted configuration sync
 - 💬 **Intuitive** - Simple commands with short aliases
 - 🎨 **Flexible Templates** - Configure request/response formats for any LLM API
 - ⚡ **Shell Completion** - Tab completion for commands, providers, models, and more
@@ -272,25 +271,21 @@ See [Template System Documentation](docs/TEMPLATE_SYSTEM.md) and [config_samples
 
 - `pdf`: Enables PDF file processing and analysis
 - `unix-sockets`: Enables Unix domain socket support for MCP daemon (Unix systems only)
-- `s3-sync`: Enables cloud synchronization support (S3 and S3-compatible storage)
 
 ### Build Options
 
 ```bash
-# Build with all default features (includes PDF, Unix sockets, and S3 sync)
+# Build with all default features (includes PDF and Unix sockets)
 cargo build --release
 
-# Build with minimal features (no PDF, no Unix sockets, no S3 sync)
+# Build with minimal features (no PDF, no Unix sockets)
 cargo build --release --no-default-features
 
 # Build with only PDF support
 cargo build --release --no-default-features --features pdf
 
-# Build with PDF and S3 sync (no Unix sockets)
-cargo build --release --no-default-features --features "pdf,s3-sync"
-
 # Explicitly enable all features
-cargo build --release --features "pdf,unix-sockets,s3-sync"
+cargo build --release --features "pdf,unix-sockets"
 ```
 
 **Note:** The `unix-sockets` feature is only functional on Unix-like systems (Linux, macOS, BSD, WSL2). On Windows native command prompt/PowerShell, this feature has no effect and MCP daemon functionality is not available regardless of the feature flag. WSL2 provides full Unix compatibility.
@@ -299,16 +294,13 @@ cargo build --release --features "pdf,unix-sockets,s3-sync"
 
 #### Compilation on Windows
 
-S3 sync is now enabled by default on all platforms. On Windows, ensure you have:
+On Windows, ensure you have:
 - Visual Studio 2019 or later with C++ build tools
 - Windows SDK installed
 
 ```bash
-# Standard build for Windows (includes S3 sync)
+# Standard build for Windows
 cargo build --release
-
-# Build without S3 sync if you encounter compilation issues
-cargo build --release --no-default-features --features "pdf unix-sockets"
 
 # Run tests
 cargo test
@@ -320,13 +312,10 @@ cargo test
 |---------|---------|-------|-------|------|
 | MCP Daemon | ❌ | ✅ | ✅ | ✅ |
 | Direct MCP | ✅ | ✅ | ✅ | ✅ |
-| S3 Sync | ✅* | ✅ | ✅ | ✅ |
 | PDF Processing | ✅ | ✅ | ✅ | ✅ |
 | Vision/Images | ✅ | ✅ | ✅ | ✅ |
 | Web Search | ✅ | ✅ | ✅ | ✅ |
 | Vector DB/RAG | ✅ | ✅ | ✅ | ✅ |
-
-*S3 Sync on Windows requires Visual Studio C++ build tools.
 
 ## Contributing
 
