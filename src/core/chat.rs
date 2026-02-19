@@ -5,6 +5,8 @@ use crate::provider::{ChatRequest, Message, MessageContent, OpenAIClient};
 use crate::token_utils::TokenCounter;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+use std::sync::{OnceLock, RwLock};
 
 // Agent execution constants
 const DEFAULT_MAX_ITERATIONS: u32 = 10;
@@ -361,10 +363,26 @@ pub async fn send_chat_request_with_streaming(
     Ok(())
 }
 
+// Cache for provider model metadata to avoid repeated file reads and parsing
+static PROVIDER_METADATA_CACHE: OnceLock<RwLock<HashMap<String, Vec<crate::model_metadata::ModelMetadata>>>> = OnceLock::new();
+
 async fn get_model_metadata(
     provider_name: &str,
     model_name: &str,
 ) -> Option<crate::model_metadata::ModelMetadata> {
+    // Initialize cache if needed
+    let cache = PROVIDER_METADATA_CACHE.get_or_init(|| RwLock::new(HashMap::new()));
+
+    // Check cache first (read lock)
+    {
+        if let Ok(guard) = cache.read() {
+            if let Some(models) = guard.get(provider_name) {
+                return models.iter().find(|m| m.id == model_name).cloned();
+            }
+        }
+    }
+
+    // Not in cache, load from file
     let filename = format!("models/{}.json", provider_name);
 
     if !std::path::Path::new(&filename).exists() {
@@ -374,7 +392,14 @@ async fn get_model_metadata(
     match tokio::fs::read_to_string(&filename).await {
         Ok(json_content) => {
             match MetadataExtractor::extract_from_provider(provider_name, &json_content) {
-                Ok(models) => models.into_iter().find(|m| m.id == model_name),
+                Ok(models) => {
+                    // Update cache (write lock)
+                    if let Ok(mut guard) = cache.write() {
+                        guard.insert(provider_name.to_string(), models.clone());
+                    }
+
+                    models.into_iter().find(|m| m.id == model_name)
+                }
                 Err(_) => None,
             }
         }
