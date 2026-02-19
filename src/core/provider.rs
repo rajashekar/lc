@@ -452,6 +452,17 @@ impl OpenAIClient {
         headers
     }
 
+    /// Helper to check if TLS verification should be disabled
+    fn should_disable_tls_verify() -> bool {
+        match std::env::var("LC_DISABLE_TLS_VERIFY") {
+            Ok(val) => {
+                let val = val.trim().to_lowercase();
+                val == "1" || val == "true" || val == "yes" || val == "on"
+            }
+            Err(_) => false,
+        }
+    }
+
     /// Builds an HTTP client with the specified configuration
     fn build_http_client(
         default_headers: reqwest::header::HeaderMap,
@@ -471,7 +482,19 @@ impl OpenAIClient {
             .default_headers(default_headers);
 
         // Disable certificate verification for development/debugging (e.g., with Proxyman)
-        if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
+        if Self::should_disable_tls_verify() {
+            static ONCE: std::sync::Once = std::sync::Once::new();
+            ONCE.call_once(|| {
+                use colored::Colorize;
+                eprintln!(
+                    "{} TLS verification is disabled via LC_DISABLE_TLS_VERIFY environment variable.",
+                    "WARNING:".yellow().bold()
+                );
+                eprintln!(
+                    "{} This is insecure and should only be used for development/debugging.",
+                    "WARNING:".yellow().bold()
+                );
+            });
             builder = builder.danger_accept_invalid_certs(true);
         }
 
@@ -1617,5 +1640,50 @@ impl OpenAIClient {
         handle.write_all(b"\n")?;
         handle.flush()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn test_should_disable_tls_verify() {
+        // Test case: not set
+        std::env::remove_var("LC_DISABLE_TLS_VERIFY");
+        assert!(!OpenAIClient::should_disable_tls_verify());
+
+        // Test case: set to "0" (should NOT disable)
+        std::env::set_var("LC_DISABLE_TLS_VERIFY", "0");
+        assert!(!OpenAIClient::should_disable_tls_verify());
+
+        // Test case: set to "false" (should NOT disable)
+        std::env::set_var("LC_DISABLE_TLS_VERIFY", "false");
+        assert!(!OpenAIClient::should_disable_tls_verify());
+
+        // Test case: set to "1" (should disable)
+        std::env::set_var("LC_DISABLE_TLS_VERIFY", "1");
+        assert!(OpenAIClient::should_disable_tls_verify());
+
+        // Test case: set to "true" (should disable)
+        std::env::set_var("LC_DISABLE_TLS_VERIFY", "true");
+        assert!(OpenAIClient::should_disable_tls_verify());
+
+        // Test case: set to "TRUE" (case insensitive)
+        std::env::set_var("LC_DISABLE_TLS_VERIFY", "TRUE");
+        assert!(OpenAIClient::should_disable_tls_verify());
+
+        // Test case: set to "yes" (should disable)
+        std::env::set_var("LC_DISABLE_TLS_VERIFY", "yes");
+        assert!(OpenAIClient::should_disable_tls_verify());
+
+        // Test case: set to "on" (should disable)
+        std::env::set_var("LC_DISABLE_TLS_VERIFY", "on");
+        assert!(OpenAIClient::should_disable_tls_verify());
+
+        // Cleanup
+        std::env::remove_var("LC_DISABLE_TLS_VERIFY");
     }
 }
