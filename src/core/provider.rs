@@ -1619,3 +1619,91 @@ impl OpenAIClient {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_user() {
+        let content = "Hello, world!".to_string();
+        let message = Message::user(content.clone());
+        assert_eq!(message.role, "user");
+        match message.content_type {
+            MessageContent::Text { content: c } => assert_eq!(c, Some(content)),
+            _ => panic!("Expected Text content"),
+        }
+        assert!(message.tool_calls.is_none());
+        assert!(message.tool_call_id.is_none());
+    }
+
+    #[test]
+    fn test_message_user_with_image() {
+        let text = "What is this image?".to_string();
+        let image_data = "data:image/png;base64,...".to_string();
+        let detail = Some("high".to_string());
+        let message = Message::user_with_image(text.clone(), image_data.clone(), detail.clone());
+        assert_eq!(message.role, "user");
+        match message.content_type {
+            MessageContent::Multimodal { content } => {
+                assert_eq!(content.len(), 2);
+                match &content[0] {
+                    ContentPart::Text { text: t } => assert_eq!(t, &text),
+                    _ => panic!("Expected Text content part"),
+                }
+                match &content[1] {
+                    ContentPart::ImageUrl { image_url } => {
+                        assert_eq!(image_url.url, image_data);
+                        assert_eq!(image_url.detail, detail);
+                    }
+                    _ => panic!("Expected ImageUrl content part"),
+                }
+            }
+            _ => panic!("Expected Multimodal content"),
+        }
+    }
+
+    #[test]
+    fn test_message_assistant() {
+        let content = "I am an AI assistant.".to_string();
+        let message = Message::assistant(content.clone());
+        assert_eq!(message.role, "assistant");
+        match message.content_type {
+            MessageContent::Text { content: c } => assert_eq!(c, Some(content)),
+            _ => panic!("Expected Text content"),
+        }
+    }
+
+    #[test]
+    fn test_message_assistant_with_tool_calls() {
+        let tool_calls = vec![ToolCall {
+            id: "call_123".to_string(),
+            call_type: "function".to_string(),
+            function: FunctionCall {
+                name: "get_weather".to_string(),
+                arguments: "{\"location\": \"London\"}".to_string(),
+            },
+        }];
+        let message = Message::assistant_with_tool_calls(tool_calls.clone());
+        assert_eq!(message.role, "assistant");
+        match message.content_type {
+            MessageContent::Text { content } => assert!(content.is_none()),
+            _ => panic!("Expected Text content"),
+        }
+        assert_eq!(message.tool_calls.as_ref().unwrap().len(), 1);
+        assert_eq!(message.tool_calls.unwrap()[0].id, "call_123");
+    }
+
+    #[test]
+    fn test_message_tool_result() {
+        let tool_call_id = "call_123".to_string();
+        let content = "The weather is sunny.".to_string();
+        let message = Message::tool_result(tool_call_id.clone(), content.clone());
+        assert_eq!(message.role, "tool");
+        assert_eq!(message.tool_call_id, Some(tool_call_id));
+        match message.content_type {
+            MessageContent::Text { content: c } => assert_eq!(c, Some(content)),
+            _ => panic!("Expected Text content"),
+        }
+    }
+}
