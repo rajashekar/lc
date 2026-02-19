@@ -3,27 +3,25 @@
 // Import everything from the library crate
 extern crate lc;
 
-#[allow(unused_imports)]
 use lc::{
     // Core modules
     chat,
 
     // CLI module
-    cli,
+    cli::{self, Cli, Commands},
     // Data modules
     config,
     database::{ChatEntry, Database},
-
-    // Services modules
-    mcp_daemon,
 
     // Models modules
     model_metadata,
 };
 
+#[cfg(all(unix, feature = "unix-sockets"))]
+use lc::mcp_daemon;
+
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands};
 
 #[derive(Debug, Clone)]
 struct ChatMessage {
