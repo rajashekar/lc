@@ -6,6 +6,7 @@ pub mod input;
 pub mod template_processor;
 pub mod test;
 pub mod token;
+pub mod regex_utils;
 
 // Re-export with old names for compatibility
 pub use audio as audio_utils;
