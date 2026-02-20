@@ -166,6 +166,7 @@ pub async fn handle_direct(
             temperature_parsed,
             &provider_name,
             mcp_tools.clone(),
+            None,
         )
         .await?;
 
