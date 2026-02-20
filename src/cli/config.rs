@@ -224,7 +224,7 @@ async fn handle_path_command() -> Result<()> {
     println!("{}", config_dir.display());
     println!("\n{}", "Files:".bold().blue());
     println!("  {} config.toml", "•".blue());
-    println!("  {} logs.db (synced to cloud)", "•".blue());
+    println!("  {} logs.db", "•".blue());
     println!("\n{}", "Database Management:".bold().blue());
     println!(
         "  {} Purge old logs: {}",
