@@ -3,7 +3,6 @@ pub mod audio;
 pub mod cli_utils;
 pub mod image;
 pub mod input;
-pub mod regex_utils;
 pub mod template_processor;
 pub mod test;
 pub mod token;

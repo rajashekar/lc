@@ -97,6 +97,7 @@ pub use analytics::usage_stats;
 pub mod error;
 pub mod readers;
 pub mod search;
+pub mod sync;
 
 // Global debug flag
 use std::sync::atomic::AtomicBool;

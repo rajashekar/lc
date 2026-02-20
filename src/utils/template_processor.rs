@@ -66,7 +66,7 @@ impl EndpointTemplates {
 
         // Then check regex patterns
         for (pattern, template) in &self.model_template_patterns {
-            if let Some(re) = crate::utils::regex_utils::get_cached_regex(pattern) {
+            if let Ok(re) = regex::Regex::new(pattern) {
                 if re.is_match(model_name) {
                     return match template_type {
                         "request" => template.request.clone(),
