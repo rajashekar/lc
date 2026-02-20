@@ -471,13 +471,26 @@ impl OpenAIClient {
             .default_headers(default_headers);
 
         // Disable certificate verification for development/debugging (e.g., with Proxyman)
-        if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
+        if Self::should_disable_tls_verify() {
+            crate::debug_log!("TLS verification disabled via LC_DISABLE_TLS_VERIFY");
             builder = builder.danger_accept_invalid_certs(true);
         }
 
         builder
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {}", e))
+    }
+
+    /// Helper to check if TLS verification should be disabled
+    /// Only returns true if the environment variable is set to a truthy value
+    fn should_disable_tls_verify() -> bool {
+        match std::env::var("LC_DISABLE_TLS_VERIFY") {
+            Ok(val) => {
+                let val = val.trim().to_lowercase();
+                val == "1" || val == "true" || val == "yes" || val == "on"
+            }
+            Err(_) => false,
+        }
     }
 
     /// Creates a template processor if any templates are configured
@@ -1705,5 +1718,49 @@ mod tests {
             MessageContent::Text { content: c } => assert_eq!(c, Some(content)),
             _ => panic!("Expected Text content"),
         }
+    }
+
+    #[test]
+    fn test_should_disable_tls_verify() {
+        // Helper to run test with environment variable
+        fn run_with_env(val: Option<&str>, expected: bool) {
+            // Save original value
+            let original = std::env::var("LC_DISABLE_TLS_VERIFY");
+
+            // Set new value
+            match val {
+                Some(v) => std::env::set_var("LC_DISABLE_TLS_VERIFY", v),
+                None => std::env::remove_var("LC_DISABLE_TLS_VERIFY"),
+            }
+
+            // Check result
+            let result = OpenAIClient::should_disable_tls_verify();
+
+            // Restore original value
+            match original {
+                Ok(v) => std::env::set_var("LC_DISABLE_TLS_VERIFY", v),
+                Err(_) => std::env::remove_var("LC_DISABLE_TLS_VERIFY"),
+            }
+
+            assert_eq!(result, expected, "Failed for input: {:?}", val);
+        }
+
+        // Test truthy values
+        run_with_env(Some("1"), true);
+        run_with_env(Some("true"), true);
+        run_with_env(Some("True"), true);
+        run_with_env(Some("yes"), true);
+        run_with_env(Some("on"), true);
+
+        // Test falsy values
+        run_with_env(Some("0"), false);
+        run_with_env(Some("false"), false);
+        run_with_env(Some("no"), false);
+        run_with_env(Some("off"), false);
+        run_with_env(Some(""), false);
+        run_with_env(Some("random"), false);
+
+        // Test unset
+        run_with_env(None, false);
     }
 }
