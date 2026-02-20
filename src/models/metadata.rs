@@ -331,7 +331,12 @@ impl Default for TagConfig {
     }
 }
 
-// Static caches for configuration
+// Static caches for configuration.
+// These are intentionally initialized once per process and never invalidated.
+// As a result, changes to `model_paths.toml` and `tags.toml` made while the
+// process is running will NOT take effect until the process is restarted.
+// If runtime reload of configuration is desired in the future, these
+// OnceLock-based caches should be replaced with a reloadable mechanism.
 static MODEL_PATHS_CACHE: OnceLock<ModelPaths> = OnceLock::new();
 static TAG_CONFIG_CACHE: OnceLock<TagConfig> = OnceLock::new();
 
@@ -351,22 +356,22 @@ impl ModelMetadataExtractor {
             );
         }
 
-        // Try to get from cache, or load and store
-        let model_paths = if let Some(paths) = MODEL_PATHS_CACHE.get() {
-            paths.clone()
-        } else {
-            let paths = Self::load_model_paths()?;
-            let _ = MODEL_PATHS_CACHE.set(paths.clone());
-            paths
-        };
+        // Load model paths exactly once per process using get_or_init to eliminate
+        // redundant disk I/O. A panic here is intentional: ensure_config_files_exist
+        // already creates default files, so a failure at this point is unrecoverable.
+        let model_paths = MODEL_PATHS_CACHE
+            .get_or_init(|| {
+                Self::load_model_paths()
+                    .expect("model_paths.toml could not be loaded after config initialization")
+            })
+            .clone();
 
-        let tag_config = if let Some(config) = TAG_CONFIG_CACHE.get() {
-            config.clone()
-        } else {
-            let config = Self::load_tag_config()?;
-            let _ = TAG_CONFIG_CACHE.set(config.clone());
-            config
-        };
+        let tag_config = TAG_CONFIG_CACHE
+            .get_or_init(|| {
+                Self::load_tag_config()
+                    .expect("tags.toml could not be loaded after config initialization")
+            })
+            .clone();
 
         Ok(Self {
             model_paths,
