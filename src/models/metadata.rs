@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelMetadata {
@@ -330,6 +331,10 @@ impl Default for TagConfig {
     }
 }
 
+// Static caches for configuration
+static MODEL_PATHS_CACHE: OnceLock<ModelPaths> = OnceLock::new();
+static TAG_CONFIG_CACHE: OnceLock<TagConfig> = OnceLock::new();
+
 // Main extractor
 pub struct ModelMetadataExtractor {
     model_paths: ModelPaths,
@@ -346,8 +351,22 @@ impl ModelMetadataExtractor {
             );
         }
 
-        let model_paths = Self::load_model_paths()?;
-        let tag_config = Self::load_tag_config()?;
+        // Try to get from cache, or load and store
+        let model_paths = if let Some(paths) = MODEL_PATHS_CACHE.get() {
+            paths.clone()
+        } else {
+            let paths = Self::load_model_paths()?;
+            let _ = MODEL_PATHS_CACHE.set(paths.clone());
+            paths
+        };
+
+        let tag_config = if let Some(config) = TAG_CONFIG_CACHE.get() {
+            config.clone()
+        } else {
+            let config = Self::load_tag_config()?;
+            let _ = TAG_CONFIG_CACHE.set(config.clone());
+            config
+        };
 
         Ok(Self {
             model_paths,
