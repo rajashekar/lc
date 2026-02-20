@@ -312,6 +312,12 @@ pub enum Commands {
         #[command(subcommand)]
         command: WebChatProxyCommands,
     },
+    /// Sync configuration files to/from cloud providers (alias: sy)
+    #[command(alias = "sy")]
+    Sync {
+        #[command(subcommand)]
+        command: SyncCommands,
+    },
     /// Search provider management (alias: se)
     #[command(alias = "se")]
     Search {
@@ -1026,6 +1032,56 @@ pub enum WebChatProxyCommands {
         #[arg(long = "cors")]
         cors: bool,
     },
+}
+
+#[derive(Subcommand)]
+pub enum SyncCommands {
+    /// List supported cloud providers (alias: p)
+    #[command(alias = "p")]
+    Providers,
+    /// Configure cloud provider settings (alias: c)
+    #[command(alias = "c")]
+    Configure {
+        /// Cloud provider name (e.g., s3, cloudflare, backblaze)
+        provider: String,
+        #[command(subcommand)]
+        command: Option<ConfigureCommands>,
+    },
+    /// Sync configuration to cloud provider
+    To {
+        /// Cloud provider name (e.g., s3, cloudflare, backblaze)
+        provider: String,
+        /// Encrypt files before uploading
+        #[arg(short = 'e', long = "encrypted")]
+        encrypted: bool,
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long = "yes")]
+        yes: bool,
+    },
+    /// Sync configuration from cloud provider
+    From {
+        /// Cloud provider name (e.g., s3, cloudflare, backblaze)
+        provider: String,
+        /// Decrypt files after downloading
+        #[arg(short = 'e', long = "encrypted")]
+        encrypted: bool,
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long = "yes")]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ConfigureCommands {
+    /// Initial sync setup (alias: s)
+    #[command(alias = "s")]
+    Setup,
+    /// Show current sync configuration (alias: sh)
+    #[command(alias = "sh")]
+    Show,
+    /// Remove sync configuration (alias: r)
+    #[command(alias = "r")]
+    Remove,
 }
 
 #[derive(Subcommand)]

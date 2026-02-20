@@ -3,25 +3,27 @@
 // Import everything from the library crate
 extern crate lc;
 
+#[allow(unused_imports)]
 use lc::{
     // Core modules
     chat,
 
     // CLI module
-    cli::{self, Cli, Commands},
+    cli,
     // Data modules
     config,
     database::{ChatEntry, Database},
+
+    // Services modules
+    mcp_daemon,
 
     // Models modules
     model_metadata,
 };
 
-#[cfg(all(unix, feature = "unix-sockets"))]
-use lc::mcp_daemon;
-
 use anyhow::Result;
 use clap::Parser;
+use cli::{Cli, Commands};
 
 #[derive(Debug, Clone)]
 struct ChatMessage {
@@ -355,6 +357,9 @@ async fn main() -> Result<()> {
         }
         (true, Some(Commands::WebChatProxy { command })) => {
             cli::webchatproxy::handle(command).await?;
+        }
+        (true, Some(Commands::Sync { command })) => {
+            cli::sync::handle(command).await?;
         }
         (true, Some(Commands::Search { command })) => {
             cli::search::handle(command).await?;
