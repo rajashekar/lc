@@ -3,6 +3,12 @@
 use anyhow::Result;
 use colored::Colorize;
 use std::io::{self, Write};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use std::thread;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::config::Config;
@@ -10,6 +16,51 @@ use crate::core::chat;
 use crate::database::Database;
 use crate::provider::{ContentPart, ImageUrl, Message, MessageContent};
 use crate::utils::{cli_utils::resolve_model_and_provider, input::MultiLineInput};
+
+struct Spinner {
+    running: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl Spinner {
+    fn new(message: &str) -> Self {
+        let running = Arc::new(AtomicBool::new(true));
+        let running_clone = running.clone();
+        let message = message.to_string();
+
+        let handle = thread::spawn(move || {
+            let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let mut i = 0;
+            while running_clone.load(Ordering::SeqCst) {
+                print!("\r{} {}", frames[i % frames.len()].blue(), message);
+                io::stdout().flush().unwrap();
+                thread::sleep(Duration::from_millis(80));
+                i += 1;
+            }
+            // Clear the line when stopped
+            print!("\r\x1b[2K");
+            io::stdout().flush().unwrap();
+        });
+
+        Self {
+            running,
+            handle: Some(handle),
+        }
+    }
+
+    fn stop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            self.running.store(false, Ordering::SeqCst);
+            handle.join().unwrap();
+        }
+    }
+}
+
+impl Drop for Spinner {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 /// Handle chat command - interactive chat mode
@@ -234,10 +285,8 @@ pub async fn handle(
             Vec::new()
         };
 
-        // Add newline before "Thinking..." to ensure proper positioning after multi-line input
+        // Add newline
         println!();
-        print!("{}", "Thinking...".dimmed());
-        io::stdout().flush()?;
 
         let resolved_system_prompt = config
             .system_prompt
@@ -260,10 +309,26 @@ pub async fn handle(
             }
         }
 
+        // Start spinner for thinking indicator
+        let spinner = Arc::new(Mutex::new(Spinner::new("Thinking...")));
+        let spinner_clone = spinner.clone();
+
+        // Callback to stop spinner and print prefix when connection is established
+        let on_connect = Box::new(move || {
+            if let Ok(mut guard) = spinner_clone.lock() {
+                guard.stop();
+                print!("{} ", "Assistant:".bold().blue());
+                io::stdout().flush().unwrap();
+            }
+        });
+
         // Handle tool execution, streaming, or regular chat
         if mcp_tools.is_some() && !mcp_server_names.is_empty() {
             // Tool execution (not yet fully implemented)
-            print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..."
+            // Stop spinner before printing
+            if let Ok(mut guard) = spinner.lock() {
+                guard.stop();
+            }
             println!(
                 "{} Tool execution is not yet fully implemented",
                 "⚠️".yellow()
@@ -271,8 +336,7 @@ pub async fn handle(
             continue;
         } else if use_streaming {
             // Use streaming chat
-            print!("\r{}\r{} ", " ".repeat(12), "Assistant:".bold().blue());
-            io::stdout().flush()?;
+            // Note: Spinner is stopped by on_connect callback
 
             let result = if !messages.is_empty() {
                 chat::send_chat_request_with_streaming_messages(
@@ -284,6 +348,7 @@ pub async fn handle(
                     config.temperature,
                     &provider_name,
                     None,
+                    Some(on_connect),
                 )
                 .await
             } else {
@@ -297,6 +362,7 @@ pub async fn handle(
                     config.temperature,
                     &provider_name,
                     None,
+                    Some(on_connect),
                 )
                 .await
             };
@@ -324,6 +390,10 @@ pub async fn handle(
                     }
                 }
                 Err(e) => {
+                    // Stop spinner if it hasn't been stopped
+                    if let Ok(mut guard) = spinner.lock() {
+                        guard.stop();
+                    }
                     println!("\n{} Error: {}", "✗".red(), e);
                 }
             }
@@ -356,9 +426,13 @@ pub async fn handle(
                 .await
             };
 
+            // Stop spinner before processing result
+            if let Ok(mut guard) = spinner.lock() {
+                guard.stop();
+            }
+
             match result {
                 Ok((response, input_tokens, output_tokens)) => {
-                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..."
                     println!("{} {}", "Assistant:".bold().blue(), response);
 
                     // Save to database with token counts
@@ -379,7 +453,6 @@ pub async fn handle(
                     }
                 }
                 Err(e) => {
-                    print!("\r{}\r", " ".repeat(12)); // Clear "Thinking..."
                     println!("{} Error: {}", "✗".red(), e);
                 }
             }

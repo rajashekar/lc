@@ -1424,7 +1424,11 @@ impl OpenAIClient {
         Ok(response_text.into_bytes())
     }
 
-    pub async fn chat_stream(&self, request: &ChatRequest) -> Result<()> {
+    pub async fn chat_stream(
+        &self,
+        request: &ChatRequest,
+        mut on_connect: Option<Box<dyn FnMut() + Send>>,
+    ) -> Result<()> {
         use std::io::{stdout, Write};
 
         let url = self.get_chat_url(&request.model);
@@ -1437,10 +1441,6 @@ impl OpenAIClient {
             .header("Accept", "text/event-stream") // Explicitly request SSE format
             .header("Cache-Control", "no-cache") // Prevent caching for streaming
             .header("Accept-Encoding", "identity"); // Explicitly request no compression
-
-        // Wrap stdout in BufWriter for efficiency
-        let stdout = stdout();
-        let mut handle = std::io::BufWriter::new(stdout.lock());
 
         // Add standard headers using helper method
         req = self.add_standard_headers(req);
@@ -1496,11 +1496,21 @@ impl OpenAIClient {
             anyhow::bail!("API request failed with status {}: {}", status, text);
         }
 
+        // Signal that connection is established and we're about to start streaming
+        if let Some(cb) = on_connect.as_mut() {
+            cb();
+        }
+
         // Check for compression headers (silent check for potential issues)
         let headers = response.headers();
         if headers.get("content-encoding").is_some() {
             // Content encoding detected - may cause buffering delays but continue silently
         }
+
+        // Wrap stdout in BufWriter for efficiency
+        // We do this after the request to avoid blocking stdout during the API call
+        let stdout = stdout();
+        let mut handle = std::io::BufWriter::new(stdout.lock());
 
         let mut stream = response.bytes_stream();
 
