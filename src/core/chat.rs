@@ -223,6 +223,7 @@ pub async fn send_chat_request_with_streaming(
     temperature: Option<f32>,
     provider_name: &str,
     tools: Option<Vec<crate::provider::Tool>>,
+    on_connect: Option<Box<dyn FnMut() + Send>>,
 ) -> Result<()> {
     crate::debug_log!("Sending streaming chat request - provider: '{}', model: '{}', prompt length: {}, history entries: {}",
                       provider_name, model, prompt.len(), history.len());
@@ -358,7 +359,7 @@ pub async fn send_chat_request_with_streaming(
 
     // Send the streaming request
     crate::debug_log!("Making streaming API call to chat endpoint...");
-    client.chat_stream(&request).await?;
+    client.chat_stream(&request, on_connect).await?;
 
     Ok(())
 }
@@ -1261,6 +1262,7 @@ pub async fn send_chat_request_with_streaming_messages(
     temperature: Option<f32>,
     provider_name: &str,
     tools: Option<Vec<crate::provider::Tool>>,
+    on_connect: Option<Box<dyn FnMut() + Send>>,
 ) -> Result<()> {
     crate::debug_log!(
         "Sending streaming chat request with messages - provider: '{}', model: '{}', messages: {}",
@@ -1299,7 +1301,7 @@ pub async fn send_chat_request_with_streaming_messages(
         stream: Some(true),
     };
 
-    client.chat_stream(&request).await?;
+    client.chat_stream(&request, on_connect).await?;
 
     Ok(())
 }

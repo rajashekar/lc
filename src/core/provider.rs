@@ -471,13 +471,26 @@ impl OpenAIClient {
             .default_headers(default_headers);
 
         // Disable certificate verification for development/debugging (e.g., with Proxyman)
-        if std::env::var("LC_DISABLE_TLS_VERIFY").is_ok() {
+        if Self::should_disable_tls_verify() {
+            crate::debug_log!("TLS verification disabled via LC_DISABLE_TLS_VERIFY");
             builder = builder.danger_accept_invalid_certs(true);
         }
 
         builder
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {}", e))
+    }
+
+    /// Helper to check if TLS verification should be disabled
+    /// Only returns true if the environment variable is set to a truthy value
+    fn should_disable_tls_verify() -> bool {
+        match std::env::var("LC_DISABLE_TLS_VERIFY") {
+            Ok(val) => {
+                let val = val.trim().to_lowercase();
+                val == "1" || val == "true" || val == "yes" || val == "on"
+            }
+            Err(_) => false,
+        }
     }
 
     /// Creates a template processor if any templates are configured
@@ -1424,7 +1437,11 @@ impl OpenAIClient {
         Ok(response_text.into_bytes())
     }
 
-    pub async fn chat_stream(&self, request: &ChatRequest) -> Result<()> {
+    pub async fn chat_stream(
+        &self,
+        request: &ChatRequest,
+        mut on_connect: Option<Box<dyn FnMut() + Send>>,
+    ) -> Result<()> {
         use std::io::{stdout, Write};
 
         let url = self.get_chat_url(&request.model);
@@ -1437,10 +1454,6 @@ impl OpenAIClient {
             .header("Accept", "text/event-stream") // Explicitly request SSE format
             .header("Cache-Control", "no-cache") // Prevent caching for streaming
             .header("Accept-Encoding", "identity"); // Explicitly request no compression
-
-        // Wrap stdout in BufWriter for efficiency
-        let stdout = stdout();
-        let mut handle = std::io::BufWriter::new(stdout.lock());
 
         // Add standard headers using helper method
         req = self.add_standard_headers(req);
@@ -1496,11 +1509,21 @@ impl OpenAIClient {
             anyhow::bail!("API request failed with status {}: {}", status, text);
         }
 
+        // Signal that connection is established and we're about to start streaming
+        if let Some(cb) = on_connect.as_mut() {
+            cb();
+        }
+
         // Check for compression headers (silent check for potential issues)
         let headers = response.headers();
         if headers.get("content-encoding").is_some() {
             // Content encoding detected - may cause buffering delays but continue silently
         }
+
+        // Wrap stdout in BufWriter for efficiency
+        // We do this after the request to avoid blocking stdout during the API call
+        let stdout = stdout();
+        let mut handle = std::io::BufWriter::new(stdout.lock());
 
         let mut stream = response.bytes_stream();
 
@@ -1617,5 +1640,137 @@ impl OpenAIClient {
         handle.write_all(b"\n")?;
         handle.flush()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_user() {
+        let content = "Hello, world!".to_string();
+        let message = Message::user(content.clone());
+        assert_eq!(message.role, "user");
+        match message.content_type {
+            MessageContent::Text { content: c } => assert_eq!(c, Some(content)),
+            _ => panic!("Expected Text content"),
+        }
+        assert!(message.tool_calls.is_none());
+        assert!(message.tool_call_id.is_none());
+    }
+
+    #[test]
+    fn test_message_user_with_image() {
+        let text = "What is this image?".to_string();
+        let image_data = "data:image/png;base64,...".to_string();
+        let detail = Some("high".to_string());
+        let message = Message::user_with_image(text.clone(), image_data.clone(), detail.clone());
+        assert_eq!(message.role, "user");
+        match message.content_type {
+            MessageContent::Multimodal { content } => {
+                assert_eq!(content.len(), 2);
+                match &content[0] {
+                    ContentPart::Text { text: t } => assert_eq!(t, &text),
+                    _ => panic!("Expected Text content part"),
+                }
+                match &content[1] {
+                    ContentPart::ImageUrl { image_url } => {
+                        assert_eq!(image_url.url, image_data);
+                        assert_eq!(image_url.detail, detail);
+                    }
+                    _ => panic!("Expected ImageUrl content part"),
+                }
+            }
+            _ => panic!("Expected Multimodal content"),
+        }
+    }
+
+    #[test]
+    fn test_message_assistant() {
+        let content = "I am an AI assistant.".to_string();
+        let message = Message::assistant(content.clone());
+        assert_eq!(message.role, "assistant");
+        match message.content_type {
+            MessageContent::Text { content: c } => assert_eq!(c, Some(content)),
+            _ => panic!("Expected Text content"),
+        }
+    }
+
+    #[test]
+    fn test_message_assistant_with_tool_calls() {
+        let tool_calls = vec![ToolCall {
+            id: "call_123".to_string(),
+            call_type: "function".to_string(),
+            function: FunctionCall {
+                name: "get_weather".to_string(),
+                arguments: "{\"location\": \"London\"}".to_string(),
+            },
+        }];
+        let message = Message::assistant_with_tool_calls(tool_calls.clone());
+        assert_eq!(message.role, "assistant");
+        match message.content_type {
+            MessageContent::Text { content } => assert!(content.is_none()),
+            _ => panic!("Expected Text content"),
+        }
+        assert_eq!(message.tool_calls.as_ref().unwrap().len(), 1);
+        assert_eq!(message.tool_calls.unwrap()[0].id, "call_123");
+    }
+
+    #[test]
+    fn test_message_tool_result() {
+        let tool_call_id = "call_123".to_string();
+        let content = "The weather is sunny.".to_string();
+        let message = Message::tool_result(tool_call_id.clone(), content.clone());
+        assert_eq!(message.role, "tool");
+        assert_eq!(message.tool_call_id, Some(tool_call_id));
+        match message.content_type {
+            MessageContent::Text { content: c } => assert_eq!(c, Some(content)),
+            _ => panic!("Expected Text content"),
+        }
+    }
+
+    #[test]
+    fn test_should_disable_tls_verify() {
+        // Helper to run test with environment variable
+        fn run_with_env(val: Option<&str>, expected: bool) {
+            // Save original value
+            let original = std::env::var("LC_DISABLE_TLS_VERIFY");
+
+            // Set new value
+            match val {
+                Some(v) => std::env::set_var("LC_DISABLE_TLS_VERIFY", v),
+                None => std::env::remove_var("LC_DISABLE_TLS_VERIFY"),
+            }
+
+            // Check result
+            let result = OpenAIClient::should_disable_tls_verify();
+
+            // Restore original value
+            match original {
+                Ok(v) => std::env::set_var("LC_DISABLE_TLS_VERIFY", v),
+                Err(_) => std::env::remove_var("LC_DISABLE_TLS_VERIFY"),
+            }
+
+            assert_eq!(result, expected, "Failed for input: {:?}", val);
+        }
+
+        // Test truthy values
+        run_with_env(Some("1"), true);
+        run_with_env(Some("true"), true);
+        run_with_env(Some("True"), true);
+        run_with_env(Some("yes"), true);
+        run_with_env(Some("on"), true);
+
+        // Test falsy values
+        run_with_env(Some("0"), false);
+        run_with_env(Some("false"), false);
+        run_with_env(Some("no"), false);
+        run_with_env(Some("off"), false);
+        run_with_env(Some(""), false);
+        run_with_env(Some("random"), false);
+
+        // Test unset
+        run_with_env(None, false);
     }
 }
