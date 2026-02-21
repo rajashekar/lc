@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use lc::data::keys::KeysConfig;
 use serial_test::serial;
 use std::env;
@@ -5,7 +7,6 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-#[cfg(unix)]
 #[serial]
 fn test_keys_file_permissions() {
     use std::os::unix::fs::PermissionsExt;
@@ -36,7 +37,6 @@ fn test_keys_file_permissions() {
 }
 
 #[test]
-#[cfg(unix)]
 #[serial]
 fn test_existing_file_permissions_corrected() {
     use std::os::unix::fs::PermissionsExt;
