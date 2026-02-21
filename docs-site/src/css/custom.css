@@ -39,6 +39,31 @@
 /* Code blocks */
 pre {
   border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+[data-theme='dark'] pre {
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Accessibility: Improved focus indicators */
+:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* UX: Brand-matched selection */
+::selection {
+  background: var(--ifm-color-primary-lightest);
+  color: #000;
+}
+
+/* UX: Smooth scrolling (respect user motion preference) */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 /* Tables */

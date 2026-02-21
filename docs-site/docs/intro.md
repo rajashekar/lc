@@ -5,10 +5,10 @@ sidebar_position: 1
 slug: /
 ---
 
-<p align="center">
+<div align="center">
 <h1>LLM Client (lc)</h1>
 <img src="img/social-card.png" alt="LLM Client" width="450" />
-</p>
+</div>
 
 A fast, Rust-based command-line tool for interacting with Large Language Models through OpenAI-compatible APIs. Built for speed, efficiency, and ease of use.
 
