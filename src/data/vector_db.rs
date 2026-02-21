@@ -382,7 +382,8 @@ impl VectorDatabase {
         let mut similarities: Vec<(VectorEntry, f64)> = vectors
             .into_par_iter()
             .map(|vector_entry| {
-                let similarity = cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
+                let similarity =
+                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
                 (vector_entry, similarity)
             })
             .collect();
@@ -878,5 +879,4 @@ mod tests {
         assert!(!FileProcessor::is_text_file(Path::new("test.exe")));
         assert!(!FileProcessor::is_text_file(Path::new("test.jpg")));
     }
-
 }
