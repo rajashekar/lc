@@ -374,11 +374,16 @@ impl VectorDatabase {
                 .collect::<Vec<_>>()
         };
 
+        // Precompute query norm to avoid re-calculating it for every vector
+        let query_norm_sq: f64 = query_vector.iter().map(|x| x * x).sum();
+        let query_norm = query_norm_sq.sqrt();
+
         // Use parallel processing for similarity calculations
         let mut similarities: Vec<(VectorEntry, f64)> = vectors
             .into_par_iter()
             .map(|vector_entry| {
-                let similarity = cosine_similarity_simd(query_vector, &vector_entry.vector);
+                let similarity =
+                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
                 (vector_entry, similarity)
             })
             .collect();
@@ -508,6 +513,51 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     }
 
     let norm_a = norm_a_sq.sqrt();
+    let norm_b = norm_b_sq.sqrt();
+
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+
+    dot_product / (norm_a * norm_b)
+}
+
+pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
+    if a.len() != b.len() {
+        return 0.0;
+    }
+
+    if a.is_empty() {
+        return 0.0;
+    }
+
+    let mut dot_product = 0.0f64;
+    let mut norm_b_sq = 0.0f64;
+
+    // Process in chunks of 4 for better performance
+    let chunk_size = 4;
+    let chunks = a.len() / chunk_size;
+
+    for i in 0..chunks {
+        let start = i * chunk_size;
+        let end = start + chunk_size;
+
+        for j in start..end {
+            let av = a[j];
+            let bv = b[j];
+            dot_product += av * bv;
+            norm_b_sq += bv * bv;
+        }
+    }
+
+    // Process remaining elements
+    for i in (chunks * chunk_size)..a.len() {
+        let av = a[i];
+        let bv = b[i];
+        dot_product += av * bv;
+        norm_b_sq += bv * bv;
+    }
+
     let norm_b = norm_b_sq.sqrt();
 
     if norm_a == 0.0 || norm_b == 0.0 {
