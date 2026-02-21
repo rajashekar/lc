@@ -1,10 +1,12 @@
 use lc::data::keys::KeysConfig;
+use serial_test::serial;
 use std::env;
 use std::fs;
 use tempfile::TempDir;
 
 #[test]
 #[cfg(unix)]
+#[serial]
 fn test_keys_file_permissions() {
     use std::os::unix::fs::PermissionsExt;
 
@@ -35,6 +37,7 @@ fn test_keys_file_permissions() {
 
 #[test]
 #[cfg(unix)]
+#[serial]
 fn test_existing_file_permissions_corrected() {
     use std::os::unix::fs::PermissionsExt;
 
@@ -56,17 +59,28 @@ fn test_existing_file_permissions_corrected() {
 
     // Verify it's initially insecure
     let initial_mode = fs::metadata(&keys_path).unwrap().permissions().mode();
-    assert_eq!(initial_mode & 0o777, 0o644, "Initial permissions should be 0o644");
+    assert_eq!(
+        initial_mode & 0o777,
+        0o644,
+        "Initial permissions should be 0o644"
+    );
 
     // Save KeysConfig, which should fix the permissions
     let mut keys = KeysConfig::default();
-    keys.set_api_key("test-provider-correction".to_string(), "test-key".to_string())
-        .unwrap();
+    keys.set_api_key(
+        "test-provider-correction".to_string(),
+        "test-key".to_string(),
+    )
+    .unwrap();
 
     // Verify permissions are corrected to 0o600
     let metadata = fs::metadata(&keys_path).unwrap();
     let permissions = metadata.permissions();
     let mode = permissions.mode();
 
-    assert_eq!(mode & 0o777, 0o600, "File permissions should be corrected to 0o600");
+    assert_eq!(
+        mode & 0o777,
+        0o600,
+        "File permissions should be corrected to 0o600"
+    );
 }
