@@ -6,7 +6,10 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 
 /// Structure for storing API keys and secrets
@@ -69,17 +72,30 @@ impl KeysConfig {
         }
 
         let content = toml::to_string_pretty(self)?;
-        fs::write(&keys_path, content)?;
 
-        // Set restrictive permissions on keys file (Unix-like systems)
+        // Use OpenOptions to set permissions atomically on creation (Unix)
+        // This avoids race conditions where the file exists with default permissions
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            // Set mode 0o600 (read/write for owner only) before opening
+            options.mode(0o600);
+        }
+
+        let mut file = options.open(&keys_path)?;
+
+        // Ensure permissions are restricted even if file already existed
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let metadata = fs::metadata(&keys_path)?;
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(0o600); // Read/write for owner only
-            fs::set_permissions(&keys_path, permissions)?;
+            let mut permissions = file.metadata()?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions)?;
         }
+
+        file.write_all(content.as_bytes())?;
 
         Ok(())
     }
