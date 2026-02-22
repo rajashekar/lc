@@ -13,6 +13,8 @@ fn test_basic_request_template() {
   "max_tokens": {{ max_tokens | default(value=1024) }}
 }"#;
 
+    processor.register_template(template).unwrap();
+
     let request = ChatRequest {
         model: "gpt-4".to_string(),
         messages: vec![Message::user("Hello, world!".to_string())],
@@ -43,6 +45,8 @@ fn test_gpt5_template_override() {
   {% if max_tokens %}"max_completion_tokens": {{ max_tokens }}{% endif %}
 }"#;
 
+    processor.register_template(template).unwrap();
+
     let request = ChatRequest {
         model: "gpt-5-nano".to_string(),
         messages: vec![Message::user("Test message".to_string())],
@@ -72,6 +76,8 @@ fn test_response_template() {
   "tool_calls": {{ choices[0].message.tool_calls | default(value=[]) | json }}
 }"#;
 
+    processor.register_template(template).unwrap();
+
     let response = json!({
         "choices": [{
             "message": {
@@ -95,6 +101,8 @@ fn test_gemini_role_filter() {
   "role": "{{ role | gemini_role }}"
 }"#;
 
+    processor.register_template(template).unwrap();
+
     let _request = ChatRequest {
         model: "gemini-pro".to_string(),
         messages: vec![Message::assistant("I am an assistant".to_string())],
@@ -112,7 +120,7 @@ fn test_gemini_role_filter() {
 
     // Use the test-only render_template method
     let result = processor
-        .render_template("test", template, &context)
+        .render_template(template, &context)
         .unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
 
@@ -129,6 +137,8 @@ fn test_template_with_vars() {
   "location": "{{ location }}",
   "model": "{{ model }}"
 }"#;
+
+    processor.register_template(template).unwrap();
 
     let request = ChatRequest {
         model: "text-bison".to_string(),
@@ -162,6 +172,8 @@ fn test_conditional_fields() {
   {% if tools %}"tools": {{ tools | json }},{% endif %}
   "messages": {{ messages | json }}
 }"#;
+
+    processor.register_template(template).unwrap();
 
     let request = ChatRequest {
         model: "gpt-4".to_string(),

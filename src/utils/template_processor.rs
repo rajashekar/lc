@@ -10,6 +10,7 @@ use crate::provider::{ChatRequest, ContentPart, Message, MessageContent};
 #[derive(Clone)]
 pub struct TemplateProcessor {
     tera: Tera,
+    template_map: HashMap<String, String>, // content -> name
 }
 
 /// Endpoint-specific templates with model pattern support
@@ -109,32 +110,51 @@ impl TemplateProcessor {
         tera.register_filter("anthropic_messages", AnthropicMessagesFilter);
         tera.register_filter("gemini_messages", GeminiMessagesFilter);
 
-        Ok(Self { tera })
+        Ok(Self {
+            tera,
+            template_map: HashMap::new(),
+        })
+    }
+
+    /// Register a template and return its internal name
+    pub fn register_template(&mut self, content: &str) -> Result<String> {
+        if let Some(name) = self.template_map.get(content) {
+            return Ok(name.clone());
+        }
+
+        let name = format!("tpl_{}", self.template_map.len());
+        self.tera.add_raw_template(&name, content)?;
+        self.template_map.insert(content.to_string(), name.clone());
+        Ok(name)
     }
 
     /// Render a template directly
     #[allow(dead_code)]
     pub fn render_template(
-        &mut self,
-        name: &str,
+        &self,
         template: &str,
         context: &TeraContext,
     ) -> Result<String> {
-        self.tera.add_raw_template(name, template)?;
-        Ok(self.tera.render(name, context)?)
+        if let Some(name) = self.template_map.get(template) {
+            Ok(self.tera.render(name, context)?)
+        } else {
+            // Fallback for unregistered templates (should be avoided in critical path)
+            let mut tera = self.tera.clone();
+            tera.add_raw_template("temp", template)?;
+            Ok(tera.render("temp", context)?)
+        }
     }
 
     /// Process a chat request using the provided template
     pub fn process_request(
-        &mut self,
+        &self,
         request: &ChatRequest,
         template: &str,
         provider_vars: &HashMap<String, String>,
     ) -> Result<JsonValue> {
-        // Add template to Tera
-        self.tera
-            .add_raw_template("request", template)
-            .context("Failed to parse request template")?;
+        let template_name = self.template_map.get(template).ok_or_else(|| {
+            anyhow::anyhow!("Template not registered. Ensure all templates are registered during initialization.")
+        })?;
 
         // Build context from ChatRequest
         let mut context = TeraContext::new();
@@ -165,7 +185,7 @@ impl TemplateProcessor {
         // Render template
         let rendered = self
             .tera
-            .render("request", &context)
+            .render(template_name, &context)
             .context("Failed to render request template")?;
 
         // Parse as JSON to validate
@@ -177,15 +197,14 @@ impl TemplateProcessor {
 
     /// Process an image generation request using the provided template
     pub fn process_image_request(
-        &mut self,
+        &self,
         request: &crate::provider::ImageGenerationRequest,
         template: &str,
         provider_vars: &HashMap<String, String>,
     ) -> Result<JsonValue> {
-        // Add template to Tera
-        self.tera
-            .add_raw_template("image_request", template)
-            .context("Failed to parse image request template")?;
+        let template_name = self.template_map.get(template).ok_or_else(|| {
+            anyhow::anyhow!("Template not registered. Ensure all templates are registered during initialization.")
+        })?;
 
         // Build context from ImageGenerationRequest
         let mut context = TeraContext::new();
@@ -207,7 +226,7 @@ impl TemplateProcessor {
         // Render template
         let rendered = self
             .tera
-            .render("image_request", &context)
+            .render(template_name, &context)
             .context("Failed to render image request template")?;
 
         // Parse as JSON to validate
@@ -220,15 +239,14 @@ impl TemplateProcessor {
     /// Process an audio transcription request using the provided template
     #[allow(dead_code)]
     pub fn process_audio_request(
-        &mut self,
+        &self,
         request: &crate::provider::AudioTranscriptionRequest,
         template: &str,
         provider_vars: &HashMap<String, String>,
     ) -> Result<JsonValue> {
-        // Add template to Tera
-        self.tera
-            .add_raw_template("audio_request", template)
-            .context("Failed to parse audio request template")?;
+        let template_name = self.template_map.get(template).ok_or_else(|| {
+            anyhow::anyhow!("Template not registered. Ensure all templates are registered during initialization.")
+        })?;
 
         // Build context from AudioTranscriptionRequest
         let mut context = TeraContext::new();
@@ -249,7 +267,7 @@ impl TemplateProcessor {
         // Render template
         let rendered = self
             .tera
-            .render("audio_request", &context)
+            .render(template_name, &context)
             .context("Failed to render audio request template")?;
 
         // Parse as JSON to validate
@@ -261,15 +279,14 @@ impl TemplateProcessor {
 
     /// Process a speech generation request using the provided template
     pub fn process_speech_request(
-        &mut self,
+        &self,
         request: &crate::provider::AudioSpeechRequest,
         template: &str,
         provider_vars: &HashMap<String, String>,
     ) -> Result<JsonValue> {
-        // Add template to Tera
-        self.tera
-            .add_raw_template("speech_request", template)
-            .context("Failed to parse speech request template")?;
+        let template_name = self.template_map.get(template).ok_or_else(|| {
+            anyhow::anyhow!("Template not registered. Ensure all templates are registered during initialization.")
+        })?;
 
         // Build context from AudioSpeechRequest
         let mut context = TeraContext::new();
@@ -289,7 +306,7 @@ impl TemplateProcessor {
         // Render template
         let rendered = self
             .tera
-            .render("speech_request", &context)
+            .render(template_name, &context)
             .context("Failed to render speech request template")?;
 
         // Parse as JSON to validate
@@ -301,15 +318,14 @@ impl TemplateProcessor {
 
     /// Process an embeddings request using the provided template
     pub fn process_embeddings_request(
-        &mut self,
+        &self,
         request: &crate::provider::EmbeddingRequest,
         template: &str,
         provider_vars: &HashMap<String, String>,
     ) -> Result<JsonValue> {
-        // Add template to Tera
-        self.tera
-            .add_raw_template("embeddings_request", template)
-            .context("Failed to parse embeddings request template")?;
+        let template_name = self.template_map.get(template).ok_or_else(|| {
+            anyhow::anyhow!("Template not registered. Ensure all templates are registered during initialization.")
+        })?;
 
         // Build context from EmbeddingRequest
         let mut context = TeraContext::new();
@@ -327,7 +343,7 @@ impl TemplateProcessor {
         // Render template
         let rendered = self
             .tera
-            .render("embeddings_request", &context)
+            .render(template_name, &context)
             .context("Failed to render embeddings request template")?;
 
         // Parse as JSON to validate
@@ -338,11 +354,10 @@ impl TemplateProcessor {
     }
 
     /// Process a response using the provided template
-    pub fn process_response(&mut self, response: &JsonValue, template: &str) -> Result<JsonValue> {
-        // Add template to Tera
-        self.tera
-            .add_raw_template("response", template)
-            .context("Failed to parse response template")?;
+    pub fn process_response(&self, response: &JsonValue, template: &str) -> Result<JsonValue> {
+        let template_name = self.template_map.get(template).ok_or_else(|| {
+            anyhow::anyhow!("Template not registered. Ensure all templates are registered during initialization.")
+        })?;
 
         // Build context from response
         let context = TeraContext::from_serialize(response)
@@ -351,7 +366,7 @@ impl TemplateProcessor {
         // Render template
         let rendered = self
             .tera
-            .render("response", &context)
+            .render(template_name, &context)
             .context("Failed to render response template")?;
 
         // Parse as JSON
@@ -910,5 +925,25 @@ mod tests {
         let value = Value::String("existing".to_string());
         let result = filter.filter(&value, &args).unwrap();
         assert_eq!(result, Value::String("existing".to_string()));
+    }
+
+    #[test]
+    fn test_template_registration() {
+        let mut processor = TemplateProcessor::new().unwrap();
+        let template = r#"{"test": "{{ value }}"}"#;
+
+        // Register template
+        let name = processor.register_template(template).unwrap();
+
+        // Should get same name for same content
+        let name2 = processor.register_template(template).unwrap();
+        assert_eq!(name, name2);
+
+        // Render
+        let mut context = TeraContext::new();
+        context.insert("value", "hello");
+
+        let result = processor.render_template(template, &context).unwrap();
+        assert_eq!(result, r#"{"test": "hello"}"#);
     }
 }
