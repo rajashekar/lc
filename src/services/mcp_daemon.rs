@@ -156,6 +156,18 @@ impl McpDaemon {
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
+
+        // Set socket permissions to 0o600 (owner read/write only) to prevent unauthorized access
+        #[cfg(unix)]
+        {
+            use std::fs;
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = fs::Permissions::from_mode(0o600);
+            if let Err(e) = fs::set_permissions(&self.socket_path, permissions) {
+                crate::debug_log!("Warning: Failed to set socket permissions: {}", e);
+            }
+        }
+
         crate::debug_log!("MCP Daemon started, listening on {:?}", self.socket_path);
 
         loop {
