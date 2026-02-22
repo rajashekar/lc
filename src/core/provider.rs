@@ -515,7 +515,39 @@ impl OpenAIClient {
 
         if has_templates {
             match TemplateProcessor::new() {
-                Ok(processor) => Some(processor),
+                Ok(mut processor) => {
+                    // Helper to register templates from a map
+                    let mut register_templates = |templates: &Option<
+                        std::collections::HashMap<
+                            String,
+                            crate::template_processor::TemplateConfig,
+                        >,
+                    >| {
+                        if let Some(map) = templates {
+                            for template_config in map.values() {
+                                if let Some(req) = &template_config.request {
+                                    let _ = processor.register_template(req);
+                                }
+                                if let Some(resp) = &template_config.response {
+                                    let _ = processor.register_template(resp);
+                                }
+                                if let Some(stream_resp) = &template_config.stream_response {
+                                    let _ = processor.register_template(stream_resp);
+                                }
+                            }
+                        }
+                    };
+
+                    // Register all templates from config to avoid parsing/hashing at runtime
+                    register_templates(&config.chat_templates);
+                    register_templates(&config.images_templates);
+                    register_templates(&config.embeddings_templates);
+                    register_templates(&config.models_templates);
+                    register_templates(&config.audio_templates);
+                    register_templates(&config.speech_templates);
+
+                    Some(processor)
+                }
                 Err(e) => {
                     eprintln!("Warning: Failed to create template processor: {}", e);
                     None
@@ -641,10 +673,8 @@ impl OpenAIClient {
                 let template = config.get_endpoint_template("chat", &request.model);
 
                 if let Some(template_str) = template {
-                    // Clone the processor to avoid mutable borrow issues
-                    let mut processor_clone = processor.clone();
                     // Use template to transform request
-                    match processor_clone.process_request(request, &template_str, &config.vars) {
+                    match processor.process_request(request, &template_str, &config.vars) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process request template: {}. Falling back to default.", e);
@@ -702,10 +732,8 @@ impl OpenAIClient {
                     if let Ok(response_json) =
                         serde_json::from_str::<serde_json::Value>(&response_text)
                     {
-                        // Clone the processor to avoid mutable borrow issues
-                        let mut processor_clone = processor.clone();
                         // Use template to extract content
-                        match processor_clone.process_response(&response_json, &template_str) {
+                        match processor.process_response(&response_json, &template_str) {
                             Ok(extracted) => {
                                 // Extract content from the template result
                                 if let Some(content) =
@@ -993,14 +1021,9 @@ impl OpenAIClient {
                 let template = config.get_endpoint_template("embeddings", &request.model);
 
                 if let Some(template_str) = template {
-                    // Clone the processor to avoid mutable borrow issues
-                    let mut processor_clone = processor.clone();
                     // Use template to transform request
-                    match processor_clone.process_embeddings_request(
-                        request,
-                        &template_str,
-                        &config.vars,
-                    ) {
+                    match processor.process_embeddings_request(request, &template_str, &config.vars)
+                    {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process embeddings request template: {}. Falling back to default.", e);
@@ -1048,10 +1071,8 @@ impl OpenAIClient {
                     if let Ok(response_json) =
                         serde_json::from_str::<serde_json::Value>(&response_text)
                     {
-                        // Clone the processor to avoid mutable borrow issues
-                        let mut processor_clone = processor.clone();
                         // Use template to transform response
-                        match processor_clone.process_response(&response_json, &template_str) {
+                        match processor.process_response(&response_json, &template_str) {
                             Ok(transformed) => {
                                 // Try to parse the transformed response as EmbeddingResponse
                                 if let Ok(embedding_response) =
@@ -1098,14 +1119,8 @@ impl OpenAIClient {
                 let template = config.get_endpoint_template("images", model_name);
 
                 if let Some(template_str) = template {
-                    // Clone the processor to avoid mutable borrow issues
-                    let mut processor_clone = processor.clone();
                     // Use template to transform request
-                    match processor_clone.process_image_request(
-                        request,
-                        &template_str,
-                        &config.vars,
-                    ) {
+                    match processor.process_image_request(request, &template_str, &config.vars) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process image request template: {}. Falling back to default.", e);
@@ -1154,10 +1169,8 @@ impl OpenAIClient {
                     if let Ok(response_json) =
                         serde_json::from_str::<serde_json::Value>(&response_text)
                     {
-                        // Clone the processor to avoid mutable borrow issues
-                        let mut processor_clone = processor.clone();
                         // Use template to transform response
-                        match processor_clone.process_response(&response_json, &template_str) {
+                        match processor.process_response(&response_json, &template_str) {
                             Ok(transformed) => {
                                 // Try to parse the transformed response as ImageGenerationResponse
                                 if let Ok(image_response) =
@@ -1287,10 +1300,8 @@ impl OpenAIClient {
                     if let Ok(response_json) =
                         serde_json::from_str::<serde_json::Value>(&response_text)
                     {
-                        // Clone the processor to avoid mutable borrow issues
-                        let mut processor_clone = processor.clone();
                         // Use template to transform response
-                        match processor_clone.process_response(&response_json, &template_str) {
+                        match processor.process_response(&response_json, &template_str) {
                             Ok(transformed) => {
                                 // Try to parse the transformed response as AudioTranscriptionResponse
                                 if let Ok(audio_response) =
@@ -1346,14 +1357,8 @@ impl OpenAIClient {
                 let template = config.get_endpoint_template("speech", &request.model);
 
                 if let Some(template_str) = template {
-                    // Clone the processor to avoid mutable borrow issues
-                    let mut processor_clone = processor.clone();
                     // Use template to transform request
-                    match processor_clone.process_speech_request(
-                        request,
-                        &template_str,
-                        &config.vars,
-                    ) {
+                    match processor.process_speech_request(request, &template_str, &config.vars) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process speech request template: {}. Falling back to default.", e);
@@ -1401,10 +1406,8 @@ impl OpenAIClient {
                     if let Ok(response_json) =
                         serde_json::from_str::<serde_json::Value>(&response_text)
                     {
-                        // Clone the processor to avoid mutable borrow issues
-                        let mut processor_clone = processor.clone();
                         // Use template to extract base64 data
-                        match processor_clone.process_response(&response_json, &template_str) {
+                        match processor.process_response(&response_json, &template_str) {
                             Ok(extracted) => {
                                 // The template should return the base64 string directly
                                 if let Some(base64_data) = extracted.as_str() {
@@ -1475,10 +1478,8 @@ impl OpenAIClient {
                 let template = config.get_endpoint_template("chat", &request.model);
 
                 if let Some(template_str) = template {
-                    // Clone the processor to avoid mutable borrow issues
-                    let mut processor_clone = processor.clone();
                     // Use template to transform request
-                    match processor_clone.process_request(request, &template_str, &config.vars) {
+                    match processor.process_request(request, &template_str, &config.vars) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process request template: {}. Falling back to default.", e);
