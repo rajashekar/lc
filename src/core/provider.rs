@@ -1022,11 +1022,8 @@ impl OpenAIClient {
 
                 if let Some(template_str) = template {
                     // Use template to transform request
-                    match processor.process_embeddings_request(
-                        request,
-                        &template_str,
-                        &config.vars,
-                    ) {
+                    match processor.process_embeddings_request(request, &template_str, &config.vars)
+                    {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process embeddings request template: {}. Falling back to default.", e);
@@ -1123,11 +1120,7 @@ impl OpenAIClient {
 
                 if let Some(template_str) = template {
                     // Use template to transform request
-                    match processor.process_image_request(
-                        request,
-                        &template_str,
-                        &config.vars,
-                    ) {
+                    match processor.process_image_request(request, &template_str, &config.vars) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process image request template: {}. Falling back to default.", e);
@@ -1365,11 +1358,7 @@ impl OpenAIClient {
 
                 if let Some(template_str) = template {
                     // Use template to transform request
-                    match processor.process_speech_request(
-                        request,
-                        &template_str,
-                        &config.vars,
-                    ) {
+                    match processor.process_speech_request(request, &template_str, &config.vars) {
                         Ok(json_value) => Some(json_value),
                         Err(e) => {
                             eprintln!("Warning: Failed to process speech request template: {}. Falling back to default.", e);

@@ -119,9 +119,7 @@ fn test_gemini_role_filter() {
     context.insert("role", "assistant");
 
     // Use the test-only render_template method
-    let result = processor
-        .render_template(template, &context)
-        .unwrap();
+    let result = processor.render_template(template, &context).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
 
     // Assistant should be converted to "model" for Gemini

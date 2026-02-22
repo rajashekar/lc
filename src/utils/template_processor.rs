@@ -130,11 +130,7 @@ impl TemplateProcessor {
 
     /// Render a template directly
     #[allow(dead_code)]
-    pub fn render_template(
-        &self,
-        template: &str,
-        context: &TeraContext,
-    ) -> Result<String> {
+    pub fn render_template(&self, template: &str, context: &TeraContext) -> Result<String> {
         if let Some(name) = self.template_map.get(template) {
             Ok(self.tera.render(name, context)?)
         } else {
