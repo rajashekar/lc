@@ -312,6 +312,7 @@ async fn main() -> Result<()> {
                 model,
                 api_key,
                 generate_key,
+                cors,
             }),
         ) => {
             cli::proxy::handle(
@@ -321,6 +322,7 @@ async fn main() -> Result<()> {
                 model,
                 api_key,
                 generate_key,
+                cors,
             )
             .await?;
         }
