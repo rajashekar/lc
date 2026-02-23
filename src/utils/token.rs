@@ -15,6 +15,12 @@ pub struct TokenCounter {
     truncation_cache: Arc<Mutex<LruCache<(String, usize), String>>>,
 }
 
+// Type aliases to avoid complex types warning
+type TokenCache = Arc<Mutex<LruCache<String, usize>>>;
+type TruncationCache = Arc<Mutex<LruCache<(String, usize), String>>>;
+type GlobalTokenCache = Arc<Mutex<HashMap<String, TokenCache>>>;
+type GlobalTruncationCache = Arc<Mutex<HashMap<String, TruncationCache>>>;
+
 // Global cache for encoder instances and token counts to avoid repeated creation/calculation
 lazy_static::lazy_static! {
     // Store encoders in Arc to avoid expensive cloning
@@ -23,12 +29,12 @@ lazy_static::lazy_static! {
 
     // Global cache for token counts per model (tokenizer)
     // Key: tokenizer_name -> Cache(text -> count)
-    static ref TOKEN_CACHE_BY_MODEL: Arc<Mutex<HashMap<String, Arc<Mutex<LruCache<String, usize>>>>>> =
+    static ref TOKEN_CACHE_BY_MODEL: GlobalTokenCache =
         Arc::new(Mutex::new(HashMap::new()));
 
     // Global cache for truncation results per model
     // Key: tokenizer_name -> Cache((text, max_len) -> truncated_text)
-    static ref TRUNCATION_CACHE_BY_MODEL: Arc<Mutex<HashMap<String, Arc<Mutex<LruCache<(String, usize), String>>>>>> =
+    static ref TRUNCATION_CACHE_BY_MODEL: GlobalTruncationCache =
         Arc::new(Mutex::new(HashMap::new()));
 }
 
