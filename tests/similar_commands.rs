@@ -714,16 +714,29 @@ mod similar_integration_tests {
 
         // Top results should be AI-related
         // Check that top 2 results contain expected keywords (order might vary slightly)
-        let top_results_text: Vec<String> = similar.iter()
+        let top_results_text: Vec<String> = similar
+            .iter()
             .take(2)
             .map(|(entry, _)| entry.text.to_lowercase())
             .collect();
 
-        let has_ai_research = top_results_text.iter().any(|t| t.contains("artificial") || t.contains("intelligence"));
-        let has_ml = top_results_text.iter().any(|t| t.contains("machine") || t.contains("learning"));
+        let has_ai_research = top_results_text
+            .iter()
+            .any(|t| t.contains("artificial") || t.contains("intelligence"));
+        let has_ml = top_results_text
+            .iter()
+            .any(|t| t.contains("machine") || t.contains("learning"));
 
-        assert!(has_ai_research, "Top results should contain AI research: {:?}", top_results_text);
-        assert!(has_ml, "Top results should contain ML: {:?}", top_results_text);
+        assert!(
+            has_ai_research,
+            "Top results should contain AI research: {:?}",
+            top_results_text
+        );
+        assert!(
+            has_ml,
+            "Top results should contain ML: {:?}",
+            top_results_text
+        );
 
         // 4. Test similarity search with different query
         let web_query = vec![0.0, 0.0, 0.8, 0.2, 0.0];
