@@ -65,9 +65,7 @@ impl TokenCounter {
                 .or_insert_with(|| {
                     // Use a larger cache size (5000 entries) since this is shared across requests
                     // and chat history can be large
-                    Arc::new(Mutex::new(LruCache::new(
-                        NonZeroUsize::new(5000).unwrap(),
-                    )))
+                    Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(5000).unwrap())))
                 })
                 .clone()
         };
@@ -78,9 +76,7 @@ impl TokenCounter {
             caches
                 .entry(tiktoken_model.clone())
                 .or_insert_with(|| {
-                    Arc::new(Mutex::new(LruCache::new(
-                        NonZeroUsize::new(1000).unwrap(),
-                    )))
+                    Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())))
                 })
                 .clone()
         };
