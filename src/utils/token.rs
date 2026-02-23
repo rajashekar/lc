@@ -1,23 +1,35 @@
 use anyhow::Result;
 use lru::LruCache;
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use tiktoken_rs::{get_bpe_from_model, CoreBPE};
 
 /// Token counter for various models with caching
 pub struct TokenCounter {
-    encoder: CoreBPE,
+    encoder: Arc<CoreBPE>,
     // LRU cache for token counts to avoid repeated tokenization
     token_cache: Arc<Mutex<LruCache<String, usize>>>,
     // Cache for truncated text to avoid repeated truncation
     truncation_cache: Arc<Mutex<LruCache<(String, usize), String>>>,
 }
 
-// Global cache for encoder instances to avoid repeated creation
+// Global cache for encoder instances and token counts to avoid repeated creation/calculation
 lazy_static::lazy_static! {
-    static ref ENCODER_CACHE: Arc<Mutex<LruCache<String, CoreBPE>>> =
+    // Store encoders in Arc to avoid expensive cloning
+    static ref ENCODER_CACHE: Arc<Mutex<LruCache<String, Arc<CoreBPE>>>> =
         Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(10).unwrap())));
+
+    // Global cache for token counts per model (tokenizer)
+    // Key: tokenizer_name -> Cache(text -> count)
+    static ref TOKEN_CACHE_BY_MODEL: Arc<Mutex<HashMap<String, Arc<Mutex<LruCache<String, usize>>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    // Global cache for truncation results per model
+    // Key: tokenizer_name -> Cache((text, max_len) -> truncated_text)
+    static ref TRUNCATION_CACHE_BY_MODEL: Arc<Mutex<HashMap<String, Arc<Mutex<LruCache<(String, usize), String>>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 }
 
 impl TokenCounter {
@@ -39,15 +51,44 @@ impl TokenCounter {
                         e
                     )
                 })?;
-                cache.put(tiktoken_model, new_encoder.clone());
-                new_encoder
+                let arc_encoder = Arc::new(new_encoder);
+                cache.put(tiktoken_model.clone(), arc_encoder.clone());
+                arc_encoder
             }
+        };
+
+        // Get or create shared token cache for this model tokenizer
+        let token_cache = {
+            let mut caches = TOKEN_CACHE_BY_MODEL.lock();
+            caches
+                .entry(tiktoken_model.clone())
+                .or_insert_with(|| {
+                    // Use a larger cache size (5000 entries) since this is shared across requests
+                    // and chat history can be large
+                    Arc::new(Mutex::new(LruCache::new(
+                        NonZeroUsize::new(5000).unwrap(),
+                    )))
+                })
+                .clone()
+        };
+
+        // Get or create shared truncation cache for this model tokenizer
+        let truncation_cache = {
+            let mut caches = TRUNCATION_CACHE_BY_MODEL.lock();
+            caches
+                .entry(tiktoken_model.clone())
+                .or_insert_with(|| {
+                    Arc::new(Mutex::new(LruCache::new(
+                        NonZeroUsize::new(1000).unwrap(),
+                    )))
+                })
+                .clone()
         };
 
         Ok(Self {
             encoder,
-            token_cache: Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap()))),
-            truncation_cache: Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(100).unwrap()))),
+            token_cache,
+            truncation_cache,
         })
     }
 
@@ -143,7 +184,7 @@ impl TokenCounter {
         }
 
         // Include as much history as possible
-        let mut truncated_history = Vec::new();
+        let mut reverse_history = Vec::new();
         let remaining_tokens = available_tokens - used_tokens;
         let mut history_tokens = 0;
 
@@ -153,13 +194,17 @@ impl TokenCounter {
                 self.count_tokens(&entry.question) + self.count_tokens(&entry.response) + 8;
             if history_tokens + entry_tokens <= remaining_tokens {
                 history_tokens += entry_tokens;
-                truncated_history.insert(0, entry.clone());
+                // Push to vector instead of inserting at 0 to avoid O(n^2) behavior
+                reverse_history.push(entry.clone());
             } else {
                 break;
             }
         }
 
-        (prompt.to_string(), truncated_history)
+        // Reverse back to chronological order (oldest first)
+        reverse_history.reverse();
+
+        (prompt.to_string(), reverse_history)
     }
 
     /// Truncate text to fit within token limit with caching
