@@ -5,12 +5,41 @@ sidebar_position: 1
 slug: /
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 <div align="center">
 <h1>LLM Client (lc)</h1>
 <img src="img/social-card.png" alt="LLM Client" width="450" />
 </div>
 
 A fast, Rust-based command-line tool for interacting with Large Language Models through OpenAI-compatible APIs. Built for speed, efficiency, and ease of use.
+
+## Quick Install
+
+<Tabs>
+  <TabItem value="shell" label="Shell (Mac/Linux)" default>
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/rajashekar/lc/main/install.sh | bash
+  ```
+
+  </TabItem>
+  <TabItem value="cargo" label="Rust Cargo">
+
+  ```bash
+  cargo install lc-cli
+  ```
+
+  </TabItem>
+  <TabItem value="manual" label="Manual">
+
+  Download the latest binary from [GitHub Releases](https://github.com/rajashekar/lc/releases).
+
+  </TabItem>
+</Tabs>
+
+For Windows and other installation methods, see the [Installation Guide](/getting-started/installation).
 
 ## Why LLM Client?
 
