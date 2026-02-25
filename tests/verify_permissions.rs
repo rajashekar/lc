@@ -84,3 +84,56 @@ fn test_existing_file_permissions_corrected() {
         "File permissions should be corrected to 0o600"
     );
 }
+
+#[cfg(feature = "unix-sockets")]
+#[tokio::test]
+async fn test_mcp_daemon_socket_permissions() {
+    use lc::mcp_daemon::McpDaemon;
+    use std::os::unix::fs::PermissionsExt;
+
+    // Create a temporary directory for testing
+    let temp_dir = TempDir::new().unwrap();
+    env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
+
+    // Spawn daemon in background
+    let handle = tokio::spawn(async move {
+        // We need to re-set the env var in the spawned task thread?
+        // Actually env vars are process-wide, so it should be fine.
+        // But we need to handle potential errors gracefully
+        if let Ok(mut daemon) = McpDaemon::new() {
+            let _ = daemon.start().await;
+        }
+    });
+
+    // Wait for socket
+    let socket_path = temp_dir.path().join("mcp_daemon.sock");
+    let mut retries = 50;
+    while !socket_path.exists() && retries > 0 {
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        retries -= 1;
+    }
+
+    if !socket_path.exists() {
+        handle.abort();
+        panic!("Socket file not created within timeout");
+    }
+
+    // Check permissions
+    let metadata = fs::metadata(&socket_path).unwrap();
+    let permissions = metadata.permissions();
+    let mode = permissions.mode();
+
+    // Verify mode is 0o600
+    // We mask with 0o777 to check just the permissions part
+    // Note: If this fails, it means the fix hasn't been applied yet!
+
+    // Clean up before asserting so we don't leave the daemon running on failure
+    handle.abort();
+
+    assert_eq!(
+        mode & 0o777,
+        0o600,
+        "Socket permissions should be 0o600, but were {:o}",
+        mode & 0o777
+    );
+}

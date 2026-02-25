@@ -156,6 +156,18 @@ impl McpDaemon {
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
+
+        // Ensure socket permissions are restricted to owner only (0o600)
+        // By default, bind uses umask which typically results in 0o755 (world readable)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let metadata = std::fs::metadata(&self.socket_path)?;
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o600);
+            std::fs::set_permissions(&self.socket_path, permissions)?;
+        }
+
         crate::debug_log!("MCP Daemon started, listening on {:?}", self.socket_path);
 
         loop {
