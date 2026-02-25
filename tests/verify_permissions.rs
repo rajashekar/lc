@@ -101,7 +101,7 @@ async fn test_mcp_daemon_socket_permissions() {
         // Actually env vars are process-wide, so it should be fine.
         // But we need to handle potential errors gracefully
         if let Ok(mut daemon) = McpDaemon::new() {
-             let _ = daemon.start().await;
+            let _ = daemon.start().await;
         }
     });
 
@@ -133,6 +133,7 @@ async fn test_mcp_daemon_socket_permissions() {
     assert_eq!(
         mode & 0o777,
         0o600,
-        "Socket permissions should be 0o600, but were {:o}", mode & 0o777
+        "Socket permissions should be 0o600, but were {:o}",
+        mode & 0o777
     );
 }
