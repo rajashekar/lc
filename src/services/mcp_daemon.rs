@@ -13,6 +13,8 @@ use anyhow::anyhow;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+#[cfg(all(unix, feature = "unix-sockets"))]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -156,6 +158,13 @@ impl McpDaemon {
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
+
+        // Set permissions to 0o600 (read/write for owner only) to prevent unauthorized access
+        // to the MCP daemon socket which provides access to tools
+        let mut perms = std::fs::metadata(&self.socket_path)?.permissions();
+        perms.set_mode(0o600);
+        std::fs::set_permissions(&self.socket_path, perms)?;
+
         crate::debug_log!("MCP Daemon started, listening on {:?}", self.socket_path);
 
         loop {
