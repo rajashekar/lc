@@ -18,6 +18,8 @@ use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::net::{UnixListener, UnixStream};
+#[cfg(all(unix, feature = "unix-sockets"))]
+use std::os::unix::fs::PermissionsExt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DaemonRequest {
@@ -156,6 +158,13 @@ impl McpDaemon {
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
+
+        // Set permissions to 0o600 (read/write for owner only) to prevent unauthorized access
+        // to the MCP daemon socket which provides access to tools
+        let mut perms = std::fs::metadata(&self.socket_path)?.permissions();
+        perms.set_mode(0o600);
+        std::fs::set_permissions(&self.socket_path, perms)?;
+
         crate::debug_log!("MCP Daemon started, listening on {:?}", self.socket_path);
 
         loop {
