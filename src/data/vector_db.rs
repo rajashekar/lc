@@ -21,6 +21,8 @@ pub struct VectorEntry {
     pub file_path: Option<String>,
     pub chunk_index: Option<i32>,
     pub total_chunks: Option<i32>,
+    #[serde(default)]
+    pub norm: Option<f64>,
 }
 
 // HNSW index for fast approximate nearest neighbor search
@@ -214,6 +216,10 @@ impl VectorDatabase {
 
         let id = conn.last_insert_rowid();
 
+        // Calculate norm for cache
+        let norm_sq: f64 = vector.iter().map(|x| x * x).sum();
+        let norm = norm_sq.sqrt();
+
         // Create vector entry for cache
         let vector_entry = VectorEntry {
             id,
@@ -225,6 +231,7 @@ impl VectorDatabase {
             file_path: file_path.map(|s| s.to_string()),
             chunk_index,
             total_chunks,
+            norm: Some(norm),
         };
 
         // Add to cache
@@ -253,6 +260,10 @@ impl VectorDatabase {
                 )
             })?;
 
+            // Calculate norm for cache
+            let norm_sq: f64 = vector.iter().map(|x| x * x).sum();
+            let norm = norm_sq.sqrt();
+
             let created_at_str: String = row.get(5)?;
             let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
                 .map_err(|_| {
@@ -274,6 +285,7 @@ impl VectorDatabase {
                 file_path: row.get(6).ok(),
                 chunk_index: row.get(7).ok(),
                 total_chunks: row.get(8).ok(),
+                norm: Some(norm),
             })
         })?;
 
@@ -382,8 +394,18 @@ impl VectorDatabase {
         let mut similarities: Vec<(VectorEntry, f64)> = vectors
             .into_par_iter()
             .map(|vector_entry| {
+                // Get precomputed norm or calculate it if missing
+                let norm_b = vector_entry.norm.unwrap_or_else(|| {
+                    vector_entry
+                        .vector
+                        .iter()
+                        .map(|x| x * x)
+                        .sum::<f64>()
+                        .sqrt()
+                });
+
                 let similarity =
-                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
+                    cosine_similarity_fast(query_vector, &vector_entry.vector, query_norm, norm_b);
                 (vector_entry, similarity)
             })
             .collect();
@@ -517,6 +539,42 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
 
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
+    }
+
+    dot_product / (norm_a * norm_b)
+}
+
+pub fn cosine_similarity_fast(a: &[f64], b: &[f64], norm_a: f64, norm_b: f64) -> f64 {
+    if a.len() != b.len() {
+        return 0.0;
+    }
+
+    if a.is_empty() {
+        return 0.0;
+    }
+
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+
+    let mut dot_product = 0.0f64;
+
+    // Process in chunks of 4 for better performance
+    let chunk_size = 4;
+    let chunks = a.len() / chunk_size;
+
+    for i in 0..chunks {
+        let start = i * chunk_size;
+        let end = start + chunk_size;
+
+        for j in start..end {
+            dot_product += a[j] * b[j];
+        }
+    }
+
+    // Process remaining elements
+    for i in (chunks * chunk_size)..a.len() {
+        dot_product += a[i] * b[i];
     }
 
     dot_product / (norm_a * norm_b)
@@ -858,6 +916,23 @@ mod tests {
         let a = vec![1.0, 0.0];
         let b = vec![0.0, 1.0];
         assert!((cosine_similarity_simd(&a, &b) - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_cosine_similarity_fast() {
+        let a = vec![1.0, 2.0, 3.0];
+        let b = vec![1.0, 2.0, 3.0];
+        let norm_a = a.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let norm_b = b.iter().map(|x| x * x).sum::<f64>().sqrt();
+
+        assert!((cosine_similarity_fast(&a, &b, norm_a, norm_b) - 1.0).abs() < 1e-10);
+
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        let norm_a = a.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let norm_b = b.iter().map(|x| x * x).sum::<f64>().sqrt();
+
+        assert!((cosine_similarity_fast(&a, &b, norm_a, norm_b) - 0.0).abs() < 1e-10);
     }
 
     #[test]
