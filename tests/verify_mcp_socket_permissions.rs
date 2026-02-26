@@ -33,7 +33,10 @@ async fn test_mcp_socket_permissions() {
         tries += 1;
     }
 
-    assert!(socket_path.exists(), "Socket file was not created within timeout");
+    assert!(
+        socket_path.exists(),
+        "Socket file was not created within timeout"
+    );
 
     // Check permissions
     let metadata = std::fs::metadata(&socket_path).expect("Failed to get socket metadata");

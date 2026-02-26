@@ -13,13 +13,13 @@ use anyhow::anyhow;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+#[cfg(all(unix, feature = "unix-sockets"))]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::net::{UnixListener, UnixStream};
-#[cfg(all(unix, feature = "unix-sockets"))]
-use std::os::unix::fs::PermissionsExt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DaemonRequest {
