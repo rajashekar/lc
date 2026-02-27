@@ -117,6 +117,17 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
             let config = config::Config::load()?;
             if config.providers.is_empty() {
                 println!("No providers configured.");
+                println!();
+                println!(
+                    "{} Use '{}' to install a provider from the registry",
+                    "💡".yellow(),
+                    "lc providers install <name>".bold()
+                );
+                println!(
+                    "{} Or '{}' to add a custom one",
+                    "💡".yellow(),
+                    "lc providers add <name> <url>".bold()
+                );
                 return Ok(());
             }
 
@@ -259,6 +270,12 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                     let headers = config.list_headers(&provider)?;
                     if headers.is_empty() {
                         println!("No custom headers configured for provider '{}'", provider);
+                        println!();
+                        println!(
+                            "{} Use '{}' to add one",
+                            "💡".yellow(),
+                            format!("lc providers headers {} add <name> <value>", provider).bold()
+                        );
                     } else {
                         println!(
                             "\n{} Custom headers for provider '{}':",
@@ -310,6 +327,12 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                     let vars = config.list_provider_vars(&provider)?;
                     if vars.is_empty() {
                         println!("No vars set for provider '{}'", provider);
+                        println!();
+                        println!(
+                            "{} Use '{}' to set one",
+                            "💡".yellow(),
+                            format!("lc providers vars {} set <key> <value>", provider).bold()
+                        );
                     } else {
                         println!(
                             "\n{} Vars for provider '{}':",
