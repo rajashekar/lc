@@ -150,12 +150,7 @@ impl McpDaemon {
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        // Remove existing socket if it exists
-        if self.socket_path.exists() {
-            tokio::fs::remove_file(&self.socket_path).await?;
-        }
-
-        let listener = UnixListener::bind(&self.socket_path)?;
+        let listener = self.bind_socket()?;
         crate::debug_log!("MCP Daemon started, listening on {:?}", self.socket_path);
 
         loop {
@@ -171,6 +166,23 @@ impl McpDaemon {
                 }
             }
         }
+    }
+
+    fn bind_socket(&self) -> Result<UnixListener> {
+        // Remove existing socket if it exists
+        if self.socket_path.exists() {
+            std::fs::remove_file(&self.socket_path)?;
+        }
+
+        let listener = UnixListener::bind(&self.socket_path)?;
+
+        // Restrict permissions to owner-only (0o600)
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(&self.socket_path)?.permissions();
+        permissions.set_mode(0o600);
+        std::fs::set_permissions(&self.socket_path, permissions)?;
+
+        Ok(listener)
     }
 
     async fn handle_client(&mut self, mut stream: UnixStream) -> Result<()> {
@@ -717,5 +729,47 @@ impl DaemonClient {
             DaemonResponse::Error(e) => Err(anyhow!(e)),
             _ => Err(anyhow!("Unexpected response from daemon")),
         }
+    }
+}
+
+#[cfg(all(test, unix, feature = "unix-sockets"))]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::env;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    #[serial]
+    async fn test_bind_socket_permissions() {
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
+
+        // Instantiate McpDaemon
+        let daemon = McpDaemon::new().expect("Failed to create McpDaemon");
+
+        // Get the socket path
+        let socket_path = daemon.socket_path.clone();
+
+        // Ensure socket doesn't exist initially
+        if socket_path.exists() {
+            std::fs::remove_file(&socket_path).unwrap();
+        }
+
+        // Call bind_socket
+        let _listener = daemon.bind_socket().expect("Failed to bind socket");
+
+        // Verify socket exists
+        assert!(socket_path.exists(), "Socket file should exist");
+
+        // Verify permissions are 0o600
+        let metadata = std::fs::metadata(&socket_path).expect("Failed to get metadata");
+        let permissions = metadata.permissions();
+        let mode = permissions.mode();
+
+        // Mask with 0o777 to get just the permission bits
+        assert_eq!(mode & 0o777, 0o600, "Socket permissions should be 0o600");
     }
 }
