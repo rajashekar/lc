@@ -737,8 +737,8 @@ mod tests {
     use super::*;
     use serial_test::serial;
     use std::env;
-    use tempfile::TempDir;
     use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
 
     #[tokio::test]
     #[serial]
