@@ -130,7 +130,12 @@ impl MultiLineInput {
             }
             KeyCode::Char(c) => {
                 // Determine byte position from char cursor_pos
-                let byte_idx = self.current_line.chars().take(self.cursor_pos).map(|ch| ch.len_utf8()).sum();
+                let byte_idx = self
+                    .current_line
+                    .chars()
+                    .take(self.cursor_pos)
+                    .map(|ch| ch.len_utf8())
+                    .sum();
 
                 // Insert character at correct byte position
                 self.current_line.insert(byte_idx, c);
