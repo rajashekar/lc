@@ -161,14 +161,12 @@ impl MultiLineInput {
                 let char_count = self.current_line.chars().count();
                 if self.cursor_pos < char_count {
                     // Determine the character to remove and its byte position
-                    let mut current_pos = 0;
                     let mut char_to_remove_idx = 0;
-                    for (i, _) in self.current_line.char_indices() {
+                    for (current_pos, (i, _)) in self.current_line.char_indices().enumerate() {
                         if current_pos == self.cursor_pos {
                             char_to_remove_idx = i;
                             break;
                         }
-                        current_pos += 1;
                     }
 
                     // Remove character at cursor
@@ -194,14 +192,12 @@ impl MultiLineInput {
                 let char_count = self.current_line.chars().count();
                 if self.cursor_pos > 0 && self.cursor_pos <= char_count {
                     // Determine the character to remove and its byte position
-                    let mut current_pos = 0;
                     let mut char_to_remove_idx = 0;
-                    for (i, _ch) in self.current_line.char_indices() {
+                    for (current_pos, (i, _ch)) in self.current_line.char_indices().enumerate() {
                         if current_pos == self.cursor_pos - 1 {
                             char_to_remove_idx = i;
                             break;
                         }
-                        current_pos += 1;
                     }
 
                     // Remove character before cursor
