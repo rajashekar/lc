@@ -21,6 +21,8 @@ pub struct VectorEntry {
     pub file_path: Option<String>,
     pub chunk_index: Option<i32>,
     pub total_chunks: Option<i32>,
+    #[serde(default)]
+    pub norm: f64,
 }
 
 // HNSW index for fast approximate nearest neighbor search
@@ -214,6 +216,10 @@ impl VectorDatabase {
 
         let id = conn.last_insert_rowid();
 
+        // Precompute norm
+        let norm_sq: f64 = vector.iter().map(|x| x * x).sum();
+        let norm = norm_sq.sqrt();
+
         // Create vector entry for cache
         let vector_entry = VectorEntry {
             id,
@@ -225,6 +231,7 @@ impl VectorDatabase {
             file_path: file_path.map(|s| s.to_string()),
             chunk_index,
             total_chunks,
+            norm,
         };
 
         // Add to cache
@@ -264,6 +271,9 @@ impl VectorDatabase {
                 })?
                 .with_timezone(&chrono::Utc);
 
+            let norm_sq: f64 = vector.iter().map(|x| x * x).sum();
+            let norm = norm_sq.sqrt();
+
             Ok(VectorEntry {
                 id: row.get(0)?,
                 text: row.get(1)?,
@@ -274,6 +284,7 @@ impl VectorDatabase {
                 file_path: row.get(6).ok(),
                 chunk_index: row.get(7).ok(),
                 total_chunks: row.get(8).ok(),
+                norm,
             })
         })?;
 
@@ -382,8 +393,12 @@ impl VectorDatabase {
         let mut similarities: Vec<(VectorEntry, f64)> = vectors
             .into_par_iter()
             .map(|vector_entry| {
-                let similarity =
-                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
+                let similarity = cosine_similarity_fast(
+                    query_vector,
+                    &vector_entry.vector,
+                    query_norm,
+                    vector_entry.norm,
+                );
                 (vector_entry, similarity)
             })
             .collect();
@@ -522,47 +537,16 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     dot_product / (norm_a * norm_b)
 }
 
-pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
-    if a.len() != b.len() {
+pub fn cosine_similarity_fast(a: &[f64], b: &[f64], norm_a: f64, norm_b: f64) -> f64 {
+    if a.len() != b.len() || a.is_empty() {
         return 0.0;
     }
-
-    if a.is_empty() {
-        return 0.0;
-    }
-
-    let mut dot_product = 0.0f64;
-    let mut norm_b_sq = 0.0f64;
-
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
-
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_b_sq += bv * bv;
-        }
-    }
-
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
-        dot_product += av * bv;
-        norm_b_sq += bv * bv;
-    }
-
-    let norm_b = norm_b_sq.sqrt();
 
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
     }
+
+    let dot_product: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
 
     dot_product / (norm_a * norm_b)
 }
@@ -858,6 +842,21 @@ mod tests {
         let a = vec![1.0, 0.0];
         let b = vec![0.0, 1.0];
         assert!((cosine_similarity_simd(&a, &b) - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_cosine_similarity_fast() {
+        let a = vec![1.0, 2.0, 3.0];
+        let b = vec![1.0, 2.0, 3.0];
+        let norm_a: f64 = a.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let norm_b: f64 = b.iter().map(|x| x * x).sum::<f64>().sqrt();
+        assert!((cosine_similarity_fast(&a, &b, norm_a, norm_b) - 1.0).abs() < 1e-10);
+
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        let norm_a: f64 = a.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let norm_b: f64 = b.iter().map(|x| x * x).sum::<f64>().sqrt();
+        assert!((cosine_similarity_fast(&a, &b, norm_a, norm_b) - 0.0).abs() < 1e-10);
     }
 
     #[test]
