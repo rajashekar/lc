@@ -30,6 +30,14 @@ impl MultiLineInput {
     /// - Ctrl+C: Cancel input (returns empty string)
     /// - Backspace: Delete character
     /// - Arrow keys: Navigate (basic support)
+    fn get_byte_index(&self, char_index: usize) -> usize {
+        self.current_line
+            .char_indices()
+            .nth(char_index)
+            .map(|(i, _)| i)
+            .unwrap_or(self.current_line.len())
+    }
+
     pub fn read_input(&mut self, prompt: &str) -> Result<String> {
         print!("{} ", prompt);
         io::stdout().flush()?;
@@ -130,14 +138,16 @@ impl MultiLineInput {
             }
             KeyCode::Char(c) => {
                 // Insert character at cursor position
-                self.current_line.insert(self.cursor_pos, c);
+                let byte_idx = self.get_byte_index(self.cursor_pos);
+                self.current_line.insert(byte_idx, c);
                 self.cursor_pos += 1;
 
                 // Print the character
                 print!("{}", c);
 
                 // Redraw the rest of the line if we inserted in the middle
-                let rest = &self.current_line[self.cursor_pos..];
+                let new_byte_idx = self.get_byte_index(self.cursor_pos);
+                let rest = &self.current_line[new_byte_idx..];
                 if !rest.is_empty() {
                     print!("{}", rest);
                     // Move cursor back to correct position
@@ -149,12 +159,14 @@ impl MultiLineInput {
                 Ok(InputAction::Continue)
             }
             KeyCode::Delete => {
-                if self.cursor_pos < self.current_line.len() {
+                let char_count = self.current_line.chars().count();
+                if self.cursor_pos < char_count {
                     // Remove character at cursor
-                    self.current_line.remove(self.cursor_pos);
+                    let byte_idx = self.get_byte_index(self.cursor_pos);
+                    self.current_line.remove(byte_idx);
 
                     // Print rest of line
-                    let rest = &self.current_line[self.cursor_pos..];
+                    let rest = &self.current_line[byte_idx..];
                     print!("{}", rest);
 
                     // Clear the character that was shifted left
@@ -172,14 +184,15 @@ impl MultiLineInput {
             KeyCode::Backspace => {
                 if self.cursor_pos > 0 {
                     // Remove character before cursor
-                    self.current_line.remove(self.cursor_pos - 1);
                     self.cursor_pos -= 1;
+                    let byte_idx = self.get_byte_index(self.cursor_pos);
+                    self.current_line.remove(byte_idx);
 
                     // Move cursor back to position of deleted char
                     print!("\x08");
 
                     // Print rest of line
-                    let rest = &self.current_line[self.cursor_pos..];
+                    let rest = &self.current_line[byte_idx..];
                     print!("{}", rest);
 
                     // Clear the character that was shifted left
@@ -200,7 +213,7 @@ impl MultiLineInput {
                     print!("\r{}   \r", " ".repeat(10));
 
                     // Restore previous line
-                    self.cursor_pos = prev_line.len();
+                    self.cursor_pos = prev_line.chars().count();
                     self.current_line = prev_line;
 
                     // Redraw prompt and current line
@@ -223,7 +236,8 @@ impl MultiLineInput {
                 Ok(InputAction::Continue)
             }
             KeyCode::Right => {
-                if self.cursor_pos < self.current_line.len() {
+                let char_count = self.current_line.chars().count();
+                if self.cursor_pos < char_count {
                     self.cursor_pos += 1;
                     print!("\x1b[C"); // Move cursor right
                     io::stdout().flush()?;
