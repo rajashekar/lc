@@ -7,7 +7,7 @@ use tiktoken_rs::{get_bpe_from_model, CoreBPE};
 
 /// Token counter for various models with caching
 pub struct TokenCounter {
-    encoder: CoreBPE,
+    encoder: Arc<CoreBPE>,
     // LRU cache for token counts to avoid repeated tokenization
     token_cache: Arc<Mutex<LruCache<String, usize>>>,
     // Cache for truncated text to avoid repeated truncation
@@ -16,7 +16,7 @@ pub struct TokenCounter {
 
 // Global cache for encoder instances to avoid repeated creation
 lazy_static::lazy_static! {
-    static ref ENCODER_CACHE: Arc<Mutex<LruCache<String, CoreBPE>>> =
+    static ref ENCODER_CACHE: Arc<Mutex<LruCache<String, Arc<CoreBPE>>>> =
         Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(10).unwrap())));
 }
 
@@ -32,13 +32,13 @@ impl TokenCounter {
             if let Some(cached_encoder) = cache.get(&tiktoken_model) {
                 cached_encoder.clone()
             } else {
-                let new_encoder = get_bpe_from_model(&tiktoken_model).map_err(|e| {
+                let new_encoder = Arc::new(get_bpe_from_model(&tiktoken_model).map_err(|e| {
                     anyhow::anyhow!(
                         "Failed to create token encoder for model '{}': {}",
                         model_name,
                         e
                     )
-                })?;
+                })?);
                 cache.put(tiktoken_model, new_encoder.clone());
                 new_encoder
             }
@@ -153,11 +153,13 @@ impl TokenCounter {
                 self.count_tokens(&entry.question) + self.count_tokens(&entry.response) + 8;
             if history_tokens + entry_tokens <= remaining_tokens {
                 history_tokens += entry_tokens;
-                truncated_history.insert(0, entry.clone());
+                truncated_history.push(entry.clone());
             } else {
                 break;
             }
         }
+
+        truncated_history.reverse();
 
         (prompt.to_string(), truncated_history)
     }
