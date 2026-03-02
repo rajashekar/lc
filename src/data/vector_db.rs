@@ -399,7 +399,12 @@ impl VectorDatabase {
                 let similarity = if vector_entry.norm == 0.0 {
                     cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm)
                 } else {
-                    cosine_similarity_fast(query_vector, &vector_entry.vector, query_norm, vector_entry.norm)
+                    cosine_similarity_fast(
+                        query_vector,
+                        &vector_entry.vector,
+                        query_norm,
+                        vector_entry.norm,
+                    )
                 };
                 (vector_entry, similarity)
             })
