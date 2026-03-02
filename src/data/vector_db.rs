@@ -15,6 +15,8 @@ pub struct VectorEntry {
     pub id: i64,
     pub text: String,
     pub vector: Vec<f64>,
+    #[serde(default)]
+    pub norm: f64,
     pub model: String,
     pub provider: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -214,11 +216,16 @@ impl VectorDatabase {
 
         let id = conn.last_insert_rowid();
 
+        // Precompute norm for faster similarity search
+        let norm_sq: f64 = vector.iter().map(|x| x * x).sum();
+        let norm = norm_sq.sqrt();
+
         // Create vector entry for cache
         let vector_entry = VectorEntry {
             id,
             text: text.to_string(),
             vector: vector.to_vec(),
+            norm,
             model: model.to_string(),
             provider: provider.to_string(),
             created_at: chrono::Utc::now(),
@@ -264,10 +271,15 @@ impl VectorDatabase {
                 })?
                 .with_timezone(&chrono::Utc);
 
+            // Precompute norm for faster similarity search
+            let norm_sq: f64 = vector.iter().map(|x| x * x).sum();
+            let norm = norm_sq.sqrt();
+
             Ok(VectorEntry {
                 id: row.get(0)?,
                 text: row.get(1)?,
                 vector,
+                norm,
                 model: row.get(3)?,
                 provider: row.get(4)?,
                 created_at,
@@ -382,8 +394,18 @@ impl VectorDatabase {
         let mut similarities: Vec<(VectorEntry, f64)> = vectors
             .into_par_iter()
             .map(|vector_entry| {
-                let similarity =
-                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
+                // If norm is exactly 0.0 (e.g. legacy data without norm precomputed), fallback to precomputed that calculates it.
+                // Otherwise use the fast O(N) path using the precomputed norms
+                let similarity = if vector_entry.norm == 0.0 {
+                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm)
+                } else {
+                    cosine_similarity_fast(
+                        query_vector,
+                        &vector_entry.vector,
+                        query_norm,
+                        vector_entry.norm,
+                    )
+                };
                 (vector_entry, similarity)
             })
             .collect();
@@ -517,6 +539,34 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
 
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
+    }
+
+    dot_product / (norm_a * norm_b)
+}
+
+pub fn cosine_similarity_fast(a: &[f64], b: &[f64], norm_a: f64, norm_b: f64) -> f64 {
+    if a.len() != b.len() || a.is_empty() || norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+
+    let mut dot_product = 0.0f64;
+
+    // Process in chunks of 4 for better performance
+    let chunk_size = 4;
+    let chunks = a.len() / chunk_size;
+
+    for i in 0..chunks {
+        let start = i * chunk_size;
+        let end = start + chunk_size;
+
+        for j in start..end {
+            dot_product += a[j] * b[j];
+        }
+    }
+
+    // Process remaining elements
+    for i in (chunks * chunk_size)..a.len() {
+        dot_product += a[i] * b[i];
     }
 
     dot_product / (norm_a * norm_b)
