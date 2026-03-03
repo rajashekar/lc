@@ -15,6 +15,8 @@ pub struct VectorEntry {
     pub id: i64,
     pub text: String,
     pub vector: Vec<f64>,
+    #[serde(default)]
+    pub norm: f64,
     pub model: String,
     pub provider: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -214,11 +216,15 @@ impl VectorDatabase {
 
         let id = conn.last_insert_rowid();
 
+        let norm_sq: f64 = vector.iter().map(|x| x * x).sum();
+        let norm = norm_sq.sqrt();
+
         // Create vector entry for cache
         let vector_entry = VectorEntry {
             id,
             text: text.to_string(),
             vector: vector.to_vec(),
+            norm,
             model: model.to_string(),
             provider: provider.to_string(),
             created_at: chrono::Utc::now(),
@@ -253,6 +259,9 @@ impl VectorDatabase {
                 )
             })?;
 
+            let norm_sq: f64 = vector.iter().map(|x| x * x).sum();
+            let norm = norm_sq.sqrt();
+
             let created_at_str: String = row.get(5)?;
             let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
                 .map_err(|_| {
@@ -268,6 +277,7 @@ impl VectorDatabase {
                 id: row.get(0)?,
                 text: row.get(1)?,
                 vector,
+                norm,
                 model: row.get(3)?,
                 provider: row.get(4)?,
                 created_at,
@@ -382,8 +392,12 @@ impl VectorDatabase {
         let mut similarities: Vec<(VectorEntry, f64)> = vectors
             .into_par_iter()
             .map(|vector_entry| {
-                let similarity =
-                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
+                let similarity = cosine_similarity_fast(
+                    query_vector,
+                    &vector_entry.vector,
+                    query_norm,
+                    vector_entry.norm,
+                );
                 (vector_entry, similarity)
             })
             .collect();
@@ -481,32 +495,11 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
         return 0.0;
     }
 
-    // Use chunked processing for better cache performance
-    let mut dot_product = 0.0f64;
-    let mut norm_a_sq = 0.0f64;
-    let mut norm_b_sq = 0.0f64;
+    let mut dot_product = 0.0;
+    let mut norm_a_sq = 0.0;
+    let mut norm_b_sq = 0.0;
 
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
-
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_a_sq += av * av;
-            norm_b_sq += bv * bv;
-        }
-    }
-
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
+    for (av, bv) in a.iter().zip(b.iter()) {
         dot_product += av * bv;
         norm_a_sq += av * av;
         norm_b_sq += bv * bv;
@@ -531,29 +524,10 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
         return 0.0;
     }
 
-    let mut dot_product = 0.0f64;
-    let mut norm_b_sq = 0.0f64;
+    let mut dot_product = 0.0;
+    let mut norm_b_sq = 0.0;
 
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
-
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_b_sq += bv * bv;
-        }
-    }
-
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
+    for (av, bv) in a.iter().zip(b.iter()) {
         dot_product += av * bv;
         norm_b_sq += bv * bv;
     }
@@ -564,6 +538,22 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
         return 0.0;
     }
 
+    dot_product / (norm_a * norm_b)
+}
+
+// Optimized cosine similarity with both norms precomputed
+pub fn cosine_similarity_fast(a: &[f64], b: &[f64], norm_a: f64, norm_b: f64) -> f64 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+
+    let mut dot_product = 0.0;
+    for (av, bv) in a.iter().zip(b.iter()) {
+        dot_product += av * bv;
+    }
     dot_product / (norm_a * norm_b)
 }
 
