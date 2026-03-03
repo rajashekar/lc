@@ -130,7 +130,12 @@ impl MultiLineInput {
             }
             KeyCode::Char(c) => {
                 // Insert character at cursor position (calculated by character indices)
-                let byte_idx = self.current_line.char_indices().nth(self.cursor_pos).map(|(i, _)| i).unwrap_or(self.current_line.len());
+                let byte_idx = self
+                    .current_line
+                    .char_indices()
+                    .nth(self.cursor_pos)
+                    .map(|(i, _)| i)
+                    .unwrap_or(self.current_line.len());
                 self.current_line.insert(byte_idx, c);
                 self.cursor_pos += 1;
 
@@ -153,7 +158,12 @@ impl MultiLineInput {
             KeyCode::Delete => {
                 if self.cursor_pos < self.current_line.chars().count() {
                     // Calculate byte index for character at cursor
-                    let byte_idx = self.current_line.char_indices().nth(self.cursor_pos).map(|(i, _)| i).unwrap_or(self.current_line.len());
+                    let byte_idx = self
+                        .current_line
+                        .char_indices()
+                        .nth(self.cursor_pos)
+                        .map(|(i, _)| i)
+                        .unwrap_or(self.current_line.len());
 
                     // Remove character at cursor
                     self.current_line.remove(byte_idx);
@@ -177,7 +187,12 @@ impl MultiLineInput {
             KeyCode::Backspace => {
                 if self.cursor_pos > 0 {
                     // Remove character before cursor
-                    let byte_idx = self.current_line.char_indices().nth(self.cursor_pos - 1).map(|(i, _)| i).unwrap_or(0);
+                    let byte_idx = self
+                        .current_line
+                        .char_indices()
+                        .nth(self.cursor_pos - 1)
+                        .map(|(i, _)| i)
+                        .unwrap_or(0);
                     self.current_line.remove(byte_idx);
                     self.cursor_pos -= 1;
 
