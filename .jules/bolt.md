@@ -1,0 +1,3 @@
+## 2024-05-18 - Idiomatic Vectorization is Faster Than Manual Chunking
+**Learning:** LLVM auto-vectorization effectively optimizes idiomatic `.iter().zip()` loops in Rust for vector mathematics (like cosine similarity). Attempting manual loop unrolling or chunking for performance often yields worse readability and equivalent or worse performance due to bounds check overhead that LLVM cannot easily elide. Also, pre-computing mathematical invariants (like L2 norm for L2-normalized vector similarity) and caching it drastically speeds up real-time iteration.
+**Action:** Always prefer idiomatic `.iter().zip()` loops over manual unrolling in Rust. Pre-compute norms to avoid square roots during the `find_similar` hot path.
