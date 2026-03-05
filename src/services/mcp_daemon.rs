@@ -156,6 +156,14 @@ impl McpDaemon {
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
+
+        // Explicitly set socket permissions to 0o600 to prevent unauthorized access
+        // by other users on the same machine.
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = tokio::fs::metadata(&self.socket_path).await?.permissions();
+        perms.set_mode(0o600);
+        tokio::fs::set_permissions(&self.socket_path, perms).await?;
+
         crate::debug_log!("MCP Daemon started, listening on {:?}", self.socket_path);
 
         loop {
