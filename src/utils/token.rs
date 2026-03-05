@@ -153,11 +153,15 @@ impl TokenCounter {
                 self.count_tokens(&entry.question) + self.count_tokens(&entry.response) + 8;
             if history_tokens + entry_tokens <= remaining_tokens {
                 history_tokens += entry_tokens;
-                truncated_history.insert(0, entry.clone());
+                // ⚡ Bolt: Use O(1) push instead of O(N) insert(0) inside the loop
+                truncated_history.push(entry.clone());
             } else {
                 break;
             }
         }
+
+        // ⚡ Bolt: Reverse the accumulated history once at the end for O(N) total complexity
+        truncated_history.reverse();
 
         (prompt.to_string(), truncated_history)
     }
