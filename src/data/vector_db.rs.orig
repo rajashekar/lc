@@ -15,8 +15,6 @@ pub struct VectorEntry {
     pub id: i64,
     pub text: String,
     pub vector: Vec<f64>,
-    #[serde(default)]
-    pub norm: f64,
     pub model: String,
     pub provider: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -221,7 +219,6 @@ impl VectorDatabase {
             id,
             text: text.to_string(),
             vector: vector.to_vec(),
-            norm: vector.iter().map(|x| x * x).sum::<f64>().sqrt(),
             model: model.to_string(),
             provider: provider.to_string(),
             created_at: chrono::Utc::now(),
@@ -267,13 +264,10 @@ impl VectorDatabase {
                 })?
                 .with_timezone(&chrono::Utc);
 
-            let norm = vector.iter().map(|x| x * x).sum::<f64>().sqrt();
-
             Ok(VectorEntry {
                 id: row.get(0)?,
                 text: row.get(1)?,
                 vector,
-                norm,
                 model: row.get(3)?,
                 provider: row.get(4)?,
                 created_at,
@@ -388,12 +382,8 @@ impl VectorDatabase {
         let mut similarities: Vec<(VectorEntry, f64)> = vectors
             .into_par_iter()
             .map(|vector_entry| {
-                let similarity = cosine_similarity_fast(
-                    query_vector,
-                    &vector_entry.vector,
-                    query_norm,
-                    vector_entry.norm,
-                );
+                let similarity =
+                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
                 (vector_entry, similarity)
             })
             .collect();
@@ -527,19 +517,6 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
 
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
-    }
-
-    dot_product / (norm_a * norm_b)
-}
-
-pub fn cosine_similarity_fast(a: &[f64], b: &[f64], norm_a: f64, norm_b: f64) -> f64 {
-    if a.len() != b.len() || a.is_empty() || norm_a == 0.0 || norm_b == 0.0 {
-        return 0.0;
-    }
-
-    let mut dot_product = 0.0f64;
-    for (av, bv) in a.iter().zip(b.iter()) {
-        dot_product += av * bv;
     }
 
     dot_product / (norm_a * norm_b)
