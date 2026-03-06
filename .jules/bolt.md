@@ -1,0 +1,3 @@
+## 2025-03-05 - idiomatic vector math optimization
+**Learning:** In Rust, idiomatic `.iter().zip()` loops for vector mathematics (e.g., cosine similarity) are preferred over manual loop unrolling/chunking, as LLVM auto-vectorization effectively optimizes them while maintaining bounds check elision and better code readability. Additionally, caching intermediate precomputed values like L2 norms inside structs significantly reduces arithmetic operations during large-scale operations like linear scans.
+**Action:** Always favor `.iter().zip()` for standard math over manual loop chunking optimizations, and look for opportunities to compute and store invariable mathematical values (like norms) at data insertion/deserialization time to optimize recurring runtime costs.
