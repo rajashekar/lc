@@ -13,6 +13,7 @@ pub struct MultiLineInput {
     lines: Vec<String>,
     current_line: String,
     cursor_pos: usize,
+    prompt: String,
 }
 
 impl MultiLineInput {
@@ -21,6 +22,7 @@ impl MultiLineInput {
             lines: Vec::new(),
             current_line: String::new(),
             cursor_pos: 0,
+            prompt: String::new(),
         }
     }
 
@@ -31,6 +33,7 @@ impl MultiLineInput {
     /// - Backspace: Delete character
     /// - Arrow keys: Navigate (basic support)
     pub fn read_input(&mut self, prompt: &str) -> Result<String> {
+        self.prompt = prompt.to_string();
         print!("{} ", prompt);
         io::stdout().flush()?;
 
@@ -82,6 +85,7 @@ impl MultiLineInput {
                             self.current_line.clear();
                             self.cursor_pos = 0;
 
+                            print!("^C"); // Print ^C for visual feedback
                             println!(); // Move to next line
                             return Ok(String::new());
                         }
@@ -205,9 +209,9 @@ impl MultiLineInput {
 
                     // Redraw prompt and current line
                     if self.lines.is_empty() {
-                        print!("You: {}", self.current_line);
+                        print!("{} {}", self.prompt, self.current_line);
                     } else {
-                        print!("...   {}", self.current_line);
+                        print!("{}   {}", "...".dimmed(), self.current_line);
                     }
                     io::stdout().flush()?;
                 }
