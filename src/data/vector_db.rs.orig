@@ -174,20 +174,18 @@ impl VectorDatabase {
             conn.execute("ALTER TABLE vectors ADD COLUMN norm REAL", [])?;
 
             // Calculate norms for existing vectors
+            let mut select_stmt = conn.prepare("SELECT id, vector FROM vectors WHERE norm IS NULL")?;
             let mut vectors_to_update = Vec::new();
-            {
-                let mut select_stmt = conn.prepare("SELECT id, vector FROM vectors WHERE norm IS NULL")?;
-                let rows = select_stmt.query_map([], |row| {
-                    let id: i64 = row.get(0)?;
-                    let vector_json: String = row.get(1)?;
-                    Ok((id, vector_json))
-                })?;
-                for row in rows {
-                    let (id, vector_json) = row?;
-                    if let Ok(vector) = serde_json::from_str::<Vec<f64>>(&vector_json) {
-                        let norm = vector.iter().map(|v| v * v).sum::<f64>().sqrt();
-                        vectors_to_update.push((id, norm));
-                    }
+            let rows = select_stmt.query_map([], |row| {
+                let id: i64 = row.get(0)?;
+                let vector_json: String = row.get(1)?;
+                Ok((id, vector_json))
+            })?;
+            for row in rows {
+                let (id, vector_json) = row?;
+                if let Ok(vector) = serde_json::from_str::<Vec<f64>>(&vector_json) {
+                    let norm = vector.iter().map(|v| v * v).sum::<f64>().sqrt();
+                    vectors_to_update.push((id, norm));
                 }
             }
 
