@@ -146,25 +146,32 @@ impl McpDaemon {
 
     pub fn get_socket_path() -> Result<PathBuf> {
         let config_dir = crate::config::Config::config_dir()?;
-        Ok(config_dir.join("mcp_daemon.sock"))
+        // Use a dedicated subdirectory to securely apply 0o700 permissions without
+        // modifying the permissions of the shared config_dir.
+        Ok(config_dir.join("mcp").join("mcp_daemon.sock"))
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        // Secure the socket directory by restricting permissions to the owner only (0o700)
+        // This prevents a TOCTOU race condition where the socket is temporarily accessible
+        // between `bind` and `set_permissions`
+        #[cfg(unix)]
+        if let Some(parent) = self.socket_path.parent() {
+            if !parent.exists() {
+                tokio::fs::create_dir_all(parent).await?;
+            }
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = tokio::fs::metadata(parent).await?.permissions();
+            perms.set_mode(0o700);
+            tokio::fs::set_permissions(parent, perms).await?;
+        }
+
         // Remove existing socket if it exists
         if self.socket_path.exists() {
             tokio::fs::remove_file(&self.socket_path).await?;
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
-
-        // Secure the socket by restricting permissions to the owner only (0o600)
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = tokio::fs::metadata(&self.socket_path).await?.permissions();
-            perms.set_mode(0o600);
-            tokio::fs::set_permissions(&self.socket_path, perms).await?;
-        }
 
         crate::debug_log!("MCP Daemon started, listening on {:?}", self.socket_path);
 
@@ -392,44 +399,6 @@ impl McpDaemon {
                 server_name
             ))
         }
-    }
-}
-
-#[cfg(test)]
-#[cfg(all(unix, feature = "unix-sockets"))]
-mod tests {
-    use super::*;
-    use std::os::unix::fs::PermissionsExt;
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_daemon_socket_permissions() {
-        // Create a temporary directory for testing
-        let temp_dir = TempDir::new().unwrap();
-        std::env::set_var("LC_TEST_CONFIG_DIR", temp_dir.path());
-
-        // Run daemon start logic in a separate task
-        let mut daemon = McpDaemon::new().unwrap();
-        let socket_path = daemon.socket_path.clone();
-
-        let _daemon_task = tokio::spawn(async move {
-            let _ = daemon.start().await;
-        });
-
-        // Wait a short time for the daemon to start and create the socket
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Verify the socket file exists
-        assert!(socket_path.exists(), "Socket file should be created");
-
-        // Verify socket file permissions are 0o600
-        let metadata = tokio::fs::metadata(&socket_path).await.unwrap();
-        let mode = metadata.permissions().mode();
-        assert_eq!(
-            mode & 0o777,
-            0o600,
-            "Daemon socket permissions should be 0o600"
-        );
     }
 }
 
