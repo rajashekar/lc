@@ -146,16 +146,33 @@ impl McpDaemon {
 
     pub fn get_socket_path() -> Result<PathBuf> {
         let config_dir = crate::config::Config::config_dir()?;
-        Ok(config_dir.join("mcp_daemon.sock"))
+        // Use a dedicated subdirectory to securely apply 0o700 permissions without
+        // modifying the permissions of the shared config_dir.
+        Ok(config_dir.join("mcp").join("mcp_daemon.sock"))
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        // Secure the socket directory by restricting permissions to the owner only (0o700)
+        // This prevents a TOCTOU race condition where the socket is temporarily accessible
+        // between `bind` and `set_permissions`
+        #[cfg(unix)]
+        if let Some(parent) = self.socket_path.parent() {
+            if !parent.exists() {
+                tokio::fs::create_dir_all(parent).await?;
+            }
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = tokio::fs::metadata(parent).await?.permissions();
+            perms.set_mode(0o700);
+            tokio::fs::set_permissions(parent, perms).await?;
+        }
+
         // Remove existing socket if it exists
         if self.socket_path.exists() {
             tokio::fs::remove_file(&self.socket_path).await?;
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
+
         crate::debug_log!("MCP Daemon started, listening on {:?}", self.socket_path);
 
         loop {

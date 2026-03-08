@@ -1,0 +1,7 @@
+## 2025-03-08 - Fix insecure MCP daemon Unix socket permissions
+
+**Vulnerability:** The MCP daemon in `src/services/mcp_daemon.rs` created a Unix domain socket (`mcp_daemon.sock`) using `UnixListener::bind` without explicitly setting file permissions. By default, this socket could potentially be accessible to other users on the system (e.g., `0o755` or `0o644` depending on umask), leading to a local authorization bypass where any user could issue commands to the MCP daemon (like calling tools).
+
+**Learning:** When dealing with inter-process communication (IPC) via Unix domain sockets, the default permissions are often governed by the process's `umask`. Attempting to fix this by `chmod`ing the socket *after* it's bound (`UnixListener::bind`) creates a Time-Of-Check to Time-Of-Use (TOCTOU) race condition—an attacker can connect during the microsecond window before permissions are restricted.
+
+**Prevention:** The correct way to secure a Unix domain socket against local attackers is to create its parent directory with highly restrictive permissions (e.g., `0o700`) *before* binding the socket inside it. This ensures the socket is protected by the directory's mode at the exact moment of creation, eliminating any TOCTOU vulnerability windows. Critically, **never `chmod 700` an arbitrary parent directory** like `/tmp` or `~/.config`, as this will destroy system or user permissions and crash the app or OS. Always nest the socket inside a *dedicated subdirectory* specifically created for the application's IPC needs.
