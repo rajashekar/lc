@@ -21,8 +21,6 @@ pub struct VectorEntry {
     pub file_path: Option<String>,
     pub chunk_index: Option<i32>,
     pub total_chunks: Option<i32>,
-    #[serde(default)]
-    pub norm: f64,
 }
 
 // HNSW index for fast approximate nearest neighbor search
@@ -119,7 +117,7 @@ impl VectorDatabase {
     }
 
     fn initialize(&self) -> Result<()> {
-        let mut conn = Connection::open(&self.db_path)?;
+        let conn = Connection::open(&self.db_path)?;
 
         // First, create the table with the basic schema if it doesn't exist
         conn.execute(
@@ -138,25 +136,21 @@ impl VectorDatabase {
         let mut has_file_path = false;
         let mut has_chunk_index = false;
         let mut has_total_chunks = false;
-        let mut has_norm = false;
 
         // Query the table schema to see what columns exist
-        {
-            let mut stmt = conn.prepare("PRAGMA table_info(vectors)")?;
-            let column_iter = stmt.query_map([], |row| {
-                let column_name: String = row.get(1)?;
-                Ok(column_name)
-            })?;
+        let mut stmt = conn.prepare("PRAGMA table_info(vectors)")?;
+        let column_iter = stmt.query_map([], |row| {
+            let column_name: String = row.get(1)?;
+            Ok(column_name)
+        })?;
 
-            for column_result in column_iter {
-                let column_name = column_result?;
-                match column_name.as_str() {
-                    "file_path" => has_file_path = true,
-                    "chunk_index" => has_chunk_index = true,
-                    "total_chunks" => has_total_chunks = true,
-                    "norm" => has_norm = true,
-                    _ => {}
-                }
+        for column_result in column_iter {
+            let column_name = column_result?;
+            match column_name.as_str() {
+                "file_path" => has_file_path = true,
+                "chunk_index" => has_chunk_index = true,
+                "total_chunks" => has_total_chunks = true,
+                _ => {}
             }
         }
 
@@ -169,33 +163,6 @@ impl VectorDatabase {
         }
         if !has_total_chunks {
             conn.execute("ALTER TABLE vectors ADD COLUMN total_chunks INTEGER", [])?;
-        }
-        if !has_norm {
-            conn.execute("ALTER TABLE vectors ADD COLUMN norm REAL", [])?;
-
-            // Calculate norms for existing vectors
-            let mut vectors_to_update = Vec::new();
-            {
-                let mut select_stmt = conn.prepare("SELECT id, vector FROM vectors WHERE norm IS NULL")?;
-                let rows = select_stmt.query_map([], |row| {
-                    let id: i64 = row.get(0)?;
-                    let vector_json: String = row.get(1)?;
-                    Ok((id, vector_json))
-                })?;
-                for row in rows {
-                    let (id, vector_json) = row?;
-                    if let Ok(vector) = serde_json::from_str::<Vec<f64>>(&vector_json) {
-                        let norm = vector.iter().map(|v| v * v).sum::<f64>().sqrt();
-                        vectors_to_update.push((id, norm));
-                    }
-                }
-            }
-
-            let tx = conn.transaction()?;
-            for (id, norm) in vectors_to_update {
-                tx.execute("UPDATE vectors SET norm = ?1 WHERE id = ?2", params![norm, id])?;
-            }
-            tx.commit()?;
         }
 
         // Create index for faster similarity searches
@@ -240,11 +207,9 @@ impl VectorDatabase {
         let vector_json = serde_json::to_string(vector)?;
         let created_at = chrono::Utc::now().to_rfc3339();
 
-        let norm = vector.iter().map(|v| v * v).sum::<f64>().sqrt();
-
         conn.execute(
-            "INSERT INTO vectors (text, vector, model, provider, created_at, file_path, chunk_index, total_chunks, norm) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![text, vector_json, model, provider, created_at, file_path, chunk_index, total_chunks, norm],
+            "INSERT INTO vectors (text, vector, model, provider, created_at, file_path, chunk_index, total_chunks) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![text, vector_json, model, provider, created_at, file_path, chunk_index, total_chunks],
         )?;
 
         let id = conn.last_insert_rowid();
@@ -260,7 +225,6 @@ impl VectorDatabase {
             file_path: file_path.map(|s| s.to_string()),
             chunk_index,
             total_chunks,
-            norm,
         };
 
         // Add to cache
@@ -276,7 +240,7 @@ impl VectorDatabase {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, text, vector, model, provider, created_at, file_path, chunk_index, total_chunks, norm FROM vectors ORDER BY created_at DESC"
+            "SELECT id, text, vector, model, provider, created_at, file_path, chunk_index, total_chunks FROM vectors ORDER BY created_at DESC"
         )?;
 
         let vector_iter = stmt.query_map([], |row| {
@@ -300,8 +264,6 @@ impl VectorDatabase {
                 })?
                 .with_timezone(&chrono::Utc);
 
-            let norm: f64 = row.get(9).unwrap_or_else(|_| vector.iter().map(|v| v * v).sum::<f64>().sqrt());
-
             Ok(VectorEntry {
                 id: row.get(0)?,
                 text: row.get(1)?,
@@ -312,7 +274,6 @@ impl VectorDatabase {
                 file_path: row.get(6).ok(),
                 chunk_index: row.get(7).ok(),
                 total_chunks: row.get(8).ok(),
-                norm,
             })
         })?;
 
@@ -422,7 +383,7 @@ impl VectorDatabase {
             .into_par_iter()
             .map(|vector_entry| {
                 let similarity =
-                    cosine_similarity_fast(query_vector, &vector_entry.vector, query_norm, vector_entry.norm);
+                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
                 (vector_entry, similarity)
             })
             .collect();
@@ -562,11 +523,6 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
 }
 
 pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
-    // If both norms are available, use the faster implementation
-    // For backwards compatibility, if we had a function with both norms, we'd use it.
-    // We'll replace this with a faster implementation that takes both norms below.
-    // For now, keeping the old signature intact if it's used elsewhere, but we'll
-    // introduce a new function and use that.
     if a.len() != b.len() {
         return 0.0;
     }
@@ -606,25 +562,6 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
 
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
-    }
-
-    dot_product / (norm_a * norm_b)
-}
-
-/// Highly optimized cosine similarity when both norms are precomputed
-pub fn cosine_similarity_fast(a: &[f64], b: &[f64], norm_a: f64, norm_b: f64) -> f64 {
-    if a.len() != b.len() {
-        return 0.0;
-    }
-
-    if a.is_empty() || norm_a == 0.0 || norm_b == 0.0 {
-        return 0.0;
-    }
-
-    let mut dot_product = 0.0f64;
-
-    for (av, bv) in a.iter().zip(b.iter()) {
-        dot_product += av * bv;
     }
 
     dot_product / (norm_a * norm_b)
