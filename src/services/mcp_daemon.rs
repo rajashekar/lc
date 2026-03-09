@@ -146,10 +146,30 @@ impl McpDaemon {
 
     pub fn get_socket_path() -> Result<PathBuf> {
         let config_dir = crate::config::Config::config_dir()?;
-        Ok(config_dir.join("mcp_daemon.sock"))
+        Ok(config_dir.join("mcp").join("mcp_daemon.sock"))
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        // Ensure parent directory exists and has strict permissions before binding
+        if let Some(parent) = self.socket_path.parent() {
+            if !parent.exists() {
+                let mut builder = std::fs::DirBuilder::new();
+                builder.recursive(true);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::DirBuilderExt;
+                    builder.mode(0o700);
+                }
+                builder.create(parent)?;
+            }
+            // Enforce permissions even if the directory already existed
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))?;
+            }
+        }
+
         // Remove existing socket if it exists
         if self.socket_path.exists() {
             tokio::fs::remove_file(&self.socket_path).await?;

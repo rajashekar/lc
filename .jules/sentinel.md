@@ -1,0 +1,4 @@
+## 2024-03-09 - Secure Unix Socket Binding (TOCTOU Prevention)
+**Vulnerability:** The MCP daemon bound its Unix domain socket directly in the global config directory without ensuring strict directory permissions. An attacker with local access could potentially exploit a Time-Of-Check to Time-Of-Use (TOCTOU) race condition during socket creation or connect to the socket if the parent directory was too permissive.
+**Learning:** Unix sockets inherit access controls from their parent directory path. Modifying socket permissions *after* binding leaves a window where unauthorized access can occur.
+**Prevention:** Always nest Unix domain sockets inside a dedicated subdirectory and set strict permissions (e.g., `0o700`) on that directory *before* binding the socket to ensure secure, atomic access control.
