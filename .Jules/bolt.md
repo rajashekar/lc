@@ -1,0 +1,3 @@
+## 2024-05-24 - Avoid Manual Loop Unrolling in Rust
+**Learning:** Manual loop chunking for vector math (e.g., in cosine similarity calculations) actually hinders performance in Rust. The idiomatic `.iter().zip()` loops are superior because they leverage `TrustedRandomAccess`, allowing LLVM to completely elide bounds checks and reliably apply automatic SIMD vectorization and loop unrolling.
+**Action:** Always prefer idiomatic iterators like `.iter().zip().fold()` over manual chunking when performing vector mathematics in Rust to unlock LLVM optimizations and improve code readability.
