@@ -77,6 +77,10 @@ impl MultiLineInput {
                             return Ok(result);
                         }
                         InputAction::Cancel => {
+                            // Print visual feedback for cancellation
+                            print!("^C");
+                            io::stdout().flush()?;
+
                             // Clear state and return empty string
                             self.lines.clear();
                             self.current_line.clear();
