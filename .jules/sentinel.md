@@ -1,0 +1,5 @@
+
+## 2025-05-18 - [HIGH] Fix TOCTOU vulnerability in MCP daemon socket creation
+**Vulnerability:** A Time-Of-Check to Time-Of-Use (TOCTOU) race condition existed when creating the MCP daemon's Unix domain socket. The socket was created directly in the application's config directory without strict parent directory permission checks, making it potentially vulnerable to unauthorized local access if the directory permissions were lax.
+**Learning:** Unix domain socket permissions are heavily dependent on the permissions of their containing directory. If the directory is accessible, the socket might be too. Binding a socket and then changing its permissions is vulnerable to race conditions where an attacker accesses the socket before the permission change occurs.
+**Prevention:** Always place sensitive Unix domain sockets inside a dedicated subdirectory, and explicitly create that subdirectory with strict permissions (e.g., `0o700`) *before* binding the socket to ensure secure access from the moment of creation. Ensure permission modifications are platform-gated (e.g., `#[cfg(unix)]`).

@@ -146,10 +146,27 @@ impl McpDaemon {
 
     pub fn get_socket_path() -> Result<PathBuf> {
         let config_dir = crate::config::Config::config_dir()?;
-        Ok(config_dir.join("mcp_daemon.sock"))
+        Ok(config_dir.join("mcp").join("mcp_daemon.sock"))
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        // Ensure parent directory exists and has correct permissions
+        if let Some(parent) = self.socket_path.parent() {
+            if !parent.exists() {
+                #[cfg(unix)]
+                {
+                    let mut builder = tokio::fs::DirBuilder::new();
+                    builder.recursive(true);
+                    builder.mode(0o700);
+                    builder.create(parent).await?;
+                }
+                #[cfg(not(unix))]
+                {
+                    tokio::fs::create_dir_all(parent).await?;
+                }
+            }
+        }
+
         // Remove existing socket if it exists
         if self.socket_path.exists() {
             tokio::fs::remove_file(&self.socket_path).await?;
