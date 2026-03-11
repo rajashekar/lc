@@ -15,6 +15,8 @@ pub struct VectorEntry {
     pub id: i64,
     pub text: String,
     pub vector: Vec<f64>,
+    #[serde(default)]
+    pub norm: f64,
     pub model: String,
     pub provider: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -214,11 +216,14 @@ impl VectorDatabase {
 
         let id = conn.last_insert_rowid();
 
+        let norm = vector.iter().map(|x| x * x).sum::<f64>().sqrt();
+
         // Create vector entry for cache
         let vector_entry = VectorEntry {
             id,
             text: text.to_string(),
             vector: vector.to_vec(),
+            norm,
             model: model.to_string(),
             provider: provider.to_string(),
             created_at: chrono::Utc::now(),
@@ -264,10 +269,13 @@ impl VectorDatabase {
                 })?
                 .with_timezone(&chrono::Utc);
 
+            let norm = vector.iter().map(|x| x * x).sum::<f64>().sqrt();
+
             Ok(VectorEntry {
                 id: row.get(0)?,
                 text: row.get(1)?,
                 vector,
+                norm,
                 model: row.get(3)?,
                 provider: row.get(4)?,
                 created_at,
@@ -381,9 +389,21 @@ impl VectorDatabase {
         // Use parallel processing for similarity calculations
         let mut similarities: Vec<(VectorEntry, f64)> = vectors
             .into_par_iter()
-            .map(|vector_entry| {
-                let similarity =
-                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
+            .map(|mut vector_entry| {
+                if vector_entry.norm == 0.0 && !vector_entry.vector.is_empty() {
+                    vector_entry.norm = vector_entry
+                        .vector
+                        .iter()
+                        .map(|x| x * x)
+                        .sum::<f64>()
+                        .sqrt();
+                }
+                let similarity = cosine_similarity_fast(
+                    query_vector,
+                    &vector_entry.vector,
+                    query_norm,
+                    vector_entry.norm,
+                );
                 (vector_entry, similarity)
             })
             .collect();
@@ -466,50 +486,20 @@ impl VectorDatabase {
     }
 }
 
-// Optimized cosine similarity calculation with manual vectorization
+// Optimized cosine similarity calculation leveraging Rust's auto-vectorization
 pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
-    if a.len() != b.len() {
-        debug_log!(
-            "Vector dimension mismatch: query={}, stored={}",
-            a.len(),
-            b.len()
-        );
+    if a.len() != b.len() || a.is_empty() {
         return 0.0;
     }
 
-    if a.is_empty() {
-        return 0.0;
-    }
+    let mut dot_product = 0.0;
+    let mut norm_a_sq = 0.0;
+    let mut norm_b_sq = 0.0;
 
-    // Use chunked processing for better cache performance
-    let mut dot_product = 0.0f64;
-    let mut norm_a_sq = 0.0f64;
-    let mut norm_b_sq = 0.0f64;
-
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
-
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_a_sq += av * av;
-            norm_b_sq += bv * bv;
-        }
-    }
-
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
-        dot_product += av * bv;
-        norm_a_sq += av * av;
-        norm_b_sq += bv * bv;
+    for (x, y) in a.iter().zip(b.iter()) {
+        dot_product += x * y;
+        norm_a_sq += x * x;
+        norm_b_sq += y * y;
     }
 
     let norm_a = norm_a_sq.sqrt();
@@ -522,47 +512,13 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     dot_product / (norm_a * norm_b)
 }
 
-pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
-    if a.len() != b.len() {
+// Fast cosine similarity with precomputed L2 norms to avoid square root operations
+pub fn cosine_similarity_fast(a: &[f64], b: &[f64], norm_a: f64, norm_b: f64) -> f64 {
+    if a.len() != b.len() || a.is_empty() || norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
     }
 
-    if a.is_empty() {
-        return 0.0;
-    }
-
-    let mut dot_product = 0.0f64;
-    let mut norm_b_sq = 0.0f64;
-
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
-
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_b_sq += bv * bv;
-        }
-    }
-
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
-        dot_product += av * bv;
-        norm_b_sq += bv * bv;
-    }
-
-    let norm_b = norm_b_sq.sqrt();
-
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 0.0;
-    }
+    let dot_product: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
 
     dot_product / (norm_a * norm_b)
 }
