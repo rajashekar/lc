@@ -1,3 +1,4 @@
+pub mod regex_cache;
 // Utility modules
 pub mod audio;
 pub mod cli_utils;
