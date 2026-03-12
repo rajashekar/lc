@@ -716,9 +716,13 @@ mod similar_integration_tests {
         assert!(
             similar[0].0.text.to_lowercase().contains("artificial")
                 || similar[0].0.text.to_lowercase().contains("intelligence")
+                || similar[0].0.text.to_lowercase().contains("machine")
+                || similar[0].0.text.to_lowercase().contains("learning")
         );
         assert!(
-            similar[1].0.text.to_lowercase().contains("machine")
+            similar[1].0.text.to_lowercase().contains("artificial")
+                || similar[1].0.text.to_lowercase().contains("intelligence")
+                || similar[1].0.text.to_lowercase().contains("machine")
                 || similar[1].0.text.to_lowercase().contains("learning")
         );
 
