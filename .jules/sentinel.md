@@ -1,4 +1,0 @@
-## 2024-03-12 - Prevent TOCTOU race condition in Unix domain socket creation
-**Vulnerability:** The MCP daemon Unix socket (`mcp_daemon.sock`) was being created in the shared configuration directory. This opens up a potential Time-Of-Check to Time-Of-Use (TOCTOU) race condition and local unauthorized access, as the socket might be created before proper permissions are applied.
-**Learning:** To prevent TOCTOU race conditions when creating Unix domain sockets, the parent directory must be created with strict permissions (e.g., `0o700`) *before* the socket is bound inside it. Modifying the socket's permissions after binding leaves a window where it might be accessible.
-**Prevention:** When creating Unix domain sockets, nest them inside a dedicated subdirectory with `0o700` permissions created prior to socket binding.
