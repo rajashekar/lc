@@ -1,0 +1,55 @@
+--- src/utils/input.rs
++++ src/utils/input.rs
+@@ -9,13 +9,15 @@
+     lines: Vec<String>,
+     current_line: String,
+     cursor_pos: usize,
++    prompt: String,
+ }
+
+ impl MultiLineInput {
+     pub fn new() -> Self {
+         Self {
+             lines: Vec::new(),
+             current_line: String::new(),
+             cursor_pos: 0,
++            prompt: String::new(),
+         }
+     }
+
+@@ -25,6 +27,7 @@
+     /// - Backspace: Delete character
+     /// - Arrow keys: Navigate (basic support)
+     pub fn read_input(&mut self, prompt: &str) -> Result<String> {
++        self.prompt = prompt.to_string();
+         print!("{} ", prompt);
+         io::stdout().flush()?;
+
+@@ -102,6 +105,8 @@
+             }
+             KeyCode::Char('c') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                 // Ctrl+C: Cancel
++                print!("^C");
++                io::stdout().flush()?;
+                 Ok(InputAction::Cancel)
+             }
+             KeyCode::Char(c) => {
+@@ -171,9 +176,9 @@
+
+                     // Redraw prompt and current line
+                     if self.lines.is_empty() {
+-                        print!("You: {}", self.current_line);
++                        print!("{} {}", self.prompt, self.current_line);
+                     } else {
+-                        print!("...   {}", self.current_line);
++                        print!("{}   {}", "...".dimmed(), self.current_line);
+                     }
+                     io::stdout().flush()?;
+                 }
+@@ -213,6 +218,7 @@
+         assert!(input.lines.is_empty());
+         assert!(input.current_line.is_empty());
+         assert_eq!(input.cursor_pos, 0);
++        assert!(input.prompt.is_empty());
+     }
+ }
