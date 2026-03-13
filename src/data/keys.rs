@@ -212,26 +212,23 @@ impl KeysConfig {
     /// List all providers with configured keys
     #[allow(dead_code)]
     pub fn list_providers_with_keys(&self) -> Vec<String> {
-        let mut providers = Vec::new();
+        // Optimization: Use HashSet for O(1) insertions and automatic deduplication
+        // This replaces the previous O(N^2) approach of checking Vec::contains in a loop
+        let mut providers_set = std::collections::HashSet::new();
 
         for key in self.api_keys.keys() {
-            if !providers.contains(key) {
-                providers.push(key.clone());
-            }
+            providers_set.insert(key.clone());
         }
 
         for key in self.service_accounts.keys() {
-            if !providers.contains(key) {
-                providers.push(key.clone());
-            }
+            providers_set.insert(key.clone());
         }
 
         for key in self.custom_headers.keys() {
-            if !providers.contains(key) {
-                providers.push(key.clone());
-            }
+            providers_set.insert(key.clone());
         }
 
+        let mut providers: Vec<String> = providers_set.into_iter().collect();
         providers.sort();
         providers
     }
