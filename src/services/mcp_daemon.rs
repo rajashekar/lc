@@ -146,10 +146,26 @@ impl McpDaemon {
 
     pub fn get_socket_path() -> Result<PathBuf> {
         let config_dir = crate::config::Config::config_dir()?;
-        Ok(config_dir.join("mcp_daemon.sock"))
+        Ok(config_dir.join("mcp").join("mcp_daemon.sock"))
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        // Ensure the parent directory exists with safe permissions
+        if let Some(parent) = self.socket_path.parent() {
+            if !parent.exists() {
+                let mut builder = tokio::fs::DirBuilder::new();
+                builder.recursive(true).mode(0o700);
+                builder.create(parent).await?;
+            } else {
+                let metadata = tokio::fs::symlink_metadata(parent).await?;
+                if metadata.file_type().is_symlink() {
+                    return Err(anyhow::anyhow!(
+                        "Socket parent directory is a symlink, which is insecure"
+                    ));
+                }
+            }
+        }
+
         // Remove existing socket if it exists
         if self.socket_path.exists() {
             tokio::fs::remove_file(&self.socket_path).await?;
