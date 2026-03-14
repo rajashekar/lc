@@ -146,13 +146,42 @@ impl McpDaemon {
 
     pub fn get_socket_path() -> Result<PathBuf> {
         let config_dir = crate::config::Config::config_dir()?;
-        Ok(config_dir.join("mcp_daemon.sock"))
+        Ok(config_dir.join("mcp").join("mcp_daemon.sock"))
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        // Remove existing socket if it exists
-        if self.socket_path.exists() {
-            tokio::fs::remove_file(&self.socket_path).await?;
+        // Ensure parent directory exists with secure permissions (0o700) to prevent TOCTOU
+        if let Some(parent) = self.socket_path.parent() {
+            if parent.exists() {
+                let metadata = tokio::fs::symlink_metadata(parent).await?;
+                if metadata.is_symlink() {
+                    return Err(anyhow::anyhow!("MCP daemon parent directory is a symlink"));
+                }
+            } else {
+                let mut builder = tokio::fs::DirBuilder::new();
+                builder.recursive(true);
+                #[cfg(unix)]
+                {
+                    #[allow(unused_imports)]
+                    use std::os::unix::fs::DirBuilderExt;
+                    builder.mode(0o700);
+                }
+                builder.create(parent).await?;
+            }
+        }
+
+        // Check if existing socket is a symlink before attempting to remove it
+        if let Ok(metadata) = tokio::fs::symlink_metadata(&self.socket_path).await {
+            if metadata.is_symlink() {
+                return Err(anyhow::anyhow!("Existing MCP daemon socket is a symlink"));
+            }
+        }
+
+        // Remove existing socket, ignoring NotFound errors
+        match tokio::fs::remove_file(&self.socket_path).await {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
