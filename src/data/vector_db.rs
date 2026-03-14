@@ -364,32 +364,29 @@ impl VectorDatabase {
         query_vector: &[f64],
         limit: usize,
     ) -> Result<Vec<(VectorEntry, f64)>> {
+        // Get all vectors from cache or database
+        let vectors = if self.vector_cache.is_empty() {
+            self.get_all_vectors()?
+        } else {
+            self.vector_cache
+                .iter()
+                .map(|entry| entry.value().clone())
+                .collect::<Vec<_>>()
+        };
+
         // Precompute query norm to avoid re-calculating it for every vector
         let query_norm_sq: f64 = query_vector.iter().map(|x| x * x).sum();
         let query_norm = query_norm_sq.sqrt();
 
-        // Get all vectors from cache or database
-        let mut similarities: Vec<(VectorEntry, f64)> = if self.vector_cache.is_empty() {
-            let vectors = self.get_all_vectors()?;
-            vectors
-                .into_par_iter()
-                .map(|vector_entry| {
-                    let similarity =
-                        cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
-                    (vector_entry, similarity)
-                })
-                .collect()
-        } else {
-            let refs: Vec<_> = self.vector_cache.iter().collect();
-            refs.into_par_iter()
-                .map(|entry| {
-                    let vector_entry = entry.value();
-                    let similarity =
-                        cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
-                    (vector_entry.clone(), similarity)
-                })
-                .collect()
-        };
+        // Use parallel processing for similarity calculations
+        let mut similarities: Vec<(VectorEntry, f64)> = vectors
+            .into_par_iter()
+            .map(|vector_entry| {
+                let similarity =
+                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
+                (vector_entry, similarity)
+            })
+            .collect();
 
         // Use partial_sort for better performance when limit << total_vectors
         if limit < similarities.len() {
