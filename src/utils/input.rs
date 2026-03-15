@@ -13,6 +13,7 @@ pub struct MultiLineInput {
     lines: Vec<String>,
     current_line: String,
     cursor_pos: usize,
+    prompt: String,
 }
 
 impl MultiLineInput {
@@ -21,6 +22,7 @@ impl MultiLineInput {
             lines: Vec::new(),
             current_line: String::new(),
             cursor_pos: 0,
+            prompt: String::new(),
         }
     }
 
@@ -31,6 +33,7 @@ impl MultiLineInput {
     /// - Backspace: Delete character
     /// - Arrow keys: Navigate (basic support)
     pub fn read_input(&mut self, prompt: &str) -> Result<String> {
+        self.prompt = prompt.to_string();
         print!("{} ", prompt);
         io::stdout().flush()?;
 
@@ -82,6 +85,8 @@ impl MultiLineInput {
                             self.current_line.clear();
                             self.cursor_pos = 0;
 
+                            print!("^C");
+                            io::stdout().flush()?;
                             println!(); // Move to next line
                             return Ok(String::new());
                         }
@@ -130,14 +135,15 @@ impl MultiLineInput {
             }
             KeyCode::Char(c) => {
                 // Insert character at cursor position
-                self.current_line.insert(self.cursor_pos, c);
+                let idx = self.byte_index();
+                self.current_line.insert(idx, c);
                 self.cursor_pos += 1;
 
                 // Print the character
                 print!("{}", c);
 
                 // Redraw the rest of the line if we inserted in the middle
-                let rest = &self.current_line[self.cursor_pos..];
+                let rest = &self.current_line[self.byte_index()..];
                 if !rest.is_empty() {
                     print!("{}", rest);
                     // Move cursor back to correct position
@@ -149,12 +155,13 @@ impl MultiLineInput {
                 Ok(InputAction::Continue)
             }
             KeyCode::Delete => {
-                if self.cursor_pos < self.current_line.len() {
+                if self.cursor_pos < self.current_line.chars().count() {
                     // Remove character at cursor
-                    self.current_line.remove(self.cursor_pos);
+                    let idx = self.byte_index();
+                    self.current_line.remove(idx);
 
                     // Print rest of line
-                    let rest = &self.current_line[self.cursor_pos..];
+                    let rest = &self.current_line[idx..];
                     print!("{}", rest);
 
                     // Clear the character that was shifted left
@@ -172,14 +179,15 @@ impl MultiLineInput {
             KeyCode::Backspace => {
                 if self.cursor_pos > 0 {
                     // Remove character before cursor
-                    self.current_line.remove(self.cursor_pos - 1);
+                    let prev_idx = self.prev_byte_index();
+                    self.current_line.remove(prev_idx);
                     self.cursor_pos -= 1;
 
                     // Move cursor back to position of deleted char
                     print!("\x08");
 
                     // Print rest of line
-                    let rest = &self.current_line[self.cursor_pos..];
+                    let rest = &self.current_line[prev_idx..];
                     print!("{}", rest);
 
                     // Clear the character that was shifted left
@@ -200,12 +208,12 @@ impl MultiLineInput {
                     print!("\r{}   \r", " ".repeat(10));
 
                     // Restore previous line
-                    self.cursor_pos = prev_line.len();
+                    self.cursor_pos = prev_line.chars().count();
                     self.current_line = prev_line;
 
                     // Redraw prompt and current line
                     if self.lines.is_empty() {
-                        print!("You: {}", self.current_line);
+                        print!("{} {}", self.prompt, self.current_line);
                     } else {
                         print!("...   {}", self.current_line);
                     }
@@ -223,7 +231,7 @@ impl MultiLineInput {
                 Ok(InputAction::Continue)
             }
             KeyCode::Right => {
-                if self.cursor_pos < self.current_line.len() {
+                if self.cursor_pos < self.current_line.chars().count() {
                     self.cursor_pos += 1;
                     print!("\x1b[C"); // Move cursor right
                     io::stdout().flush()?;
@@ -231,6 +239,26 @@ impl MultiLineInput {
                 Ok(InputAction::Continue)
             }
             _ => Ok(InputAction::Continue),
+        }
+    }
+
+    fn byte_index(&self) -> usize {
+        self.current_line
+            .char_indices()
+            .nth(self.cursor_pos)
+            .map(|(i, _)| i)
+            .unwrap_or(self.current_line.len())
+    }
+
+    fn prev_byte_index(&self) -> usize {
+        if self.cursor_pos == 0 {
+            0
+        } else {
+            self.current_line
+                .char_indices()
+                .nth(self.cursor_pos - 1)
+                .map(|(i, _)| i)
+                .unwrap_or(0)
         }
     }
 
