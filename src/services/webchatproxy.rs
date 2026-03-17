@@ -769,7 +769,7 @@ pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> 
     let dead_processes: Vec<String> = Vec::new();
 
     // Check which processes are still alive
-    for (provider, daemon_info) in registry.list_daemons().clone() {
+    for (provider, daemon_info) in registry.list_daemons() {
         #[cfg(unix)]
         {
             use nix::sys::signal;
@@ -779,11 +779,11 @@ pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> 
             match signal::kill(pid, None) {
                 Ok(_) => {
                     // Process is alive
-                    active_daemons.insert(provider, daemon_info);
+                    active_daemons.insert(provider.clone(), daemon_info.clone());
                 }
                 Err(_) => {
                     // Process is dead, mark for removal
-                    dead_processes.push(provider);
+                    dead_processes.push(provider.clone());
                 }
             }
         }
@@ -791,7 +791,7 @@ pub async fn list_webchatproxy_daemons() -> Result<HashMap<String, DaemonInfo>> 
         #[cfg(not(unix))]
         {
             // On non-Unix systems, assume all registered daemons are active
-            active_daemons.insert(provider, daemon_info);
+            active_daemons.insert(provider.clone(), daemon_info.clone());
         }
     }
 
