@@ -1,0 +1,3 @@
+## 2024-05-24 - Idiomatic zip for vector mathematics
+**Learning:** Manual loop unrolling and chunking for mathematical operations (like calculating dot products or L2 norms in cosine similarity) can actually degrade performance in Rust because it introduces bounds-checking overhead that defeats auto-vectorization. Using idiomatic `.iter().zip()` loops leverages `TrustedRandomAccess` under the hood, allowing LLVM to completely elide bounds checks and reliably apply automatic SIMD vectorization while simultaneously improving code readability.
+**Action:** When implementing mathematical operations on slices or vectors (e.g., in vector database search functions), prefer `.iter().zip()` over manual index-based iteration or chunking loops.
