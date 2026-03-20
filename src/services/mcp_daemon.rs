@@ -169,7 +169,9 @@ impl McpDaemon {
             // we will catch it here before binding the socket inside it.
             let metadata = tokio::fs::symlink_metadata(parent).await?;
             if metadata.file_type().is_symlink() {
-                return Err(anyhow::anyhow!("MCP daemon parent directory is a symlink, which is a security risk"));
+                return Err(anyhow::anyhow!(
+                    "MCP daemon parent directory is a symlink, which is a security risk"
+                ));
             }
         }
 
