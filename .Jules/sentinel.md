@@ -1,0 +1,5 @@
+
+## 2024-03-20 - Fix TOCTOU and Symlink vulnerabilities in MCP Unix socket creation
+**Vulnerability:** The MCP daemon created its Unix domain socket directly in the general config directory with default permissions. It checked if the socket file existed before deleting it (TOCTOU race condition), and was vulnerable to symlink attacks if an attacker pre-created the socket as a symlink.
+**Learning:** Unix domain sockets are powerful IPC mechanisms that require strict file system permissions. Creating a socket in a directory that may have overly permissive access or without verifying the directory is not a symlink allows local attackers to hijack the connection. Using `.exists()` before deleting a file introduces a Time-of-Check to Time-of-Use race condition.
+**Prevention:** Always create Unix sockets in a dedicated, restricted directory created with `0o700` permissions. Check for symlinks using `symlink_metadata` before binding. Avoid TOCTOU by performing the action directly (e.g., `remove_file`) and gracefully handling `NotFound` errors.
