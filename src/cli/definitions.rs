@@ -255,6 +255,9 @@ pub enum Commands {
         /// Generate a random API key
         #[arg(short = 'g', long = "generate-key")]
         generate_key: bool,
+        /// Enable CORS for cross-origin requests
+        #[arg(long = "cors")]
+        cors: bool,
     },
     /// MCP server management
     Mcp {
