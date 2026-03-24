@@ -82,7 +82,7 @@ impl MultiLineInput {
                             self.current_line.clear();
                             self.cursor_pos = 0;
 
-                            println!(); // Move to next line
+                            println!("^C"); // Move to next line and show cancel indication
                             return Ok(String::new());
                         }
                         InputAction::NewLine => {
