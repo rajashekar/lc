@@ -1,0 +1,3 @@
+## 2024-05-24 - Rust Vectorization vs Manual Loop Unrolling
+**Learning:** In Rust, idiomatic `.iter().zip()` loops for vector mathematics (e.g., cosine similarity) are preferred over manual loop unrolling/chunking. Under the hood, this leverages `TrustedRandomAccess`, allowing LLVM to completely elide bounds checks and reliably apply automatic SIMD vectorization and loop unrolling while maintaining better code readability.
+**Action:** Replace manual loop unrolling with `.iter().zip()` loops when performing vector mathematics.
