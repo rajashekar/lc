@@ -481,32 +481,12 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
         return 0.0;
     }
 
-    // Use chunked processing for better cache performance
+    // Use idiomatic iterators for better readability and automatic SIMD vectorization
     let mut dot_product = 0.0f64;
     let mut norm_a_sq = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
-
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_a_sq += av * av;
-            norm_b_sq += bv * bv;
-        }
-    }
-
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
+    for (av, bv) in a.iter().zip(b.iter()) {
         dot_product += av * bv;
         norm_a_sq += av * av;
         norm_b_sq += bv * bv;
@@ -534,26 +514,8 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
     let mut dot_product = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
-
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_b_sq += bv * bv;
-        }
-    }
-
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
+    // Use idiomatic iterators for better readability and automatic SIMD vectorization
+    for (av, bv) in a.iter().zip(b.iter()) {
         dot_product += av * bv;
         norm_b_sq += bv * bv;
     }
