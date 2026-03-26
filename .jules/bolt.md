@@ -1,0 +1,3 @@
+## 2026-03-26 - LLVM SIMD Vectorization is Better with Idiomatic iter().zip()
+**Learning:** In Rust, manually unrolling loops and chunking elements (like processing items 4 at a time) for vector math (such as calculating cosine similarity) is actually an anti-pattern that can hinder performance and code readability. Instead, idiomatic patterns like `.iter().zip()` utilize `TrustedRandomAccess`, allowing LLVM to completely elide bounds checks, automatically apply SIMD vectorization, and perform loop unrolling efficiently under the hood.
+**Action:** When performing heavy mathematical vector operations (like dot products or distances), always prefer using idiomatic `.iter().zip()` over manual loop chunking to leverage compiler optimizations securely.
