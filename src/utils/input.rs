@@ -1,7 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
 use crossterm::{
-    cursor::MoveLeft,
+    cursor::{MoveLeft, MoveRight},
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -226,6 +226,24 @@ impl MultiLineInput {
                 if self.cursor_pos < self.current_line.len() {
                     self.cursor_pos += 1;
                     print!("\x1b[C"); // Move cursor right
+                    io::stdout().flush()?;
+                }
+                Ok(InputAction::Continue)
+            }
+            KeyCode::Home => {
+                if self.cursor_pos > 0 {
+                    let dist = self.cursor_pos as u16;
+                    self.cursor_pos = 0;
+                    execute!(io::stdout(), MoveLeft(dist))?;
+                    io::stdout().flush()?;
+                }
+                Ok(InputAction::Continue)
+            }
+            KeyCode::End => {
+                if self.cursor_pos < self.current_line.len() {
+                    let dist = (self.current_line.len() - self.cursor_pos) as u16;
+                    self.cursor_pos = self.current_line.len();
+                    execute!(io::stdout(), MoveRight(dist))?;
                     io::stdout().flush()?;
                 }
                 Ok(InputAction::Continue)
