@@ -145,7 +145,10 @@ pub async fn handle(
                     println!("  {}            - Show this help", "/help".green());
                     println!("\n{}", "Input Controls:".bold().blue());
                     println!("  {}            - Send message", "Enter".yellow());
-                    println!("  {}      - New line (multi-line input)", "Shift+Enter".yellow());
+                    println!(
+                        "  {}      - New line (multi-line input)",
+                        "Shift+Enter".yellow()
+                    );
                     println!("  {}           - New line (alternative)", "Ctrl+J".yellow());
                     println!("  {}           - Cancel current input\n", "Ctrl+C".yellow());
                     continue;
