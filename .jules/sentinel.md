@@ -1,0 +1,4 @@
+## 2024-05-31 - Time-Of-Check to Time-Of-Use (TOCTOU) vulnerability with file.exists()
+**Vulnerability:** Many places in the codebase use `path.exists()` before performing file operations like `tokio::fs::remove_file(path)` or `tokio::fs::create_dir_all(path)`. This is a classic Time-Of-Check to Time-Of-Use (TOCTOU) vulnerability. In `src/services/mcp_daemon.rs`, `if self.socket_path.exists() { tokio::fs::remove_file(&self.socket_path).await?; }` was used.
+**Learning:** This pattern creates a race condition where the file state can change between the `.exists()` check and the actual file operation, leading to potential errors (e.g., trying to remove a file that was deleted right after the check) or security issues (e.g., a symlink attack).
+**Prevention:** Perform the file operation directly and gracefully handle the resulting error using standard ErrorKind matching (e.g., matching on `std::io::ErrorKind::NotFound` or `std::io::ErrorKind::AlreadyExists`).
