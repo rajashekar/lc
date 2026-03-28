@@ -138,16 +138,16 @@ pub async fn handle(
                 }
                 "/help" => {
                     println!("\n{}", "Available Commands:".bold().blue());
-                    println!("  /exit, /quit     - Exit chat session");
-                    println!("  /clear           - Clear current session");
-                    println!("  /model <name>    - Change model");
-                    println!("  /system <prompt> - Set system prompt");
-                    println!("  /help            - Show this help");
+                    println!("  {}     - Exit chat session", "/exit, /quit".green());
+                    println!("  {}           - Clear current session", "/clear".green());
+                    println!("  {}    - Change model", "/model <name>".green());
+                    println!("  {} - Set system prompt", "/system <prompt>".green());
+                    println!("  {}            - Show this help", "/help".green());
                     println!("\n{}", "Input Controls:".bold().blue());
-                    println!("  Enter            - Send message");
-                    println!("  Shift+Enter      - New line (multi-line input)");
-                    println!("  Ctrl+J           - New line (alternative)");
-                    println!("  Ctrl+C           - Cancel current input\n");
+                    println!("  {}            - Send message", "Enter".yellow());
+                    println!("  {}      - New line (multi-line input)", "Shift+Enter".yellow());
+                    println!("  {}           - New line (alternative)", "Ctrl+J".yellow());
+                    println!("  {}           - Cancel current input\n", "Ctrl+C".yellow());
                     continue;
                 }
                 _ if input.starts_with("/model ") => {
