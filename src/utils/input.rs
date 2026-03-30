@@ -230,6 +230,24 @@ impl MultiLineInput {
                 }
                 Ok(InputAction::Continue)
             }
+            KeyCode::Home => {
+                if self.cursor_pos > 0 {
+                    let diff = self.cursor_pos as u16;
+                    self.cursor_pos = 0;
+                    execute!(io::stdout(), MoveLeft(diff))?;
+                    io::stdout().flush()?;
+                }
+                Ok(InputAction::Continue)
+            }
+            KeyCode::End => {
+                if self.cursor_pos < self.current_line.len() {
+                    let diff = (self.current_line.len() - self.cursor_pos) as u16;
+                    self.cursor_pos = self.current_line.len();
+                    execute!(io::stdout(), crossterm::cursor::MoveRight(diff))?;
+                    io::stdout().flush()?;
+                }
+                Ok(InputAction::Continue)
+            }
             _ => Ok(InputAction::Continue),
         }
     }
