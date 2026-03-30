@@ -445,8 +445,15 @@ async fn dump_models_data() -> Result<()> {
 
     for (provider_name, provider_config) in &config.providers {
         // Prevent path traversal vulnerabilities
-        if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
-            println!("{} Skipping {} (invalid name)", "⚠️".yellow(), provider_name);
+        if provider_name.contains('/')
+            || provider_name.contains('\\')
+            || provider_name.contains("..")
+        {
+            println!(
+                "{} Skipping {} (invalid name)",
+                "⚠️".yellow(),
+                provider_name
+            );
             continue;
         }
 
