@@ -376,6 +376,11 @@ async fn handle_show_current_config() -> Result<()> {
 async fn load_provider_enhanced_models(
     provider_name: &str,
 ) -> Result<Vec<crate::model_metadata::ModelMetadata>> {
+    // Prevent path traversal vulnerabilities
+    if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
+        return Ok(Vec::new());
+    }
+
     use crate::model_metadata::MetadataExtractor;
     use std::fs;
 
