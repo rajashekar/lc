@@ -11,6 +11,7 @@ pub async fn handle(
     model: Option<String>,
     api_key: Option<String>,
     generate_key: bool,
+    cors: bool,
 ) -> Result<()> {
     // Defaults
     let port_val = port.unwrap_or(8080);
@@ -96,6 +97,12 @@ pub async fn handle(
         println!("  {} {}", "Authentication:".bold(), "Disabled".yellow());
     }
 
+    if cors {
+        println!("  {} {}", "CORS:".bold(), "Enabled".green());
+    } else {
+        println!("  {} {}", "CORS:".bold(), "Disabled".yellow());
+    }
+
     println!("\n{}", "Available endpoints:".bold().blue());
     println!("  {} http://{}:{}/models", "•".blue(), host_str, port_val);
     println!(
@@ -120,8 +127,15 @@ pub async fn handle(
     println!("\n{} Press Ctrl+C to stop the server\n", "💡".yellow());
 
     // Start the proxy server
-    crate::services::proxy::start_proxy_server(host_str, port_val, provider, model, final_api_key)
-        .await?;
+    crate::services::proxy::start_proxy_server(
+        host_str,
+        port_val,
+        provider,
+        model,
+        final_api_key,
+        cors,
+    )
+    .await?;
 
     Ok(())
 }
