@@ -130,7 +130,12 @@ impl MultiLineInput {
             }
             KeyCode::Char(c) => {
                 // Insert character at cursor position (convert logical index to byte index)
-                let byte_idx = self.current_line.chars().take(self.cursor_pos).map(|ch| ch.len_utf8()).sum();
+                let byte_idx = self
+                    .current_line
+                    .chars()
+                    .take(self.cursor_pos)
+                    .map(|ch| ch.len_utf8())
+                    .sum();
                 self.current_line.insert(byte_idx, c);
                 self.cursor_pos += 1;
 
@@ -138,7 +143,12 @@ impl MultiLineInput {
                 print!("{}", c);
 
                 // Redraw the rest of the line if we inserted in the middle
-                let rest_byte_idx = self.current_line.chars().take(self.cursor_pos).map(|ch| ch.len_utf8()).sum();
+                let rest_byte_idx = self
+                    .current_line
+                    .chars()
+                    .take(self.cursor_pos)
+                    .map(|ch| ch.len_utf8())
+                    .sum();
                 let rest = &self.current_line[rest_byte_idx..];
                 if !rest.is_empty() {
                     print!("{}", rest);
@@ -154,11 +164,21 @@ impl MultiLineInput {
                 let current_chars_count = self.current_line.chars().count();
                 if self.cursor_pos < current_chars_count {
                     // Remove character at cursor (convert logical index to byte index)
-                    let byte_idx = self.current_line.chars().take(self.cursor_pos).map(|ch| ch.len_utf8()).sum();
+                    let byte_idx = self
+                        .current_line
+                        .chars()
+                        .take(self.cursor_pos)
+                        .map(|ch| ch.len_utf8())
+                        .sum();
                     self.current_line.remove(byte_idx);
 
                     // Print rest of line
-                    let rest_byte_idx = self.current_line.chars().take(self.cursor_pos).map(|ch| ch.len_utf8()).sum();
+                    let rest_byte_idx = self
+                        .current_line
+                        .chars()
+                        .take(self.cursor_pos)
+                        .map(|ch| ch.len_utf8())
+                        .sum();
                     let rest = &self.current_line[rest_byte_idx..];
                     print!("{}", rest);
 
@@ -177,7 +197,12 @@ impl MultiLineInput {
             KeyCode::Backspace => {
                 if self.cursor_pos > 0 {
                     // Remove character before cursor (convert logical index to byte index)
-                    let byte_idx = self.current_line.chars().take(self.cursor_pos - 1).map(|ch| ch.len_utf8()).sum();
+                    let byte_idx = self
+                        .current_line
+                        .chars()
+                        .take(self.cursor_pos - 1)
+                        .map(|ch| ch.len_utf8())
+                        .sum();
                     self.current_line.remove(byte_idx);
                     self.cursor_pos -= 1;
 
@@ -185,7 +210,12 @@ impl MultiLineInput {
                     print!("\x08");
 
                     // Print rest of line
-                    let rest_byte_idx = self.current_line.chars().take(self.cursor_pos).map(|ch| ch.len_utf8()).sum();
+                    let rest_byte_idx = self
+                        .current_line
+                        .chars()
+                        .take(self.cursor_pos)
+                        .map(|ch| ch.len_utf8())
+                        .sum();
                     let rest = &self.current_line[rest_byte_idx..];
                     print!("{}", rest);
 
