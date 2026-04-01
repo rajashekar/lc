@@ -1,0 +1,3 @@
+## 2024-04-01 - Optimize SIMD Array iteration
+**Learning:** In Rust, attempting to optimize array iterations manually by grouping them in blocks with loops like `a.len() / chunk_size` can inhibit auto-vectorization and bound check elisions. Using iterators, specifically `chunks_exact(N)` coupled with `zip()` and `.remainder()`, provides the necessary hints to the compiler and LLVM that bounds checking is unnecessary, achieving true SIMD instruction vectorization without relying on direct assembly or intrinsics.
+**Action:** When performing heavy mathematical operations on arrays like cosine similarity, prefer to use standard library iterators like `chunks_exact().zip()` or `.align_to()` over manual pointer/index arithmetic loops.
