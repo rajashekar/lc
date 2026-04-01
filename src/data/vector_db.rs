@@ -491,12 +491,30 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     let mut b_chunks = b.chunks_exact(8);
 
     for (ac, bc) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
-        dot_product += ac[0] * bc[0] + ac[1] * bc[1] + ac[2] * bc[2] + ac[3] * bc[3]
-                     + ac[4] * bc[4] + ac[5] * bc[5] + ac[6] * bc[6] + ac[7] * bc[7];
-        norm_a_sq += ac[0] * ac[0] + ac[1] * ac[1] + ac[2] * ac[2] + ac[3] * ac[3]
-                   + ac[4] * ac[4] + ac[5] * ac[5] + ac[6] * ac[6] + ac[7] * ac[7];
-        norm_b_sq += bc[0] * bc[0] + bc[1] * bc[1] + bc[2] * bc[2] + bc[3] * bc[3]
-                   + bc[4] * bc[4] + bc[5] * bc[5] + bc[6] * bc[6] + bc[7] * bc[7];
+        dot_product += ac[0] * bc[0]
+            + ac[1] * bc[1]
+            + ac[2] * bc[2]
+            + ac[3] * bc[3]
+            + ac[4] * bc[4]
+            + ac[5] * bc[5]
+            + ac[6] * bc[6]
+            + ac[7] * bc[7];
+        norm_a_sq += ac[0] * ac[0]
+            + ac[1] * ac[1]
+            + ac[2] * ac[2]
+            + ac[3] * ac[3]
+            + ac[4] * ac[4]
+            + ac[5] * ac[5]
+            + ac[6] * ac[6]
+            + ac[7] * ac[7];
+        norm_b_sq += bc[0] * bc[0]
+            + bc[1] * bc[1]
+            + bc[2] * bc[2]
+            + bc[3] * bc[3]
+            + bc[4] * bc[4]
+            + bc[5] * bc[5]
+            + bc[6] * bc[6]
+            + bc[7] * bc[7];
     }
 
     // Process remaining elements
@@ -532,10 +550,22 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
     let mut b_chunks = b.chunks_exact(8);
 
     for (ac, bc) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
-        dot_product += ac[0] * bc[0] + ac[1] * bc[1] + ac[2] * bc[2] + ac[3] * bc[3]
-                     + ac[4] * bc[4] + ac[5] * bc[5] + ac[6] * bc[6] + ac[7] * bc[7];
-        norm_b_sq += bc[0] * bc[0] + bc[1] * bc[1] + bc[2] * bc[2] + bc[3] * bc[3]
-                   + bc[4] * bc[4] + bc[5] * bc[5] + bc[6] * bc[6] + bc[7] * bc[7];
+        dot_product += ac[0] * bc[0]
+            + ac[1] * bc[1]
+            + ac[2] * bc[2]
+            + ac[3] * bc[3]
+            + ac[4] * bc[4]
+            + ac[5] * bc[5]
+            + ac[6] * bc[6]
+            + ac[7] * bc[7];
+        norm_b_sq += bc[0] * bc[0]
+            + bc[1] * bc[1]
+            + bc[2] * bc[2]
+            + bc[3] * bc[3]
+            + bc[4] * bc[4]
+            + bc[5] * bc[5]
+            + bc[6] * bc[6]
+            + bc[7] * bc[7];
     }
 
     // Process remaining elements
