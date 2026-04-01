@@ -150,9 +150,11 @@ impl McpDaemon {
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        // Remove existing socket if it exists
-        if self.socket_path.exists() {
-            tokio::fs::remove_file(&self.socket_path).await?;
+        // Remove existing socket directly, ignoring NotFound errors to avoid TOCTOU races
+        match tokio::fs::remove_file(&self.socket_path).await {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
