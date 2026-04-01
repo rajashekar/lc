@@ -1,0 +1,3 @@
+## 2024-04-01 - Fix multi-byte character boundary panics in terminal input
+**Learning:** When building custom CLI input handlers (like multi-line text boxes using crossterm), utilizing raw `String::insert` or `String::remove` with logical character indices (e.g., `self.cursor_pos`) will cause `is_char_boundary` panics when the string contains multi-byte UTF-8 characters (like emojis or non-ASCII letters). Standard string lengths and index positions must be explicitly translated to byte indices.
+**Action:** Always convert logical cursor positions to byte indices using `.chars().take(idx).map(|c| c.len_utf8()).sum()` before performing string mutations in terminal input handlers.
