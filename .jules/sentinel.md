@@ -1,0 +1,4 @@
+## 2024-05-18 - Prevent Path Traversal from Provider Names
+**Vulnerability:** Path traversal vulnerability existed where user-supplied `provider_name` was used directly to construct file paths (e.g., `format!("models/{}.json", provider_name)`). By supplying a malicious provider name like `../config`, an attacker could potentially read or overwrite sensitive files outside the intended directory.
+**Learning:** This architectural gap resulted from implicitly trusting internal configuration keys and CLI inputs that eventually propagate to file operations without adequate validation against path traversal characters.
+**Prevention:** Always validate parameters used to construct file paths to ensure they do not contain directory separators (`/`, `\`) or parent references (`..`), even if the parameter originates from seemingly trusted internal configurations like a config map key.

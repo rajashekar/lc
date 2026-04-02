@@ -372,6 +372,10 @@ async fn get_model_metadata(
     provider_name: &str,
     model_name: &str,
 ) -> Option<crate::model_metadata::ModelMetadata> {
+    if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
+        return None;
+    }
+
     // Initialize cache if needed
     let cache = PROVIDER_METADATA_CACHE.get_or_init(|| RwLock::new(HashMap::new()));
 

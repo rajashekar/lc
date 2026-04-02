@@ -379,6 +379,10 @@ async fn load_provider_enhanced_models(
     use crate::model_metadata::MetadataExtractor;
     use std::fs;
 
+    if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
+        return Ok(Vec::new());
+    }
+
     let filename = format!("models/{}.json", provider_name);
 
     if !std::path::Path::new(&filename).exists() {
