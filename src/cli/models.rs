@@ -447,8 +447,15 @@ async fn dump_models_data() -> Result<()> {
         total_providers += 1;
 
         // Prevent path traversal
-        if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
-            println!("{} Skipping {} (invalid provider name)", "⚠️".yellow(), provider_name);
+        if provider_name.contains('/')
+            || provider_name.contains('\\')
+            || provider_name.contains("..")
+        {
+            println!(
+                "{} Skipping {} (invalid provider name)",
+                "⚠️".yellow(),
+                provider_name
+            );
             continue;
         }
 
