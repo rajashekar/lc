@@ -130,7 +130,12 @@ impl MultiLineInput {
             }
             KeyCode::Char(c) => {
                 // Insert character at cursor position (byte idx)
-                let byte_idx = self.current_line.chars().take(self.cursor_pos).map(|ch| ch.len_utf8()).sum::<usize>();
+                let byte_idx = self
+                    .current_line
+                    .chars()
+                    .take(self.cursor_pos)
+                    .map(|ch| ch.len_utf8())
+                    .sum::<usize>();
                 self.current_line.insert(byte_idx, c);
                 self.cursor_pos += 1;
 
@@ -153,7 +158,12 @@ impl MultiLineInput {
             KeyCode::Delete => {
                 if self.cursor_pos < self.current_line.chars().count() {
                     // Remove character at cursor (byte idx)
-                    let byte_idx = self.current_line.chars().take(self.cursor_pos).map(|c| c.len_utf8()).sum::<usize>();
+                    let byte_idx = self
+                        .current_line
+                        .chars()
+                        .take(self.cursor_pos)
+                        .map(|c| c.len_utf8())
+                        .sum::<usize>();
                     self.current_line.remove(byte_idx);
 
                     // Print rest of line
@@ -176,7 +186,12 @@ impl MultiLineInput {
                 if self.cursor_pos > 0 {
                     // Remove character before cursor (byte idx)
                     self.cursor_pos -= 1;
-                    let byte_idx = self.current_line.chars().take(self.cursor_pos).map(|c| c.len_utf8()).sum::<usize>();
+                    let byte_idx = self
+                        .current_line
+                        .chars()
+                        .take(self.cursor_pos)
+                        .map(|c| c.len_utf8())
+                        .sum::<usize>();
                     self.current_line.remove(byte_idx);
 
                     // Move cursor back to position of deleted char
