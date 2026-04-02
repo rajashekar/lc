@@ -446,6 +446,19 @@ async fn dump_models_data() -> Result<()> {
     for (provider_name, provider_config) in &config.providers {
         total_providers += 1;
 
+        // Prevent path traversal
+        if provider_name.contains('/')
+            || provider_name.contains('\\')
+            || provider_name.contains("..")
+        {
+            println!(
+                "{} Skipping {} (invalid provider name)",
+                "⚠️".yellow(),
+                provider_name
+            );
+            continue;
+        }
+
         // Skip providers without API keys
         if provider_config.api_key.is_none() {
             println!("{} Skipping {} (no API key)", "⚠️".yellow(), provider_name);
