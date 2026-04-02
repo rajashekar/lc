@@ -1,0 +1,3 @@
+## 2024-05-18 - String Splitting Allocations
+**Learning:** When repeatedly splitting an owned string (like finding a delimiter and taking prefix/suffix) inside a loop, cloning the string or creating new `String` allocations by taking string slices (e.g., `text[..pos].to_string()`) causes unnecessary allocations.
+**Action:** Use `.into_iter()` to take ownership of the items if the collection can be consumed. Then use `String::split_off(pos)` to extract the suffix and `String::truncate(pos)` to keep the prefix in the original string. This reduces allocations from two to one by reusing the original string's capacity for the prefix. Remember to offset the `split_off` byte index by the delimiter's byte length.
