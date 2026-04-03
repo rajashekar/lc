@@ -128,6 +128,20 @@ impl MultiLineInput {
                 // Ctrl+C: Cancel
                 Ok(InputAction::Cancel)
             }
+            KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+U: Clear current line
+                self.current_line.clear();
+                self.cursor_pos = 0;
+
+                print!("\r\x1b[2K");
+                if self.lines.is_empty() {
+                    print!("You: ");
+                } else {
+                    print!("...   ");
+                }
+                io::stdout().flush()?;
+                Ok(InputAction::Continue)
+            }
             KeyCode::Char(c) => {
                 // Insert character at cursor position
                 self.current_line.insert(self.cursor_pos, c);
