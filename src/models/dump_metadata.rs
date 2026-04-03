@@ -208,6 +208,11 @@ impl MetadataDumper {
         let raw_response = Self::fetch_raw_models_response(&client, provider_config).await?;
 
         // Save raw response to file
+        // SECURITY: Validate provider_name to prevent path traversal
+        if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
+            return Err(anyhow::anyhow!("Invalid provider name"));
+        }
+
         let filename = format!("{}.json", provider_name);
         let filepath = models_raw_dir.join(&filename);
 

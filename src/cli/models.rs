@@ -462,6 +462,11 @@ async fn dump_models_data() -> Result<()> {
                 match fetch_raw_models_response(&client, provider_config).await {
                     Ok(raw_response) => {
                         // Save raw response to file
+                        // SECURITY: Validate provider_name to prevent path traversal
+                        if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
+                            println!("{} Skipping {} (invalid provider name)", "⚠️".yellow(), provider_name);
+                            continue;
+                        }
                         let filename = format!("models/{}.json", provider_name);
                         match std::fs::write(&filename, &raw_response) {
                             Ok(_) => {

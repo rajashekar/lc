@@ -385,6 +385,11 @@ async fn get_model_metadata(
     }
 
     // Not in cache, load from file
+    // SECURITY: Validate provider_name to prevent path traversal
+    if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
+        return None;
+    }
+
     let filename = format!("models/{}.json", provider_name);
 
     if !std::path::Path::new(&filename).exists() {

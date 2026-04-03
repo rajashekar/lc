@@ -99,6 +99,10 @@ impl UnifiedCache {
 
     /// Get the cache file path for a specific provider
     pub fn provider_cache_path(provider: &str) -> Result<PathBuf> {
+        // SECURITY: Validate provider to prevent path traversal
+        if provider.contains('/') || provider.contains('\\') || provider.contains("..") {
+            return Err(anyhow::anyhow!("Invalid provider name"));
+        }
         let models_dir = Self::models_dir()?;
         Ok(models_dir.join(format!("{}.json", provider)))
     }
