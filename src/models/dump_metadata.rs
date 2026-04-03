@@ -209,7 +209,10 @@ impl MetadataDumper {
 
         // Save raw response to file
         // SECURITY: Validate provider_name to prevent path traversal
-        if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
+        if provider_name.contains('/')
+            || provider_name.contains('\\')
+            || provider_name.contains("..")
+        {
             return Err(anyhow::anyhow!("Invalid provider name"));
         }
 
