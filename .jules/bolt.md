@@ -1,0 +1,3 @@
+## 2025-04-05 - In-place string manipulation to avoid allocations
+**Learning:** To optimize parsing an owned string into a prefix (title) and suffix (snippet) separated by a delimiter, use `split_off` to extract the suffix and `truncate` to clean the prefix. This pattern reduces the total number of allocations from two to one by reusing the original string's capacity for the prefix, avoiding extra allocations.
+**Action:** When extracting multiple parts from an owned String, use `into_iter` to take ownership of the struct or vector and `split_off` coupled with `truncate` on strings in place instead of creating new instances or using `split` and `to_string`.
