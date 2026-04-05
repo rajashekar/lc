@@ -385,7 +385,10 @@ async fn get_model_metadata(
     }
 
     if provider_name.contains('/') || provider_name.contains('\\') || provider_name.contains("..") {
-        crate::debug_log!("Invalid provider name '{}' for path construction", provider_name);
+        crate::debug_log!(
+            "Invalid provider name '{}' for path construction",
+            provider_name
+        );
         return None;
     }
 
