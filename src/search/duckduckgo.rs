@@ -179,28 +179,26 @@ impl DuckDuckGoProvider {
         }
 
         // Add results from Results array
-        for result in ddg_response
+        for mut result in ddg_response
             .results
-            .iter()
+            .into_iter()
             .take(max_results.saturating_sub(results.len()))
         {
             if !result.text.is_empty() && !result.first_url.is_empty() {
-                // Extract title from the result text (usually the first part before " - ")
-                let title = if let Some(dash_pos) = result.text.find(" - ") {
-                    result.text[..dash_pos].to_string()
-                } else {
-                    result.text.clone()
-                };
-
+                // To optimize parsing an owned string into a prefix (title) and suffix (snippet),
+                // use split_off and truncate to avoid multiple allocations and clones.
                 let snippet = if let Some(dash_pos) = result.text.find(" - ") {
-                    result.text[dash_pos + 3..].to_string()
+                    let s = result.text.split_off(dash_pos + 3);
+                    result.text.truncate(dash_pos);
+                    s
                 } else {
                     String::new()
                 };
+                let title = result.text;
 
                 results.push(SearchResult {
                     title,
-                    url: result.first_url.clone(),
+                    url: result.first_url,
                     snippet,
                     published_date: None,
                     author: None,
@@ -213,27 +211,25 @@ impl DuckDuckGoProvider {
         if results.len() < max_results {
             for topic in ddg_response
                 .related_topics
-                .iter()
+                .into_iter()
                 .take(max_results.saturating_sub(results.len()))
             {
-                if let (Some(text), Some(url)) = (&topic.text, &topic.first_url) {
+                if let (Some(mut text), Some(url)) = (topic.text, topic.first_url) {
                     if !text.is_empty() && !url.is_empty() {
-                        // Extract title from the topic text
-                        let title = if let Some(dash_pos) = text.find(" - ") {
-                            text[..dash_pos].to_string()
-                        } else {
-                            text.clone()
-                        };
-
+                        // To optimize parsing an owned string into a prefix (title) and suffix (snippet),
+                        // use split_off and truncate to avoid multiple allocations and clones.
                         let snippet = if let Some(dash_pos) = text.find(" - ") {
-                            text[dash_pos + 3..].to_string()
+                            let s = text.split_off(dash_pos + 3);
+                            text.truncate(dash_pos);
+                            s
                         } else {
                             String::new()
                         };
+                        let title = text;
 
                         results.push(SearchResult {
                             title,
-                            url: url.clone(),
+                            url,
                             snippet,
                             published_date: None,
                             author: None,
