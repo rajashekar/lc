@@ -274,6 +274,7 @@ pub async fn start_webchatproxy_server(
     port: u16,
     provider: String,
     api_key: Option<String>,
+    cors: bool,
 ) -> Result<()> {
     let config = WebChatProxyConfig::load()?;
 
@@ -283,13 +284,16 @@ pub async fn start_webchatproxy_server(
         config,
     };
 
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/chat/completions", post(chat_completions))
         .route("/v1/chat/completions", post(chat_completions))
         .route("/models", get(list_models))
         .route("/v1/models", get(list_models))
-        .layer(CorsLayer::permissive())
         .with_state(Arc::new(state));
+
+    if cors {
+        app = app.layer(CorsLayer::permissive());
+    }
 
     let addr = format!("{}:{}", host, port);
     println!(
