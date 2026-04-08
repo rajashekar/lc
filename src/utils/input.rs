@@ -43,7 +43,7 @@ impl MultiLineInput {
             return self.fallback_input();
         }
 
-        let result = self.read_input_raw();
+        let result = self.read_input_raw(prompt);
 
         // Always disable raw mode, even if there was an error
         let _ = disable_raw_mode();
@@ -51,13 +51,13 @@ impl MultiLineInput {
         result
     }
 
-    fn read_input_raw(&mut self) -> Result<String> {
+    fn read_input_raw(&mut self, prompt: &str) -> Result<String> {
         loop {
             let event = event::read()?;
             if let Event::Key(key_event) = event {
                 // Only process key press events, ignore key release
                 if key_event.kind == KeyEventKind::Press {
-                    match self.handle_key_event(key_event)? {
+                    match self.handle_key_event(key_event, prompt)? {
                         InputAction::Continue => continue,
                         InputAction::Submit => {
                             // Add current line to lines if it's not empty
@@ -101,7 +101,7 @@ impl MultiLineInput {
         }
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<InputAction> {
+    fn handle_key_event(&mut self, key_event: KeyEvent, prompt: &str) -> Result<InputAction> {
         // Debug: print key event details
         if std::env::var("LC_DEBUG_INPUT").is_ok() {
             eprintln!("[DEBUG] Key event: {:?}", key_event);
@@ -127,6 +127,40 @@ impl MultiLineInput {
             KeyCode::Char('c') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Ctrl+C: Cancel
                 Ok(InputAction::Cancel)
+            }
+            KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+U: Clear line before cursor
+                if self.cursor_pos > 0 {
+                    // Remove characters before cursor
+                    // Find byte index for character index cursor_pos
+                    let byte_pos = self
+                        .current_line
+                        .char_indices()
+                        .nth(self.cursor_pos)
+                        .map(|(pos, _)| pos)
+                        .unwrap_or_else(|| self.current_line.len());
+                    self.current_line.replace_range(0..byte_pos, "");
+                    self.cursor_pos = 0;
+
+                    // Clear current line display and move to start
+                    print!("\r\x1b[2K");
+
+                    // Redraw prompt and current line
+                    if self.lines.is_empty() {
+                        print!("{} {}", prompt, self.current_line);
+                    } else {
+                        print!("\r{}   {}", "...".dimmed(), self.current_line);
+                    }
+
+                    // Move cursor back to correct position if there is text remaining
+                    if !self.current_line.is_empty() {
+                        let width = self.current_line.chars().count() as u16;
+                        execute!(io::stdout(), MoveLeft(width))?;
+                    }
+
+                    io::stdout().flush()?;
+                }
+                Ok(InputAction::Continue)
             }
             KeyCode::Char(c) => {
                 // Insert character at cursor position
@@ -205,9 +239,9 @@ impl MultiLineInput {
 
                     // Redraw prompt and current line
                     if self.lines.is_empty() {
-                        print!("You: {}", self.current_line);
+                        print!("{} {}", prompt, self.current_line);
                     } else {
-                        print!("...   {}", self.current_line);
+                        print!("\r{}   {}", "...".dimmed(), self.current_line);
                     }
                     io::stdout().flush()?;
                 }
