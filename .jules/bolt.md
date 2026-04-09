@@ -1,0 +1,3 @@
+## 2024-04-09 - Optimize string parsing into prefix and suffix
+**Learning:** When parsing an owned string into a prefix and a suffix separated by a delimiter (like extracting a title and snippet separated by " - "), using `.into_iter()` to take ownership of the struct strings, followed by `split_off` (with the correct byte index offset) and `truncate` allows for in-place modification without cloning. This reduces the number of heap allocations from two to one by reusing the original string's capacity for the prefix.
+**Action:** Use `split_off` and `truncate` instead of multiple slice clones when extracting suffixes and prefixes from owned strings to minimize memory allocations.
