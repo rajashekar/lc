@@ -48,6 +48,12 @@ impl std::fmt::Debug for VectorDatabase {
 
 impl VectorDatabase {
     pub fn new(name: &str) -> Result<Self> {
+        if name.contains('/') || name.contains('\\') || name.contains("..") {
+            anyhow::bail!(
+                "Invalid database name: contains path separators or parent directory references"
+            );
+        }
+
         let embeddings_dir = Self::embeddings_dir()?;
         fs::create_dir_all(&embeddings_dir)?;
 
@@ -107,13 +113,19 @@ impl VectorDatabase {
     }
 
     pub fn delete_database_in_dir(name: &str, embeddings_dir: &std::path::Path) -> Result<()> {
-        let db_path = embeddings_dir.join(format!("{}.db", name));
-
-        if db_path.exists() {
-            fs::remove_file(db_path)?;
+        if name.contains('/') || name.contains('\\') || name.contains("..") {
+            anyhow::bail!(
+                "Invalid database name: contains path separators or parent directory references"
+            );
         }
 
-        Ok(())
+        let db_path = embeddings_dir.join(format!("{}.db", name));
+
+        match fs::remove_file(db_path) {
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn initialize(&self) -> Result<()> {
