@@ -179,28 +179,25 @@ impl DuckDuckGoProvider {
         }
 
         // Add results from Results array
-        for result in ddg_response
+        for mut result in ddg_response
             .results
-            .iter()
+            .into_iter()
             .take(max_results.saturating_sub(results.len()))
         {
             if !result.text.is_empty() && !result.first_url.is_empty() {
                 // Extract title from the result text (usually the first part before " - ")
-                let title = if let Some(dash_pos) = result.text.find(" - ") {
-                    result.text[..dash_pos].to_string()
+                // OPTIMIZATION: Use split_off and truncate to parse in-place, avoiding extra allocations.
+                let (title, snippet) = if let Some(dash_pos) = result.text.find(" - ") {
+                    let snippet = result.text.split_off(dash_pos + 3);
+                    result.text.truncate(dash_pos);
+                    (result.text, snippet)
                 } else {
-                    result.text.clone()
-                };
-
-                let snippet = if let Some(dash_pos) = result.text.find(" - ") {
-                    result.text[dash_pos + 3..].to_string()
-                } else {
-                    String::new()
+                    (result.text, String::new())
                 };
 
                 results.push(SearchResult {
                     title,
-                    url: result.first_url.clone(),
+                    url: result.first_url,
                     snippet,
                     published_date: None,
                     author: None,
@@ -213,27 +210,24 @@ impl DuckDuckGoProvider {
         if results.len() < max_results {
             for topic in ddg_response
                 .related_topics
-                .iter()
+                .into_iter()
                 .take(max_results.saturating_sub(results.len()))
             {
-                if let (Some(text), Some(url)) = (&topic.text, &topic.first_url) {
+                if let (Some(mut text), Some(url)) = (topic.text, topic.first_url) {
                     if !text.is_empty() && !url.is_empty() {
                         // Extract title from the topic text
-                        let title = if let Some(dash_pos) = text.find(" - ") {
-                            text[..dash_pos].to_string()
+                        // OPTIMIZATION: Use split_off and truncate to parse in-place, avoiding extra allocations.
+                        let (title, snippet) = if let Some(dash_pos) = text.find(" - ") {
+                            let snippet = text.split_off(dash_pos + 3);
+                            text.truncate(dash_pos);
+                            (text, snippet)
                         } else {
-                            text.clone()
-                        };
-
-                        let snippet = if let Some(dash_pos) = text.find(" - ") {
-                            text[dash_pos + 3..].to_string()
-                        } else {
-                            String::new()
+                            (text, String::new())
                         };
 
                         results.push(SearchResult {
                             title,
-                            url: url.clone(),
+                            url,
                             snippet,
                             published_date: None,
                             author: None,
