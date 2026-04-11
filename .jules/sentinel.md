@@ -1,0 +1,4 @@
+## 2025-04-11 - Fixed Time-Of-Check to Time-Of-Use (TOCTOU) Vulnerabilities in File Operations
+**Vulnerability:** Several places in the codebase checked if a file or directory existed before attempting to delete it using `.exists()` followed by `fs::remove_file()`. This introduces a TOCTOU race condition where the file state could change between the check and the actual removal, potentially causing unexpected failures or unauthorized operations in shared environments.
+**Learning:** Using `.exists()` before an operation is an anti-pattern for concurrent environments. The file system state can change concurrently, invalidating the result of the prior `.exists()` check.
+**Prevention:** Avoid checking `.exists()` prior to file system manipulations like remove. Instead, perform the operation directly (e.g., `fs::remove_file()`) and explicitly handle `ErrorKind::NotFound` or other expected errors.
