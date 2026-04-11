@@ -145,10 +145,11 @@ pub fn resolve_model_and_provider(
         Some(m) => {
             // Check if model is in format "provider:model"
             if m.contains(':') && !has_provider_override {
-                let parts: Vec<&str> = m.splitn(2, ':').collect();
-                if parts.len() == 2 {
-                    let alias_provider = parts[0].to_string();
-                    let alias_model = parts[1].to_string();
+                // Bolt Optimization: Replace m.splitn(2, ':').collect::<Vec<_>>() with m.split_once(':')
+                // Performance impact: eliminates heap allocation for the intermediate Vec, improving parsing speed
+                if let Some((p, mod_name)) = m.split_once(':') {
+                    let alias_provider = p.to_string();
+                    let alias_model = mod_name.to_string();
 
                     // Verify provider exists
                     if !config.providers.contains_key(&alias_provider) {
@@ -165,10 +166,11 @@ pub fn resolve_model_and_provider(
             // Check if it's an alias (only if provider is not explicitly set)
             if !has_provider_override {
                 if let Some(alias_target) = config.aliases.get(&m) {
-                    let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
-                    if parts.len() == 2 {
-                        let alias_provider = parts[0].to_string();
-                        let alias_model = parts[1].to_string();
+                    // Bolt Optimization: Replace alias_target.splitn(2, ':').collect::<Vec<_>>() with alias_target.split_once(':')
+                    // Performance impact: eliminates heap allocation for the intermediate Vec, improving parsing speed
+                    if let Some((p, mod_name)) = alias_target.split_once(':') {
+                        let alias_provider = p.to_string();
+                        let alias_model = mod_name.to_string();
 
                         // Verify provider exists
                         if !config.providers.contains_key(&alias_provider) {

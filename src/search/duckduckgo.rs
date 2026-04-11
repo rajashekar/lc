@@ -186,16 +186,12 @@ impl DuckDuckGoProvider {
         {
             if !result.text.is_empty() && !result.first_url.is_empty() {
                 // Extract title from the result text (usually the first part before " - ")
-                let title = if let Some(dash_pos) = result.text.find(" - ") {
-                    result.text[..dash_pos].to_string()
+                // Bolt Optimization: replaced double .find(" - ") and substring slice allocations with a single .split_once(" - ") call
+                // Performance impact: avoids double string scan and eliminates redundant intermediate string creations
+                let (title, snippet) = if let Some((t, s)) = result.text.split_once(" - ") {
+                    (t.to_string(), s.to_string())
                 } else {
-                    result.text.clone()
-                };
-
-                let snippet = if let Some(dash_pos) = result.text.find(" - ") {
-                    result.text[dash_pos + 3..].to_string()
-                } else {
-                    String::new()
+                    (result.text.clone(), String::new())
                 };
 
                 results.push(SearchResult {
@@ -219,16 +215,12 @@ impl DuckDuckGoProvider {
                 if let (Some(text), Some(url)) = (&topic.text, &topic.first_url) {
                     if !text.is_empty() && !url.is_empty() {
                         // Extract title from the topic text
-                        let title = if let Some(dash_pos) = text.find(" - ") {
-                            text[..dash_pos].to_string()
+                        // Bolt Optimization: replaced double .find(" - ") and substring slice allocations with a single .split_once(" - ") call
+                        // Performance impact: avoids double string scan and eliminates redundant intermediate string creations
+                        let (title, snippet) = if let Some((t, s)) = text.split_once(" - ") {
+                            (t.to_string(), s.to_string())
                         } else {
-                            text.clone()
-                        };
-
-                        let snippet = if let Some(dash_pos) = text.find(" - ") {
-                            text[dash_pos + 3..].to_string()
-                        } else {
-                            String::new()
+                            (text.clone(), String::new())
                         };
 
                         results.push(SearchResult {
