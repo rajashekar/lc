@@ -47,18 +47,14 @@ pub async fn handle(
         // Check if it's an alias
         if let Some(_alias_target) = config.get_alias(model_name) {
             // Valid alias
-        } else if model_name.contains(':') {
+        } else if let Some((provider_name, _)) = model_name.split_once(':') {
             // Check provider:model format
-            let parts: Vec<&str> = model_name.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                let provider_name = parts[0];
-                if !config.has_provider(provider_name) {
-                    anyhow::bail!(
-                        "Provider '{}' not found in model specification '{}'",
-                        provider_name,
-                        model_name
-                    );
-                }
+            if !config.has_provider(provider_name) {
+                anyhow::bail!(
+                    "Provider '{}' not found in model specification '{}'",
+                    provider_name,
+                    model_name
+                );
             }
         } else {
             // Assume it's a model name for the default or specified provider

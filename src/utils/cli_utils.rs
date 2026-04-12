@@ -144,11 +144,10 @@ pub fn resolve_model_and_provider(
     let model = match model_override {
         Some(m) => {
             // Check if model is in format "provider:model"
-            if m.contains(':') && !has_provider_override {
-                let parts: Vec<&str> = m.splitn(2, ':').collect();
-                if parts.len() == 2 {
-                    let alias_provider = parts[0].to_string();
-                    let alias_model = parts[1].to_string();
+            if !has_provider_override {
+                if let Some((alias_provider, alias_model)) = m.split_once(':') {
+                    let alias_provider = alias_provider.to_string();
+                    let alias_model = alias_model.to_string();
 
                     // Verify provider exists
                     if !config.providers.contains_key(&alias_provider) {
@@ -165,10 +164,9 @@ pub fn resolve_model_and_provider(
             // Check if it's an alias (only if provider is not explicitly set)
             if !has_provider_override {
                 if let Some(alias_target) = config.aliases.get(&m) {
-                    let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
-                    if parts.len() == 2 {
-                        let alias_provider = parts[0].to_string();
-                        let alias_model = parts[1].to_string();
+                    if let Some((alias_provider, alias_model)) = alias_target.split_once(':') {
+                        let alias_provider = alias_provider.to_string();
+                        let alias_model = alias_model.to_string();
 
                         // Verify provider exists
                         if !config.providers.contains_key(&alias_provider) {

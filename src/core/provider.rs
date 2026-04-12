@@ -1196,9 +1196,8 @@ impl OpenAIClient {
         use base64::Engine;
         let audio_bytes = if request.file.starts_with("data:") {
             // Handle data URL format
-            let parts: Vec<&str> = request.file.splitn(2, ',').collect();
-            if parts.len() == 2 {
-                base64::engine::general_purpose::STANDARD.decode(parts[1])?
+            if let Some((_, base64_data)) = request.file.split_once(',') {
+                base64::engine::general_purpose::STANDARD.decode(base64_data)?
             } else {
                 anyhow::bail!("Invalid data URL format");
             }
