@@ -292,26 +292,20 @@ async fn chat_completions(
 pub fn parse_model_string(model: &str, config: &Config) -> Result<(String, String)> {
     // Check if it's an alias first
     if let Some(alias_target) = config.get_alias(model) {
-        if alias_target.contains(':') {
-            let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                return Ok((parts[0].to_string(), parts[1].to_string()));
-            }
+        if let Some((provider, model_name)) = alias_target.split_once(':') {
+            return Ok((provider.to_string(), model_name.to_string()));
         }
         return Err(anyhow::anyhow!("Invalid alias target format"));
     }
 
     // Check if it contains provider:model format
-    if model.contains(':') {
-        let parts: Vec<&str> = model.splitn(2, ':').collect();
-        if parts.len() == 2 {
-            let provider_name = parts[0].to_string();
-            let model_name = parts[1].to_string();
+    if let Some((provider_name, model_name)) = model.split_once(':') {
+        let provider_name = provider_name.to_string();
+        let model_name = model_name.to_string();
 
-            // Validate provider exists
-            if config.has_provider(&provider_name) {
-                return Ok((provider_name, model_name));
-            }
+        // Validate provider exists
+        if config.has_provider(&provider_name) {
+            return Ok((provider_name, model_name));
         }
     }
 

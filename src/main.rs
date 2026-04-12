@@ -804,23 +804,18 @@ async fn handle_session_prompt(
         // Check if model is an alias
         if let Some(alias_target) = config.get_alias(m) {
             // Alias target should be in format "provider:model"
-            if alias_target.contains(':') {
-                let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
-                if parts.len() == 2 {
-                    let provider_from_alias = parts[0].to_string();
-                    // If provider is also specified, verify they match
-                    if p != &provider_from_alias {
-                        anyhow::bail!(
-                            "Provider mismatch: -p {} conflicts with alias '{}' which maps to {}",
-                            p,
-                            m,
-                            alias_target
-                        );
-                    }
-                    (provider_from_alias, alias_target.clone())
-                } else {
-                    (p.clone(), m.clone())
+            if let Some((provider_from_alias, _)) = alias_target.split_once(':') {
+                let provider_from_alias = provider_from_alias.to_string();
+                // If provider is also specified, verify they match
+                if p != &provider_from_alias {
+                    anyhow::bail!(
+                        "Provider mismatch: -p {} conflicts with alias '{}' which maps to {}",
+                        p,
+                        m,
+                        alias_target
+                    );
                 }
+                (provider_from_alias, alias_target.clone())
             } else {
                 (p.clone(), m.clone())
             }
@@ -834,15 +829,9 @@ async fn handle_session_prompt(
 
         if let Some(alias_target) = config.get_alias(m) {
             // Alias target should be in format "provider:model"
-            if alias_target.contains(':') {
-                let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
-                if parts.len() == 2 {
-                    let provider_from_alias = parts[0].to_string();
-                    (provider_from_alias, alias_target.clone())
-                } else {
-                    // Invalid alias format, use default provider
-                    (provider.unwrap_or_else(|| "openai".to_string()), m.clone())
-                }
+            if let Some((provider_from_alias, _)) = alias_target.split_once(':') {
+                let provider_from_alias = provider_from_alias.to_string();
+                (provider_from_alias, alias_target.clone())
             } else {
                 // Invalid alias format, use default provider
                 (provider.unwrap_or_else(|| "openai".to_string()), m.clone())
@@ -891,14 +880,8 @@ async fn handle_session_prompt(
 
     // Strip provider prefix from model name for API call
     // Handle cases where model name itself contains colons (e.g., gpt-oss:20b)
-    let api_model_name = if model_name.contains(':') {
-        // Split only on the first colon to separate provider from model
-        let parts: Vec<&str> = model_name.splitn(2, ':').collect();
-        if parts.len() > 1 {
-            parts[1].to_string()
-        } else {
-            model_name.clone()
-        }
+    let api_model_name = if let Some((_, model_suffix)) = model_name.split_once(':') {
+        model_suffix.to_string()
     } else {
         model_name.clone()
     };

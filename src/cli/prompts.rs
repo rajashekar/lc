@@ -66,14 +66,8 @@ pub async fn handle_direct(
 
     // Strip provider prefix from model name for API call if present
     // Handle cases where model name itself contains colons (e.g., gpt-oss:20b)
-    let api_model_name = if model_name.contains(':') {
-        // Split only on the first colon to separate provider from model
-        let parts: Vec<&str> = model_name.splitn(2, ':').collect();
-        if parts.len() > 1 {
-            parts[1].to_string()
-        } else {
-            model_name.clone()
-        }
+    let api_model_name = if let Some((_, model_suffix)) = model_name.split_once(':') {
+        model_suffix.to_string()
     } else {
         model_name.clone()
     };
@@ -85,16 +79,12 @@ pub async fn handle_direct(
         debug_log!("Processing search with spec: {}", search_spec);
 
         // Parse search spec (format: "provider" or "provider:query")
-        let (search_provider, search_query) = if search_spec.contains(':') {
-            let parts: Vec<&str> = search_spec.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                (parts[0].to_string(), parts[1].to_string())
+        let (search_provider, search_query) =
+            if let Some((provider, query)) = search_spec.split_once(':') {
+                (provider.to_string(), query.to_string())
             } else {
                 (search_spec, prompt.clone())
-            }
-        } else {
-            (search_spec, prompt.clone())
-        };
+            };
 
         debug_log!(
             "Search provider: '{}', query: '{}'",
@@ -285,27 +275,28 @@ fn determine_provider_and_model(
         if let Some(alias_target) = config.get_alias(m) {
             debug_log!("Resolved alias '{}' to '{}'", m, alias_target);
             // Alias target should be in format "provider:model"
-            if alias_target.contains(':') {
-                let parts: Vec<&str> = alias_target.splitn(2, ':').collect();
-                if parts.len() == 2 {
-                    let provider_from_alias = parts[0].to_string();
-                    let model_from_alias = alias_target.clone();
+            if let Some((provider_from_alias, _)) = alias_target.split_once(':') {
+                let provider_from_alias = provider_from_alias.to_string();
+                let model_from_alias = alias_target.clone();
 
-                    // If provider is also specified, verify they match
-                    if let Some(ref p) = provider {
-                        if p != &provider_from_alias {
-                            anyhow::bail!("Provider mismatch: -p {} conflicts with alias '{}' which maps to {}",
-                                        p, m, alias_target);
-                        }
+                // If provider is also specified, verify they match
+                if let Some(ref p) = provider {
+                    if p != &provider_from_alias {
+                        anyhow::bail!(
+                            "Provider mismatch: -p {} conflicts with alias '{}' which maps to {}",
+                            p,
+                            m,
+                            alias_target
+                        );
                     }
-
-                    debug_log!(
-                        "Using provider '{}' and model '{}' from alias",
-                        provider_from_alias,
-                        model_from_alias
-                    );
-                    return Ok((provider_from_alias, model_from_alias));
                 }
+
+                debug_log!(
+                    "Using provider '{}' and model '{}' from alias",
+                    provider_from_alias,
+                    model_from_alias
+                );
+                return Ok((provider_from_alias, model_from_alias));
             }
         }
     }

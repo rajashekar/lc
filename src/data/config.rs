@@ -785,22 +785,18 @@ impl Config {
     }
 
     pub fn add_alias(&mut self, alias_name: String, provider_model: String) -> Result<()> {
-        // Validate that the provider_model contains a colon
-        if !provider_model.contains(':') {
+        // Extract provider and validate it exists
+        if let Some((provider_name, _)) = provider_model.split_once(':') {
+            if !self.has_provider(provider_name) {
+                anyhow::bail!(
+                    "Provider '{}' not found. Add it first with 'lc providers add'",
+                    provider_name
+                );
+            }
+        } else {
             anyhow::bail!(
                 "Alias target must be in format 'provider:model', got '{}'",
                 provider_model
-            );
-        }
-
-        // Extract provider and validate it exists
-        let parts: Vec<&str> = provider_model.splitn(2, ':').collect();
-        let provider_name = parts[0];
-
-        if !self.has_provider(provider_name) {
-            anyhow::bail!(
-                "Provider '{}' not found. Add it first with 'lc providers add'",
-                provider_name
             );
         }
 
