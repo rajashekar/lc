@@ -49,9 +49,7 @@ pub async fn handle(
             // Valid alias
         } else if model_name.contains(':') {
             // Check provider:model format
-            let parts: Vec<&str> = model_name.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                let provider_name = parts[0];
+            if let Some((provider_name, _)) = model_name.split_once(':') {
                 if !config.has_provider(provider_name) {
                     anyhow::bail!(
                         "Provider '{}' not found in model specification '{}'",

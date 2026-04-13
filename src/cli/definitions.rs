@@ -5,14 +5,14 @@ use clap::{Parser, Subcommand};
 
 // Helper function to parse environment variable KEY=VALUE pairs
 fn parse_env_var(s: &str) -> Result<(String, String), String> {
-    let parts: Vec<&str> = s.splitn(2, '=').collect();
-    if parts.len() != 2 {
-        return Err(format!(
+    if let Some((key, value)) = s.split_once('=') {
+        Ok((key.to_string(), value.to_string()))
+    } else {
+        Err(format!(
             "Invalid environment variable format: '{}'. Expected 'KEY=VALUE'",
             s
-        ));
+        ))
     }
-    Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
 #[derive(Parser)]
