@@ -109,8 +109,10 @@ impl VectorDatabase {
     pub fn delete_database_in_dir(name: &str, embeddings_dir: &std::path::Path) -> Result<()> {
         let db_path = embeddings_dir.join(format!("{}.db", name));
 
-        if db_path.exists() {
-            fs::remove_file(db_path)?;
+        match fs::remove_file(db_path) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
         }
 
         Ok(())
