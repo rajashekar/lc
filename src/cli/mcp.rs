@@ -170,11 +170,10 @@ pub async fn handle(command: McpCommands) -> Result<()> {
                                     // Check if it's a key=value format
                                     if args[0].contains('=') {
                                         let mut obj = serde_json::Map::new();
-                                        let parts: Vec<&str> = args[0].splitn(2, '=').collect();
-                                        if parts.len() == 2 {
+                                        if let Some((key, value)) = args[0].split_once('=') {
                                             obj.insert(
-                                                parts[0].to_string(),
-                                                serde_json::Value::String(parts[1].to_string()),
+                                                key.to_string(),
+                                                serde_json::Value::String(value.to_string()),
                                             );
                                         }
                                         serde_json::Value::Object(obj)
@@ -191,18 +190,18 @@ pub async fn handle(command: McpCommands) -> Result<()> {
 
                             for arg in args.iter() {
                                 if arg.contains('=') {
-                                    let parts: Vec<&str> = arg.splitn(2, '=').collect();
-                                    if parts.len() == 2 {
+                                    // ⚡ Bolt: Use split_once to avoid unnecessary Vec allocations for exactly 2 parts
+                                    if let Some((key, value_str)) = arg.split_once('=') {
                                         // Try to parse the value as JSON first (for nested objects/arrays)
                                         let value = match serde_json::from_str::<serde_json::Value>(
-                                            parts[1],
+                                            value_str,
                                         ) {
                                             Ok(json_val) => json_val,
                                             Err(_) => {
-                                                serde_json::Value::String(parts[1].to_string())
+                                                serde_json::Value::String(value_str.to_string())
                                             }
                                         };
-                                        obj.insert(parts[0].to_string(), value);
+                                        obj.insert(key.to_string(), value);
                                     } else {
                                         all_key_value = false;
                                         break;

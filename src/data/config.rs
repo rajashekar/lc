@@ -794,8 +794,10 @@ impl Config {
         }
 
         // Extract provider and validate it exists
-        let parts: Vec<&str> = provider_model.splitn(2, ':').collect();
-        let provider_name = parts[0];
+        let provider_name = provider_model
+            .split_once(':')
+            .map(|(p, _)| p)
+            .unwrap_or(&provider_model);
 
         if !self.has_provider(provider_name) {
             anyhow::bail!(
