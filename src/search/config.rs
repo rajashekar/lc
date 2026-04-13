@@ -29,13 +29,16 @@ impl SearchConfig {
     pub fn load() -> Result<Self> {
         let config_path = Self::config_file_path()?;
 
-        if config_path.exists() {
-            let content = fs::read_to_string(&config_path)?;
-            let config: SearchConfig = toml::from_str(&content)?;
-            Ok(config)
-        } else {
-            // Just return a new config without saving during load to prevent recursion
-            Ok(Self::new())
+        match fs::read_to_string(&config_path) {
+            Ok(content) => {
+                let config: SearchConfig = toml::from_str(&content)?;
+                Ok(config)
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Just return a new config without saving during load to prevent recursion
+                Ok(Self::new())
+            }
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -44,10 +47,8 @@ impl SearchConfig {
 
         // Ensure parent directory exists
         if let Some(parent) = config_path.parent() {
-            // Only create directory if it doesn't exist to prevent potential recursion
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+            // Create directory unconditionally to prevent TOCTOU vulnerability
+            fs::create_dir_all(parent)?;
         }
 
         let content = toml::to_string_pretty(self)?;
