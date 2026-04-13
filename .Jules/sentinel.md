@@ -1,0 +1,4 @@
+## 2026-04-06 - Fix TOCTOU vulnerability in search config
+**Vulnerability:** Time-Of-Check to Time-Of-Use (TOCTOU) race conditions in `src/search/config.rs` when loading and saving configuration files. Using `.exists()` before `fs::read_to_string` or `fs::create_dir_all` allowed the file system state to change between the check and the use.
+**Learning:** Checking if a file or directory exists before acting on it is a common pattern that introduces TOCTOU vulnerabilities. For example, if a file is deleted between the `exists()` check and the `read_to_string` call, the read will fail.
+**Prevention:** Unconditionally perform the desired file system operation (`fs::read_to_string` or `fs::create_dir_all`) and handle the resulting errors directly (e.g., checking for `std::io::ErrorKind::NotFound`). This atomic approach prevents race conditions.

@@ -153,11 +153,14 @@ impl TokenCounter {
                 self.count_tokens(&entry.question) + self.count_tokens(&entry.response) + 8;
             if history_tokens + entry_tokens <= remaining_tokens {
                 history_tokens += entry_tokens;
-                truncated_history.insert(0, entry.clone());
+                truncated_history.push(entry.clone());
             } else {
                 break;
             }
         }
+
+        // Reverse back to chronological order (oldest to newest)
+        truncated_history.reverse();
 
         (prompt.to_string(), truncated_history)
     }
