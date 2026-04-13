@@ -78,8 +78,9 @@ const config = {
           },
           {
             href: 'https://github.com/rajashekar/lc',
-            label: 'GitHub',
             position: 'right',
+            className: 'header-github-link',
+            'aria-label': 'GitHub repository',
           },
         ],
       },

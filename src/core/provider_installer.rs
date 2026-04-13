@@ -381,11 +381,13 @@ impl ProviderInstaller {
     pub fn uninstall_provider(&self, provider_id: &str) -> Result<()> {
         let provider_file = self.providers_dir.join(format!("{}.toml", provider_id));
 
-        if !provider_file.exists() {
-            anyhow::bail!("Provider '{}' is not installed", provider_id);
+        match fs::remove_file(&provider_file) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                anyhow::bail!("Provider '{}' is not installed", provider_id);
+            }
+            Err(e) => return Err(e.into()),
         }
-
-        fs::remove_file(&provider_file)?;
 
         println!(
             "{} Provider '{}' uninstalled successfully",

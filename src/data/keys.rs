@@ -212,28 +212,25 @@ impl KeysConfig {
     /// List all providers with configured keys
     #[allow(dead_code)]
     pub fn list_providers_with_keys(&self) -> Vec<String> {
-        let mut providers = Vec::new();
+        // ⚡ Bolt: Replaced O(N^2) Vec::contains nested loops with O(N) HashSet
+        // to collect unique provider keys more efficiently before sorting.
+        let mut providers: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for key in self.api_keys.keys() {
-            if !providers.contains(key) {
-                providers.push(key.clone());
-            }
+            providers.insert(key.clone());
         }
 
         for key in self.service_accounts.keys() {
-            if !providers.contains(key) {
-                providers.push(key.clone());
-            }
+            providers.insert(key.clone());
         }
 
         for key in self.custom_headers.keys() {
-            if !providers.contains(key) {
-                providers.push(key.clone());
-            }
+            providers.insert(key.clone());
         }
 
-        providers.sort();
-        providers
+        let mut providers_vec: Vec<String> = providers.into_iter().collect();
+        providers_vec.sort();
+        providers_vec
     }
 
     /// Check if a provider has any authentication configured

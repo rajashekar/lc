@@ -4,6 +4,9 @@ title: Installation
 sidebar_position: 1
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Installation
 
 LLM Client can be installed from source or using pre-built binaries. Choose the method that works best for your system.
@@ -14,7 +17,8 @@ LLM Client can be installed from source or using pre-built binaries. Choose the 
 
 Before installing LLM Client, you need to install system dependencies required for building Rust applications that use OpenSSL and native libraries.
 
-#### Linux
+<Tabs>
+  <TabItem value="linux" label="Linux" default>
 
 **Ubuntu/Debian:**
 ```bash
@@ -36,7 +40,8 @@ sudo dnf install -y pkgconf-devel openssl-devel gcc
 sudo apk add pkgconf openssl-dev build-base
 ```
 
-#### macOS
+  </TabItem>
+  <TabItem value="macos" label="macOS">
 
 On macOS, Xcode Command Line Tools usually provide the necessary dependencies:
 
@@ -50,7 +55,8 @@ If you encounter OpenSSL-related build errors, install additional dependencies v
 brew install pkg-config openssl@3
 ```
 
-#### Windows
+  </TabItem>
+  <TabItem value="windows" label="Windows">
 
 On Windows, Rust typically bundles OpenSSL statically, so no additional system packages are required. However, you'll need:
 
@@ -58,6 +64,9 @@ On Windows, Rust typically bundles OpenSSL statically, so no additional system p
 - **Windows SDK**
 
 You can install these via the [Visual Studio Installer](https://visualstudio.microsoft.com/downloads/).
+
+  </TabItem>
+</Tabs>
 
 #### Why These Dependencies?
 
@@ -184,7 +193,8 @@ cargo build --release --no-default-features
 
 To use `lc` from anywhere on your system, add it to your PATH:
 
-#### Linux/macOS
+<Tabs>
+  <TabItem value="unix" label="Linux/macOS" default>
 
 ```bash
 # Option 1: Copy to system bin directory
@@ -198,7 +208,8 @@ echo 'export PATH="$PATH:/path/to/lc/target/release"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-#### Windows
+  </TabItem>
+  <TabItem value="windows" label="Windows">
 
 ```powershell
 # Copy to a directory in your PATH
@@ -206,6 +217,9 @@ copy target\release\lc.exe C:\Windows\System32\
 
 # Or add the directory to PATH via System Properties
 ```
+
+  </TabItem>
+</Tabs>
 
 ## Platform-Specific Builds
 
