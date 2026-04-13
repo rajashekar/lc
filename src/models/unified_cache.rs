@@ -389,15 +389,22 @@ impl UnifiedCache {
             provider
         );
 
-        // Create a Provider object for the extractor
-        let provider_obj = Provider {
-            provider: provider.to_string(),
-            status: "active".to_string(),
-            supports_tools: false,
-            supports_structured_output: false,
-        };
+        // Offload the CPU-intensive extraction to a blocking thread
+        let provider_clone = provider.to_string();
+        let raw_response_clone = raw_response.clone();
 
-        let models = extract_models_from_provider(&provider_obj, &raw_response)?;
+        let models = tokio::task::spawn_blocking(move || {
+            // Create a Provider object for the extractor
+            let provider_obj = Provider {
+                provider: provider_clone.clone(),
+                status: "active".to_string(),
+                supports_tools: false,
+                supports_structured_output: false,
+            };
+
+            extract_models_from_provider(&provider_obj, &raw_response_clone)
+        })
+        .await??;
 
         debug_log!(
             "Extracted {} models from provider '{}'",
