@@ -1,7 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
 use crossterm::{
-    cursor::{MoveLeft, MoveRight},
+    cursor::MoveLeft,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -141,7 +141,7 @@ impl MultiLineInput {
                 if self.cursor_pos < self.current_line.len() {
                     let diff = (self.current_line.len() - self.cursor_pos) as u16;
                     self.cursor_pos = self.current_line.len();
-                    execute!(io::stdout(), MoveRight(diff))?;
+                    execute!(io::stdout(), crossterm::cursor::MoveRight(diff))?;
                     io::stdout().flush()?;
                 }
                 Ok(InputAction::Continue)
@@ -243,7 +243,7 @@ impl MultiLineInput {
             KeyCode::Right => {
                 if self.cursor_pos < self.current_line.len() {
                     self.cursor_pos += 1;
-                    execute!(io::stdout(), MoveRight(1))?;
+                    execute!(io::stdout(), crossterm::cursor::MoveRight(1))?;
                     io::stdout().flush()?;
                 }
                 Ok(InputAction::Continue)
@@ -261,7 +261,7 @@ impl MultiLineInput {
                 if self.cursor_pos < self.current_line.len() {
                     let diff = (self.current_line.len() - self.cursor_pos) as u16;
                     self.cursor_pos = self.current_line.len();
-                    execute!(io::stdout(), MoveRight(diff))?;
+                    execute!(io::stdout(), crossterm::cursor::MoveRight(diff))?;
                     io::stdout().flush()?;
                 }
                 Ok(InputAction::Continue)
