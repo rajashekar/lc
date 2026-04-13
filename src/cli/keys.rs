@@ -146,6 +146,12 @@ async fn list_keys() -> Result<()> {
     let config = config::Config::load()?;
     if config.providers.is_empty() {
         println!("No providers configured.");
+        println!();
+        println!(
+            "{} Use '{}' to install a provider first",
+            "💡".yellow(),
+            "lc providers install <name>".bold()
+        );
         return Ok(());
     }
 
