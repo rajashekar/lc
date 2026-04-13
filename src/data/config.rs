@@ -358,7 +358,7 @@ impl ProviderConfig {
         // Then check regex patterns (skip empty string which is the default)
         for (pattern, template) in templates {
             if !pattern.is_empty() {
-                if let Ok(re) = regex::Regex::new(pattern) {
+                if let Ok(re) = crate::utils::regex_cache::get_regex(pattern) {
                     if re.is_match(model_name) {
                         return match template_type {
                             "request" => template.request.clone(),
