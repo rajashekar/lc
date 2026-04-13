@@ -67,6 +67,8 @@ aes-gcm = "0.10"
 base64 = "0.21"
 jsonwebtoken = { version = "9", default-features = false, features = ["use_pem"] }
 tempfile = "3.8"
+pbkdf2 = "0.12.2"
+sha2 = "0.10.9"
 
 [dev-dependencies]
 hyper = "0.14"
