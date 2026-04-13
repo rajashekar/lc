@@ -358,7 +358,7 @@ impl ProviderConfig {
         // Then check regex patterns (skip empty string which is the default)
         for (pattern, template) in templates {
             if !pattern.is_empty() {
-                if let Ok(re) = regex::Regex::new(pattern) {
+                if let Ok(re) = crate::utils::regex_cache::get_regex(pattern) {
                     if re.is_match(model_name) {
                         return match template_type {
                             "request" => template.request.clone(),
@@ -794,8 +794,10 @@ impl Config {
         }
 
         // Extract provider and validate it exists
-        let parts: Vec<&str> = provider_model.splitn(2, ':').collect();
-        let provider_name = parts[0];
+        let provider_name = provider_model
+            .split_once(':')
+            .map(|(p, _)| p)
+            .unwrap_or(&provider_model);
 
         if !self.has_provider(provider_name) {
             anyhow::bail!(

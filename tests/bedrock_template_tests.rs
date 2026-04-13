@@ -54,6 +54,9 @@ fn test_bedrock_request_template() {
 "#;
 
     let mut processor = TemplateProcessor::new().expect("Failed to create template processor");
+    processor
+        .register_template(template)
+        .expect("Failed to register template");
     let vars: HashMap<String, String> = HashMap::new();
 
     let result = processor
@@ -118,6 +121,9 @@ fn test_bedrock_response_template() {
 "#;
 
     let mut processor = TemplateProcessor::new().expect("Failed to create template processor");
+    processor
+        .register_template(template)
+        .expect("Failed to register template");
 
     let result = processor
         .process_response(&bedrock_response, template)
@@ -185,6 +191,9 @@ fn test_system_to_user_role_filter() {
 "#;
 
     let mut processor = TemplateProcessor::new().expect("Failed to create template processor");
+    processor
+        .register_template(template)
+        .expect("Failed to register template");
     let vars: HashMap<String, String> = HashMap::new();
 
     let result = processor
@@ -249,6 +258,9 @@ fn test_bedrock_claude_specific_template() {
 "#;
 
     let mut processor = TemplateProcessor::new().expect("Failed to create template processor");
+    processor
+        .register_template(template)
+        .expect("Failed to register template");
     let vars: HashMap<String, String> = HashMap::new();
 
     let result = processor
@@ -323,6 +335,9 @@ fn test_bedrock_template_with_system_message() {
 "#;
 
     let mut processor = TemplateProcessor::new().expect("Failed to create template processor");
+    processor
+        .register_template(template)
+        .expect("Failed to register template");
     let vars: HashMap<String, String> = HashMap::new();
 
     let result = processor

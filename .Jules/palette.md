@@ -7,3 +7,7 @@
 ## 2024-05-24 - Consistent List Ordering
 **Learning:** Inconsistent sorting between similar commands (e.g., global list vs. provider-specific list) confuses users and makes the tool feel unpolished.
 **Action:** Always verify that all list-based outputs are sorted deterministically (e.g., alphabetically by ID) across all commands.
+
+## 2024-05-23 - [Documentation DX Patterns]
+**Learning:** Mixing alternative commands (e.g., aliases) into a single code block with "or" text breaks copy-paste functionality and frustrates users.
+**Action:** Use interactive tabs or separate, clean code blocks for command variations to improve discoverability and reduce friction.

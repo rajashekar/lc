@@ -10,25 +10,19 @@ use base64::{engine::general_purpose, Engine as _};
 /// Derive a 256-bit key from a password using a simple approach
 /// In production, you might want to use PBKDF2, scrypt, or Argon2
 pub fn derive_key_from_password(password: &str) -> Result<[u8; 32]> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use pbkdf2::pbkdf2_hmac;
+    use sha2::Sha256;
 
-    // Simple key derivation - in production, use proper KDF like PBKDF2
-    let mut hasher = DefaultHasher::new();
-    password.hash(&mut hasher);
-    let hash1 = hasher.finish();
-
-    // Create a second hash for more entropy
-    let mut hasher2 = DefaultHasher::new();
-    format!("{}{}", password, hash1).hash(&mut hasher2);
-    let hash2 = hasher2.finish();
-
-    // Combine hashes to create 32-byte key
+    // Use PBKDF2 with HMAC-SHA256 for secure key derivation
     let mut key = [0u8; 32];
-    key[0..8].copy_from_slice(&hash1.to_le_bytes());
-    key[8..16].copy_from_slice(&hash2.to_le_bytes());
-    key[16..24].copy_from_slice(&hash1.to_be_bytes());
-    key[24..32].copy_from_slice(&hash2.to_be_bytes());
+
+    // Using a constant application-specific salt to maintain backward compatibility
+    // with the existing API signature, while significantly improving the key derivation.
+    // In a future major refactoring, per-user/per-file random salts should be implemented.
+    let salt = b"lc_sync_encryption_salt_v1";
+    let iterations = 100_000;
+
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, iterations, &mut key);
 
     Ok(key)
 }
