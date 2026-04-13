@@ -47,7 +47,15 @@ impl std::fmt::Debug for VectorDatabase {
 }
 
 impl VectorDatabase {
+    fn validate_name(name: &str) -> Result<()> {
+        if name.contains('/') || name.contains('\\') || name.contains("..") {
+            anyhow::bail!("Invalid database name: contains path traversal characters");
+        }
+        Ok(())
+    }
+
     pub fn new(name: &str) -> Result<Self> {
+        Self::validate_name(name)?;
         let embeddings_dir = Self::embeddings_dir()?;
         fs::create_dir_all(&embeddings_dir)?;
 
@@ -107,10 +115,13 @@ impl VectorDatabase {
     }
 
     pub fn delete_database_in_dir(name: &str, embeddings_dir: &std::path::Path) -> Result<()> {
+        Self::validate_name(name)?;
         let db_path = embeddings_dir.join(format!("{}.db", name));
 
-        if db_path.exists() {
-            fs::remove_file(db_path)?;
+        match fs::remove_file(db_path) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
         }
 
         Ok(())
