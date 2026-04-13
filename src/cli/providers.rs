@@ -161,7 +161,10 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
             )
             .await
             {
-                Ok(models) => {
+                Ok(mut models) => {
+                    // Sort models alphabetically for better UX
+                    models.sort_by(|a, b| a.id.cmp(&b.id));
+
                     debug_log!(
                         "Successfully fetched {} models for provider '{}'",
                         models.len(),
@@ -191,7 +194,10 @@ pub async fn handle(command: ProviderCommands) -> Result<()> {
                             }
 
                             match client.list_models().await {
-                                Ok(models) => {
+                                Ok(mut models) => {
+                                    // Sort models alphabetically for better UX
+                                    models.sort_by(|a, b| a.id.cmp(&b.id));
+
                                     debug_log!(
                                         "Fallback client returned {} models for provider '{}'",
                                         models.len(),
