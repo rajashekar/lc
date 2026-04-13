@@ -1,3 +1,8 @@
+## 2024-05-24 - Fix Path Traversal in Vector Database Name
+**Vulnerability:** Path traversal sequence in user-supplied `name` used in database path (`{name}.db`), potentially resulting in creation/deletion of `.db` files outside the expected `embeddings` directory.
+**Learning:** `PathBuf::join` replaces the current path completely if the argument contains a leading slash or can traverse directories if the argument contains `../`. Always sanitize parameters used to construct paths, even if they're supposedly from internal trusted configurations or users.
+**Prevention:** Implement an explicit validation helper function (`validate_name`) to check for any occurrences of `/`, `\`, and `..` before path construction and abort early.
+
 ## 2025-04-11 - Fixed Time-Of-Check to Time-Of-Use (TOCTOU) Vulnerabilities in File Operations
 **Vulnerability:** Several places in the codebase checked if a file or directory existed before attempting to delete it using `.exists()` followed by `fs::remove_file()`. This introduces a TOCTOU race condition where the file state could change between the check and the actual removal, potentially causing unexpected failures or unauthorized operations in shared environments.
 **Learning:** Using `.exists()` before an operation is an anti-pattern for concurrent environments. The file system state can change concurrently, invalidating the result of the prior `.exists()` check.
