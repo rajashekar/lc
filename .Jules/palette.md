@@ -15,3 +15,7 @@
 ## 2024-05-23 - [Documentation DX Patterns]
 **Learning:** Mixing alternative commands (e.g., aliases) into a single code block with "or" text breaks copy-paste functionality and frustrates users.
 **Action:** Use interactive tabs or separate, clean code blocks for command variations to improve discoverability and reduce friction.
+
+## 2024-04-15 - Multiline Input Backspace Visual Artifacts
+**Learning:** When implementing multiline terminal inputs (e.g. using Shift+Enter), handling a backspace at the start of a line requires moving the cursor physically up via ANSI codes (`MoveUp`), not just clearing the line and rewriting the prompt. Otherwise, the old text remains visually stranded above the current line.
+**Action:** Ensure `MoveUp(1)` is explicitly called when shifting user input back up to a previous line in raw mode terminals to clear visual ghost artifacts.

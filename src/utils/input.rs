@@ -1,7 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
 use crossterm::{
-    cursor::MoveLeft,
+    cursor::{MoveLeft, MoveUp},
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -211,6 +211,12 @@ impl MultiLineInput {
                     let prev_line = self.lines.pop().unwrap();
 
                     // Clear current line display
+                    print!("\r\x1b[2K");
+
+                    // Move cursor up to the previous line
+                    execute!(io::stdout(), MoveUp(1))?;
+
+                    // Clear the previous line as well so we can redraw it fully
                     print!("\r\x1b[2K");
 
                     // Restore previous line
