@@ -1,7 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
 use crossterm::{
-    cursor::MoveLeft,
+    cursor::{MoveLeft, MoveUp},
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -210,8 +210,8 @@ impl MultiLineInput {
                     // move to end of previous line
                     let prev_line = self.lines.pop().unwrap();
 
-                    // Clear current line display
-                    print!("\r\x1b[2K");
+                    // Move cursor up to previous line
+                    execute!(io::stdout(), MoveUp(1))?;
 
                     // Restore previous line
                     self.cursor_pos = prev_line.len();
@@ -219,9 +219,9 @@ impl MultiLineInput {
 
                     // Redraw prompt and current line
                     if self.lines.is_empty() {
-                        print!("{} {}", prompt, self.current_line);
+                        print!("\r\x1b[2K{} {}", prompt, self.current_line);
                     } else {
-                        print!("{}   {}", "...".dimmed(), self.current_line);
+                        print!("\r\x1b[2K{}   {}", "...".dimmed(), self.current_line);
                     }
                     io::stdout().flush()?;
                 }
