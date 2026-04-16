@@ -186,17 +186,12 @@ impl DuckDuckGoProvider {
         {
             if !result.text.is_empty() && !result.first_url.is_empty() {
                 // Extract title from the result text (usually the first part before " - ")
-                let title = if let Some(dash_pos) = result.text.find(" - ") {
-                    result.text[..dash_pos].to_string()
-                } else {
-                    result.text.clone()
-                };
-
-                let snippet = if let Some(dash_pos) = result.text.find(" - ") {
-                    result.text[dash_pos + 3..].to_string()
-                } else {
-                    String::new()
-                };
+                let (title, snippet) =
+                    if let Some((title_part, snippet_part)) = result.text.split_once(" - ") {
+                        (title_part.to_string(), snippet_part.to_string())
+                    } else {
+                        (result.text.clone(), String::new())
+                    };
 
                 results.push(SearchResult {
                     title,
@@ -219,17 +214,12 @@ impl DuckDuckGoProvider {
                 if let (Some(text), Some(url)) = (&topic.text, &topic.first_url) {
                     if !text.is_empty() && !url.is_empty() {
                         // Extract title from the topic text
-                        let title = if let Some(dash_pos) = text.find(" - ") {
-                            text[..dash_pos].to_string()
-                        } else {
-                            text.clone()
-                        };
-
-                        let snippet = if let Some(dash_pos) = text.find(" - ") {
-                            text[dash_pos + 3..].to_string()
-                        } else {
-                            String::new()
-                        };
+                        let (title, snippet) =
+                            if let Some((title_part, snippet_part)) = text.split_once(" - ") {
+                                (title_part.to_string(), snippet_part.to_string())
+                            } else {
+                                (text.clone(), String::new())
+                            };
 
                         results.push(SearchResult {
                             title,
