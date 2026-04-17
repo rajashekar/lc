@@ -127,31 +127,31 @@ impl UsageAnalyzer {
             .into_iter()
             .map(|(model, (requests, tokens))| (model, requests, tokens))
             .collect();
-        model_usage.sort_by(|a, b| b.2.cmp(&a.2)); // Sort by tokens descending
+        model_usage.sort_by_key(|b| std::cmp::Reverse(b.2)); // Sort by tokens descending
 
         let mut daily_usage: Vec<(String, u64, u64)> = daily_stats
             .into_iter()
             .map(|(date, (requests, tokens))| (date, requests, tokens))
             .collect();
-        daily_usage.sort_by(|a, b| a.0.cmp(&b.0)); // Sort by date ascending
+        daily_usage.sort_by_key(|a| a.0.clone()); // Sort by date ascending
 
         let mut weekly_usage: Vec<(String, u64, u64)> = weekly_stats
             .into_iter()
             .map(|(week, (requests, tokens))| (week, requests, tokens))
             .collect();
-        weekly_usage.sort_by(|a, b| a.0.cmp(&b.0));
+        weekly_usage.sort_by_key(|a| a.0.clone());
 
         let mut monthly_usage: Vec<(String, u64, u64)> = monthly_stats
             .into_iter()
             .map(|(month, (requests, tokens))| (month, requests, tokens))
             .collect();
-        monthly_usage.sort_by(|a, b| a.0.cmp(&b.0));
+        monthly_usage.sort_by_key(|a| a.0.clone());
 
         let mut yearly_usage: Vec<(String, u64, u64)> = yearly_stats
             .into_iter()
             .map(|(year, (requests, tokens))| (year, requests, tokens))
             .collect();
-        yearly_usage.sort_by(|a, b| a.0.cmp(&b.0));
+        yearly_usage.sort_by_key(|a| a.0.clone());
 
         Ok(UsageStats {
             total_tokens: total_input_tokens + total_output_tokens,
@@ -367,9 +367,9 @@ pub fn display_usage_overview(stats: &UsageStats) {
 
     // Average tokens per request
     if stats.total_requests > 0 {
-        let avg_tokens = stats.total_tokens / stats.total_requests;
-        let avg_input = stats.input_tokens / stats.total_requests;
-        let avg_output = stats.output_tokens / stats.total_requests;
+        let avg_tokens = stats.total_tokens.checked_div(stats.total_requests).unwrap_or(0);
+        let avg_input = stats.input_tokens.checked_div(stats.total_requests).unwrap_or(0);
+        let avg_output = stats.output_tokens.checked_div(stats.total_requests).unwrap_or(0);
         println!();
         println!("{}", "📈 Averages per Request".bold().blue());
         println!(
