@@ -4,7 +4,10 @@ use anyhow::Result;
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 
 /// Sync configuration for all providers
@@ -51,7 +54,30 @@ impl SyncConfig {
         }
 
         let content = toml::to_string_pretty(self)?;
-        fs::write(&config_path, content)?;
+
+        // Use OpenOptions to set permissions atomically on creation (Unix)
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            // Set mode 0o600 (read/write for owner only) before opening
+            options.mode(0o600);
+        }
+
+        let mut file = options.open(&config_path)?;
+
+        // Ensure permissions are restricted even if file already existed
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = file.metadata()?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions)?;
+        }
+
+        file.write_all(content.as_bytes())?;
+
         Ok(())
     }
 
