@@ -492,32 +492,29 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
         return 0.0;
     }
 
-    // Use chunked processing for better cache performance
     let mut dot_product = 0.0f64;
     let mut norm_a_sq = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
+    let mut it_a = a.chunks_exact(4);
+    let mut it_b = b.chunks_exact(4);
 
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_a_sq += av * av;
-            norm_b_sq += bv * bv;
-        }
+    for (chunk_a, chunk_b) in it_a.by_ref().zip(it_b.by_ref()) {
+        dot_product += chunk_a[0] * chunk_b[0]
+            + chunk_a[1] * chunk_b[1]
+            + chunk_a[2] * chunk_b[2]
+            + chunk_a[3] * chunk_b[3];
+        norm_a_sq += chunk_a[0] * chunk_a[0]
+            + chunk_a[1] * chunk_a[1]
+            + chunk_a[2] * chunk_a[2]
+            + chunk_a[3] * chunk_a[3];
+        norm_b_sq += chunk_b[0] * chunk_b[0]
+            + chunk_b[1] * chunk_b[1]
+            + chunk_b[2] * chunk_b[2]
+            + chunk_b[3] * chunk_b[3];
     }
 
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
+    for (av, bv) in it_a.remainder().iter().zip(it_b.remainder().iter()) {
         dot_product += av * bv;
         norm_a_sq += av * av;
         norm_b_sq += bv * bv;
@@ -545,26 +542,21 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
     let mut dot_product = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
+    let mut it_a = a.chunks_exact(4);
+    let mut it_b = b.chunks_exact(4);
 
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
-            dot_product += av * bv;
-            norm_b_sq += bv * bv;
-        }
+    for (chunk_a, chunk_b) in it_a.by_ref().zip(it_b.by_ref()) {
+        dot_product += chunk_a[0] * chunk_b[0]
+            + chunk_a[1] * chunk_b[1]
+            + chunk_a[2] * chunk_b[2]
+            + chunk_a[3] * chunk_b[3];
+        norm_b_sq += chunk_b[0] * chunk_b[0]
+            + chunk_b[1] * chunk_b[1]
+            + chunk_b[2] * chunk_b[2]
+            + chunk_b[3] * chunk_b[3];
     }
 
-    // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
+    for (av, bv) in it_a.remainder().iter().zip(it_b.remainder().iter()) {
         dot_product += av * bv;
         norm_b_sq += bv * bv;
     }
