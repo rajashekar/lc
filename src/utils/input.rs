@@ -1,7 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
 use crossterm::{
-    cursor::{MoveLeft, MoveUp},
+    cursor::MoveLeft,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -208,22 +208,13 @@ impl MultiLineInput {
                 } else if !self.lines.is_empty() {
                     // If at beginning of current line and there are previous lines,
                     // move to end of previous line
-                    let mut prev_line = self.lines.pop().unwrap();
+                    let prev_line = self.lines.pop().unwrap();
 
-                    // Clear current line
+                    // Clear current line display
                     print!("\r\x1b[2K");
 
-                    // Move cursor up to the previous line
-                    execute!(io::stdout(), MoveUp(1))?;
-
-                    // Clear that line
-                    print!("\r\x1b[2K");
-
-                    // Set position to end of prev line before appending current remainder
+                    // Restore previous line
                     self.cursor_pos = prev_line.len();
-
-                    // Append current line to previous line
-                    prev_line.push_str(&self.current_line);
                     self.current_line = prev_line;
 
                     // Redraw prompt and current line
@@ -232,16 +223,6 @@ impl MultiLineInput {
                     } else {
                         print!("{}   {}", "...".dimmed(), self.current_line);
                     }
-
-                    // Clear anything from the cursor down just in case
-                    print!("\x1b[J");
-
-                    // If we appended characters, we need to move the cursor back to the join point
-                    let rest_len = self.current_line.len() - self.cursor_pos;
-                    if rest_len > 0 {
-                        execute!(io::stdout(), MoveLeft(rest_len as u16))?;
-                    }
-
                     io::stdout().flush()?;
                 }
 

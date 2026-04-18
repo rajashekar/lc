@@ -15,6 +15,3 @@
 ## 2024-05-23 - [Documentation DX Patterns]
 **Learning:** Mixing alternative commands (e.g., aliases) into a single code block with "or" text breaks copy-paste functionality and frustrates users.
 **Action:** Use interactive tabs or separate, clean code blocks for command variations to improve discoverability and reduce friction.
-## 2024-04-18 - Terminal Line Clear Ghosting
-**Learning:** When navigating back to a previous line in custom raw-mode input handlers (like MultiLineInput), clearing the terminal line (`\r\x1b[2K`) without explicitly moving the cursor up (`MoveUp`) first causes visual duplication/ghosting of prompts and text on the terminal due to where the terminal thinks the cursor currently resides.
-**Action:** When popping a previous line off the multiline stack and deleting the current newline, explicitly issue a `MoveUp` ANSI sequence before clearing the display and redrawing the restored previous line.
