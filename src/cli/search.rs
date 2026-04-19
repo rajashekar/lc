@@ -75,12 +75,12 @@ async fn handle_provider(command: SearchProviderCommands) -> Result<()> {
             let providers = config.list_providers();
 
             if providers.is_empty() {
-                println!("{} No search providers configured", "📋".blue());
+                println!("{} No search providers configured.", "📋".blue());
+                println!();
                 println!(
-                    "\n{}",
-                    "Add one with: lc search provider add <name> <url>"
-                        .italic()
-                        .dimmed()
+                    "{} Use '{}' to set one",
+                    "💡".yellow(),
+                    "lc search provider add <name> <url>".bold()
                 );
             } else {
                 println!("{} Configured search providers:", "📋".blue());

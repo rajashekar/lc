@@ -799,8 +799,8 @@ pub enum RecentCommands {
     /// Get last question/prompt asked to LLM (alias: q)
     #[command(alias = "q")]
     Question,
-    /// Get model used in last interaction (alias: m)
-    #[command(alias = "m")]
+    /// Get model used in last interaction (alias: mo)
+    #[command(alias = "mo")]
     Model,
     /// Get session ID of last interaction (alias: s)
     #[command(alias = "s")]
@@ -823,8 +823,8 @@ pub enum UsageCommands {
         #[arg(short = 'n', long = "count", default_value = "12")]
         count: usize,
     },
-    /// Show monthly usage statistics (alias: m)
-    #[command(alias = "m")]
+    /// Show monthly usage statistics (alias: mo)
+    #[command(alias = "mo")]
     Monthly {
         /// Number of months to show
         #[arg(short = 'n', long = "count", default_value = "12")]
@@ -837,8 +837,8 @@ pub enum UsageCommands {
         #[arg(short = 'n', long = "count", default_value = "5")]
         count: usize,
     },
-    /// Show top models by usage (alias: models)
-    #[command(alias = "models")]
+    /// Show top models by usage (alias: mo)
+    #[command(alias = "mo")]
     Models {
         /// Number of models to show
         #[arg(short = 'n', long = "count", default_value = "10")]
@@ -886,8 +886,8 @@ pub enum SetCommands {
         /// Provider name
         name: String,
     },
-    /// Set default model (alias: m)
-    #[command(alias = "m")]
+    /// Set default model (alias: mo)
+    #[command(alias = "mo")]
     Model {
         /// Model name
         name: String,
@@ -929,8 +929,8 @@ pub enum GetCommands {
     /// Get default provider (alias: p)
     #[command(alias = "p")]
     Provider,
-    /// Get default model (alias: m)
-    #[command(alias = "m")]
+    /// Get default model (alias: mo)
+    #[command(alias = "mo")]
     Model,
     /// Get system prompt (alias: s)
     #[command(alias = "s")]
@@ -954,8 +954,8 @@ pub enum DeleteCommands {
     /// Delete default provider (alias: p)
     #[command(alias = "p")]
     Provider,
-    /// Delete default model (alias: m)
-    #[command(alias = "m")]
+    /// Delete default model (alias: mo)
+    #[command(alias = "mo")]
     Model,
     /// Delete system prompt (alias: s)
     #[command(alias = "s")]

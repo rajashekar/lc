@@ -361,11 +361,11 @@ pub async fn handle(command: McpCommands) -> Result<()> {
 
             if servers.is_empty() {
                 println!("  No MCP servers configured.");
+                println!();
                 println!(
-                    "\n{}",
-                    "Add one with: lc mcp start <name> <command>"
-                        .italic()
-                        .dimmed()
+                    "  {} Use '{}' to set one",
+                    "💡".yellow(),
+                    "lc mcp start <name> <command>".bold()
                 );
             } else {
                 // Check daemon for active connections

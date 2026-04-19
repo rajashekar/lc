@@ -15,3 +15,7 @@
 ## 2024-05-23 - [Documentation DX Patterns]
 **Learning:** Mixing alternative commands (e.g., aliases) into a single code block with "or" text breaks copy-paste functionality and frustrates users.
 **Action:** Use interactive tabs or separate, clean code blocks for command variations to improve discoverability and reduce friction.
+
+## 2024-05-25 - Empty State Command Hints
+**Learning:** Returning a plain "No [items] found" message leaves users without clear next steps and increases friction. Providing the exact command to create an item improves discoverability.
+**Action:** When implementing list commands that can return empty states, always display actionable guidance with the specific command to create a new item, ideally highlighted with an icon like '💡'.
