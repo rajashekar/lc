@@ -26,7 +26,13 @@ pub async fn handle(command: AliasCommands) -> Result<()> {
             let aliases = config.list_aliases();
 
             if aliases.is_empty() {
-                println!("No aliases configured");
+                use colored::Colorize;
+                println!("No aliases configured.");
+                println!(
+                    "\n{} Add one with: {}",
+                    "💡".yellow(),
+                    "lc aliases add <name> <target>".italic().dimmed()
+                );
             } else {
                 println!("Configured aliases:");
                 for (alias_name, target) in aliases {
