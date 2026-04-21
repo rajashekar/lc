@@ -497,17 +497,14 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     let mut norm_a_sq = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
+    // Process in chunks of 4 for better performance to allow LLVM auto-vectorization
+    let mut a_chunks = a.chunks_exact(4);
+    let mut b_chunks = b.chunks_exact(4);
 
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
+    for (a_chunk, b_chunk) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
+        for j in 0..4 {
+            let av = a_chunk[j];
+            let bv = b_chunk[j];
             dot_product += av * bv;
             norm_a_sq += av * av;
             norm_b_sq += bv * bv;
@@ -515,9 +512,7 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     }
 
     // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
+    for (av, bv) in a_chunks.remainder().iter().zip(b_chunks.remainder().iter()) {
         dot_product += av * bv;
         norm_a_sq += av * av;
         norm_b_sq += bv * bv;
@@ -545,26 +540,21 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
     let mut dot_product = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance
-    let chunk_size = 4;
-    let chunks = a.len() / chunk_size;
+    // Process in chunks of 4 for better performance to allow LLVM auto-vectorization
+    let mut a_chunks = a.chunks_exact(4);
+    let mut b_chunks = b.chunks_exact(4);
 
-    for i in 0..chunks {
-        let start = i * chunk_size;
-        let end = start + chunk_size;
-
-        for j in start..end {
-            let av = a[j];
-            let bv = b[j];
+    for (a_chunk, b_chunk) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
+        for j in 0..4 {
+            let av = a_chunk[j];
+            let bv = b_chunk[j];
             dot_product += av * bv;
             norm_b_sq += bv * bv;
         }
     }
 
     // Process remaining elements
-    for i in (chunks * chunk_size)..a.len() {
-        let av = a[i];
-        let bv = b[i];
+    for (av, bv) in a_chunks.remainder().iter().zip(b_chunks.remainder().iter()) {
         dot_product += av * bv;
         norm_b_sq += bv * bv;
     }
