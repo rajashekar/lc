@@ -4,10 +4,7 @@ use anyhow::Result;
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
+use std::fs;
 use std::path::PathBuf;
 
 /// Sync configuration for all providers
@@ -54,27 +51,7 @@ impl SyncConfig {
         }
 
         let content = toml::to_string_pretty(self)?;
-
-        let mut options = OpenOptions::new();
-        options.write(true).create(true).truncate(true);
-
-        #[cfg(unix)]
-        {
-            options.mode(0o600);
-        }
-
-        let mut file = options.open(&config_path)?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut permissions = file.metadata()?.permissions();
-            permissions.set_mode(0o600);
-            file.set_permissions(permissions)?;
-        }
-
-        file.write_all(content.as_bytes())?;
-
+        fs::write(&config_path, content)?;
         Ok(())
     }
 
