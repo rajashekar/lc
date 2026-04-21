@@ -26,6 +26,11 @@ pub async fn handle(command: TemplateCommands) -> Result<()> {
 
             if templates.is_empty() {
                 println!("No templates configured.");
+                println!(
+                    "\n{} Use '{}' to add one",
+                    "💡".yellow(),
+                    "lc templates add <name> <prompt>".bold()
+                );
             } else {
                 println!("\n{}", "Templates:".bold().blue());
                 for (name, prompt) in templates {
