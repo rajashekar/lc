@@ -177,8 +177,8 @@ impl JinaProvider {
 
                 // Parse format like: [1] Title: Title text
                 if let Some(title_match) = line.strip_prefix("[") {
-                    if let Some(end_bracket) = title_match.find("] Title: ") {
-                        let title = title_match[end_bracket + 9..].to_string();
+                    if let Some((_, title_part)) = title_match.split_once("] Title: ") {
+                        let title = title_part.to_string();
                         if let Some((prev_title, prev_url, prev_desc)) = current_result.take() {
                             // Save previous result
                             if !prev_title.is_empty()
@@ -202,8 +202,8 @@ impl JinaProvider {
 
                 // Parse format like: [1] URL Source: https://example.com
                 if let Some(url_match) = line.strip_prefix("[") {
-                    if let Some(end_bracket) = url_match.find("] URL Source: ") {
-                        let url = url_match[end_bracket + 13..].to_string();
+                    if let Some((_, url_part)) = url_match.split_once("] URL Source: ") {
+                        let url = url_part.to_string();
                         if let Some((title, _, desc)) = current_result.take() {
                             current_result = Some((title, url, desc));
                         }
@@ -213,8 +213,8 @@ impl JinaProvider {
 
                 // Parse format like: [1] Description: Description text
                 if let Some(desc_match) = line.strip_prefix("[") {
-                    if let Some(end_bracket) = desc_match.find("] Description: ") {
-                        let description = desc_match[end_bracket + 15..].to_string();
+                    if let Some((_, desc_part)) = desc_match.split_once("] Description: ") {
+                        let description = desc_part.to_string();
                         if let Some((title, url, _)) = current_result.take() {
                             current_result = Some((title, url, description));
                         }
