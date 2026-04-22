@@ -366,9 +366,18 @@ pub fn display_usage_overview(stats: &UsageStats) {
     }
 
     // Average tokens per request
-    let avg_tokens = stats.total_tokens.checked_div(stats.total_requests).unwrap_or(0);
-    let avg_input = stats.input_tokens.checked_div(stats.total_requests).unwrap_or(0);
-    let avg_output = stats.output_tokens.checked_div(stats.total_requests).unwrap_or(0);
+    let avg_tokens = stats
+        .total_tokens
+        .checked_div(stats.total_requests)
+        .unwrap_or(0);
+    let avg_input = stats
+        .input_tokens
+        .checked_div(stats.total_requests)
+        .unwrap_or(0);
+    let avg_output = stats
+        .output_tokens
+        .checked_div(stats.total_requests)
+        .unwrap_or(0);
 
     if stats.total_requests > 0 {
         println!();
