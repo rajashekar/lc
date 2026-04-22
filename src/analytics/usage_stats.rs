@@ -127,7 +127,7 @@ impl UsageAnalyzer {
             .into_iter()
             .map(|(model, (requests, tokens))| (model, requests, tokens))
             .collect();
-        model_usage.sort_by(|a, b| b.2.cmp(&a.2)); // Sort by tokens descending
+        model_usage.sort_by_key(|b| std::cmp::Reverse(b.2)); // Sort by tokens descending
 
         let mut daily_usage: Vec<(String, u64, u64)> = daily_stats
             .into_iter()
@@ -367,9 +367,18 @@ pub fn display_usage_overview(stats: &UsageStats) {
 
     // Average tokens per request
     if stats.total_requests > 0 {
-        let avg_tokens = stats.total_tokens / stats.total_requests;
-        let avg_input = stats.input_tokens / stats.total_requests;
-        let avg_output = stats.output_tokens / stats.total_requests;
+        let avg_tokens = stats
+            .total_tokens
+            .checked_div(stats.total_requests)
+            .unwrap_or(0);
+        let avg_input = stats
+            .input_tokens
+            .checked_div(stats.total_requests)
+            .unwrap_or(0);
+        let avg_output = stats
+            .output_tokens
+            .checked_div(stats.total_requests)
+            .unwrap_or(0);
         println!();
         println!("{}", "📈 Averages per Request".bold().blue());
         println!(

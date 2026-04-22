@@ -622,16 +622,16 @@ impl Filter for BaseMessagesFilter {
                                     // Always include role and content
                                     cleaned_obj.insert(key.clone(), value.clone());
                                 }
+                                #[allow(clippy::collapsible_match)]
                                 "tool_calls" => {
-                                    // Only include tool_calls if it's not null and not empty
                                     if !value.is_null()
                                         && value.as_array().is_none_or(|arr| !arr.is_empty())
                                     {
                                         cleaned_obj.insert(key.clone(), value.clone());
                                     }
                                 }
+                                #[allow(clippy::collapsible_match)]
                                 "tool_call_id" => {
-                                    // Only include tool_call_id if it's not null and not empty
                                     if !value.is_null()
                                         && value.as_str().is_some_and(|s| !s.is_empty())
                                     {
