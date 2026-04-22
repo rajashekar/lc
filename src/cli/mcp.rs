@@ -361,11 +361,11 @@ pub async fn handle(command: McpCommands) -> Result<()> {
 
             if servers.is_empty() {
                 println!("  No MCP servers configured.");
-                println!();
                 println!(
-                    "  {} Use '{}' to add one",
-                    "💡".yellow(),
-                    "lc mcp add <name> <command>".dimmed()
+                    "\n{}",
+                    "Add one with: lc mcp start <name> <command>"
+                        .italic()
+                        .dimmed()
                 );
             } else {
                 // Check daemon for active connections
@@ -447,13 +447,7 @@ pub async fn handle(command: McpCommands) -> Result<()> {
                     println!("\nAvailable servers:");
                     let servers = config.list_servers();
                     if servers.is_empty() {
-                        println!("  No servers configured.");
-                        println!();
-                        println!(
-                            "  {} Use '{}' to add one",
-                            "💡".yellow(),
-                            "lc mcp add <name> <command>".dimmed()
-                        );
+                        println!("  No servers configured");
                     } else {
                         for (name, _) in servers {
                             println!("  - {}", name);
@@ -470,12 +464,6 @@ pub async fn handle(command: McpCommands) -> Result<()> {
 
                 if servers.is_empty() {
                     println!("  No MCP servers configured.");
-                    println!();
-                    println!(
-                        "  {} Use '{}' to add one",
-                        "💡".yellow(),
-                        "lc mcp add <name> <command>".dimmed()
-                    );
                 } else {
                     let daemon_client = crate::services::mcp_daemon::DaemonClient::new();
 
