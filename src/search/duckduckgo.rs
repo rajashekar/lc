@@ -186,6 +186,7 @@ impl DuckDuckGoProvider {
         {
             if !result.text.is_empty() && !result.first_url.is_empty() {
                 // Extract title from the result text (usually the first part before " - ")
+                // Performance: Utilizing split_once avoids a redundant O(N) string scan that would occur if using find twice.
                 let (title, snippet) = if let Some((t, s)) = result.text.split_once(" - ") {
                     (t.to_string(), s.to_string())
                 } else {
@@ -213,6 +214,7 @@ impl DuckDuckGoProvider {
                 if let (Some(text), Some(url)) = (&topic.text, &topic.first_url) {
                     if !text.is_empty() && !url.is_empty() {
                         // Extract title from the topic text
+                        // Performance: Utilizing split_once avoids a redundant O(N) string scan that would occur if using find twice.
                         let (title, snippet) = if let Some((t, s)) = text.split_once(" - ") {
                             (t.to_string(), s.to_string())
                         } else {
