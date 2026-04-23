@@ -5,3 +5,7 @@
 ## 2026-03-18 - Optimize ProviderConfig and EndpointTemplates regex compilation
 **Learning:** In the template pipeline, regex pattern matching (e.g., matching models to templates) was previously recompiling the `regex::Regex` object for the exact same pattern on every resolution. Since regex compilation is relatively expensive, this caused an unnecessary performance penalty, particularly visible when checking numerous model pattern templates.
 **Action:** Utilize `std::sync::OnceLock`, `std::sync::Mutex`, and `std::collections::HashMap` to create a thread-safe, centralized regex cache (in `src/utils/regex_cache.rs`) that prevents recompilation of previously seen patterns, thus optimizing template matching performance.
+
+## 2024-05-20 - Array operations performance and bounds checking
+**Learning:** Manual index arithmetic loops (e.g. `for i in 0..chunks`) in Rust can prevent LLVM from automatically vectorizing code and eliding bounds checks for array operations.
+**Action:** Use standard library iterators combined with `.zip()`, such as `.chunks_exact(N)`, `.by_ref()`, and `.remainder()`, to ensure bounds checks are elided and LLVM optimizations are enabled for performance-critical code paths.
