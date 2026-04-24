@@ -71,7 +71,31 @@ impl McpConfig {
 
         let mcp_config_path = config_dir.join("mcp.toml");
         let content = toml::to_string_pretty(self)?;
-        tokio::fs::write(&mcp_config_path, content).await?;
+
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+
+        // Convert the configured std::fs::OpenOptions to tokio::fs::OpenOptions
+        let tokio_options: tokio::fs::OpenOptions = options.into();
+        let mut file = tokio_options.open(&mcp_config_path).await?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = file.metadata().await?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions).await?;
+        }
+
+        use tokio::io::AsyncWriteExt;
+        file.write_all(content.as_bytes()).await?;
+
         Ok(())
     }
 
