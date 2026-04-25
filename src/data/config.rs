@@ -486,7 +486,17 @@ impl Config {
         };
 
         let content = toml::to_string_pretty(&main_config)?;
-        fs::write(&config_path, content)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create(true).truncate(true).mode(0o600);
+            std::io::Write::write_all(&mut options.open(&config_path)?, content.as_bytes())?;
+        }
+        #[cfg(not(unix))]
+        {
+            fs::write(&config_path, content)?;
+        }
         Ok(())
     }
 
@@ -1038,7 +1048,17 @@ impl Config {
 
         // Use the new flat format - serialize the ProviderConfig directly
         let content = toml::to_string_pretty(provider_config)?;
-        fs::write(&provider_file, content)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create(true).truncate(true).mode(0o600);
+            std::io::Write::write_all(&mut options.open(&provider_file)?, content.as_bytes())?;
+        }
+        #[cfg(not(unix))]
+        {
+            fs::write(&provider_file, content)?;
+        }
 
         Ok(())
     }
