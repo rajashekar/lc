@@ -15,3 +15,7 @@
 ## 2024-05-23 - [Documentation DX Patterns]
 **Learning:** Mixing alternative commands (e.g., aliases) into a single code block with "or" text breaks copy-paste functionality and frustrates users.
 **Action:** Use interactive tabs or separate, clean code blocks for command variations to improve discoverability and reduce friction.
+
+## 2024-04-25 - Actionable Empty List States
+**Learning:** List commands (like aliases, templates, or search providers) that return empty states can create user dead ends. Without actionable guidance, users are forced to refer back to documentation or run help commands just to figure out how to add an item.
+**Action:** Always provide the exact command to create an item, prefixed with a visual cue (e.g., `💡`), when presenting an empty list state in CLI commands.
