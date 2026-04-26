@@ -630,6 +630,7 @@ impl Filter for BaseMessagesFilter {
                                     cleaned_obj.insert(key.clone(), value.clone());
                                 }
 
+
                                 "tool_call_id"
                                     if !value.is_null()
                                         && value.as_str().is_some_and(|s| !s.is_empty()) =>

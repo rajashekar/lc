@@ -14,8 +14,9 @@ pub async fn handle(command: VectorCommands) -> Result<()> {
             if databases.is_empty() {
                 println!("No vector databases found.");
                 println!(
-                    "Create one by running: {}",
-                    "lc embed -d <name> -m <model> \"your text\"".dimmed()
+                    "\n{} Create one by running: {}",
+                    "💡".yellow(),
+                    "lc embed -d <name> -m <model> \"your text\"".bold()
                 );
             } else {
                 println!("\n{} Vector databases:", "📊".bold().blue());

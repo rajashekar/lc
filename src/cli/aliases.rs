@@ -3,6 +3,7 @@
 use crate::cli::AliasCommands;
 use crate::data::config::Config;
 use anyhow::Result;
+use colored::Colorize;
 
 /// Handle alias-related commands
 pub async fn handle(command: AliasCommands) -> Result<()> {
@@ -26,7 +27,12 @@ pub async fn handle(command: AliasCommands) -> Result<()> {
             let aliases = config.list_aliases();
 
             if aliases.is_empty() {
-                println!("No aliases configured");
+                println!("No aliases configured.");
+                println!(
+                    "\n{} Add one with: {}",
+                    "💡".yellow(),
+                    "lc aliases add <name> <target>".bold()
+                );
             } else {
                 println!("Configured aliases:");
                 for (alias_name, target) in aliases {
