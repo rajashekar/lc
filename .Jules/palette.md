@@ -15,3 +15,6 @@
 ## 2024-05-23 - [Documentation DX Patterns]
 **Learning:** Mixing alternative commands (e.g., aliases) into a single code block with "or" text breaks copy-paste functionality and frustrates users.
 **Action:** Use interactive tabs or separate, clean code blocks for command variations to improve discoverability and reduce friction.
+## 2024-05-24 - Empty State Guidance (Extended)
+**Learning:** Found additional commands (aliases, templates, mcp, search providers, vectors) that lacked clear, actionable empty state guidance. Adding standard "💡" prompts is essential to prevent user dead ends.
+**Action:** Always provide the command to create an item when displaying an empty list state. Use a "💡" icon to make it stand out as a tip, ensuring consistency across all CLI output.
