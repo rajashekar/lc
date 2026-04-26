@@ -626,15 +626,17 @@ impl Filter for BaseMessagesFilter {
                                     if !value.is_null()
                                         && value.as_array().is_none_or(|arr| !arr.is_empty()) =>
                                 {
+                                    // Only include tool_calls if it's not null and not empty
                                     cleaned_obj.insert(key.clone(), value.clone());
                                 }
                                 "tool_call_id"
                                     if !value.is_null()
                                         && value.as_str().is_some_and(|s| !s.is_empty()) =>
                                 {
+                                    // Only include tool_call_id if it's not null and not empty
                                     cleaned_obj.insert(key.clone(), value.clone());
                                 }
-                                // Skip images and any other fields that might cause issues
+                                // Skip images, empty tool fields, and any other fields that might cause issues
                                 _ => {}
                             }
                         }
