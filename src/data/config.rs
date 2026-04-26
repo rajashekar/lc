@@ -6,7 +6,10 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 
 use crate::template_processor::TemplateConfig;
@@ -486,7 +489,27 @@ impl Config {
         };
 
         let content = toml::to_string_pretty(&main_config)?;
-        fs::write(&config_path, content)?;
+
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            options.mode(0o600);
+        }
+
+        let mut file = options.open(&config_path)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = file.metadata()?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions)?;
+        }
+
+        file.write_all(content.as_bytes())?;
+
         Ok(())
     }
 
@@ -1038,7 +1061,26 @@ impl Config {
 
         // Use the new flat format - serialize the ProviderConfig directly
         let content = toml::to_string_pretty(provider_config)?;
-        fs::write(&provider_file, content)?;
+
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            options.mode(0o600);
+        }
+
+        let mut file = options.open(&provider_file)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = file.metadata()?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions)?;
+        }
+
+        file.write_all(content.as_bytes())?;
 
         Ok(())
     }

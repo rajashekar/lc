@@ -54,7 +54,29 @@ impl WebChatProxyConfig {
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_file_path()?;
         let content = toml::to_string_pretty(self)?;
-        fs::write(&config_path, content)?;
+
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+
+        let mut file = options.open(&config_path)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = file.metadata()?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions)?;
+        }
+
+        use std::io::Write;
+        file.write_all(content.as_bytes())?;
+
         Ok(())
     }
 
@@ -239,7 +261,29 @@ impl DaemonRegistry {
         }
 
         let content = toml::to_string_pretty(self)?;
-        fs::write(&registry_path, content)?;
+
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+
+        let mut file = options.open(&registry_path)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = file.metadata()?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions)?;
+        }
+
+        use std::io::Write;
+        file.write_all(content.as_bytes())?;
+
         Ok(())
     }
 
