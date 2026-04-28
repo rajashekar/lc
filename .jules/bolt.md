@@ -13,3 +13,6 @@
 ## 2024-04-26 - Double String Scanning in Text Parsing
 **Learning:** In text parsing tasks (like extracting titles and snippets from search results), developers frequently use consecutive `.find()` operations with slicing instead of `.split_once()`. This results in scanning the string twice and creating intermediate String allocations.
 **Action:** Always prefer `str::split_once()` when splitting a string into exactly two parts, as it eliminates redundant string scans and avoids unnecessary heap allocations, improving both execution speed and code readability.
+## 2024-05-18 - Avoid O(N) allocations during linear cache scans
+**Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
+**Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
