@@ -375,41 +375,76 @@ impl VectorDatabase {
         query_vector: &[f64],
         limit: usize,
     ) -> Result<Vec<(VectorEntry, f64)>> {
-        // Get all vectors from cache or database
-        let vectors = if self.vector_cache.is_empty() {
-            self.get_all_vectors()?
-        } else {
-            self.vector_cache
-                .iter()
-                .map(|entry| entry.value().clone())
-                .collect::<Vec<_>>()
-        };
-
         // Precompute query norm to avoid re-calculating it for every vector
         let query_norm_sq: f64 = query_vector.iter().map(|x| x * x).sum();
         let query_norm = query_norm_sq.sqrt();
 
-        // Use parallel processing for similarity calculations
-        let mut similarities: Vec<(VectorEntry, f64)> = vectors
-            .into_par_iter()
-            .map(|vector_entry| {
-                let similarity =
-                    cosine_similarity_precomputed(query_vector, &vector_entry.vector, query_norm);
-                (vector_entry, similarity)
-            })
-            .collect();
+        let similarities: Vec<(VectorEntry, f64)> = if self.vector_cache.is_empty() {
+            let vectors = self.get_all_vectors()?;
+            // Use parallel processing for similarity calculations
+            let mut sims: Vec<(VectorEntry, f64)> = vectors
+                .into_par_iter()
+                .map(|vector_entry| {
+                    let similarity = cosine_similarity_precomputed(
+                        query_vector,
+                        &vector_entry.vector,
+                        query_norm,
+                    );
+                    (vector_entry, similarity)
+                })
+                .collect();
 
-        // Use partial_sort for better performance when limit << total_vectors
-        if limit < similarities.len() {
-            similarities.select_nth_unstable_by(limit, |a, b| {
-                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-            });
-            similarities[..limit]
-                .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            similarities.truncate(limit);
+            // Use partial_sort for better performance when limit << total_vectors
+            if limit < sims.len() {
+                sims.select_nth_unstable_by(limit, |a, b| {
+                    b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+                });
+                sims[..limit]
+                    .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                sims.truncate(limit);
+            } else {
+                sims.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            }
+            sims
         } else {
-            similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        }
+            // Optimization: Calculate similarities using references from DashMap to avoid expensive O(N) VectorEntry clones.
+            // We only keep the VectorEntry ID and similarity initially.
+            let mut id_similarities: Vec<(i64, f64)> = self
+                .vector_cache
+                .iter()
+                .map(|entry| {
+                    let similarity = cosine_similarity_precomputed(
+                        query_vector,
+                        &entry.value().vector,
+                        query_norm,
+                    );
+                    (*entry.key(), similarity)
+                })
+                .collect();
+
+            // Use partial_sort for better performance when limit << total_vectors
+            if limit < id_similarities.len() {
+                id_similarities.select_nth_unstable_by(limit, |a, b| {
+                    b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+                });
+                id_similarities[..limit]
+                    .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                id_similarities.truncate(limit);
+            } else {
+                id_similarities
+                    .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            }
+
+            // Only clone the top N VectorEntry objects
+            id_similarities
+                .into_iter()
+                .filter_map(|(id, sim)| {
+                    self.vector_cache
+                        .get(&id)
+                        .map(|entry| (entry.value().clone(), sim))
+                })
+                .collect()
+        };
 
         Ok(similarities)
     }
