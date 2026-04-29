@@ -13,3 +13,7 @@
 ## 2024-04-26 - Double String Scanning in Text Parsing
 **Learning:** In text parsing tasks (like extracting titles and snippets from search results), developers frequently use consecutive `.find()` operations with slicing instead of `.split_once()`. This results in scanning the string twice and creating intermediate String allocations.
 **Action:** Always prefer `str::split_once()` when splitting a string into exactly two parts, as it eliminates redundant string scans and avoids unnecessary heap allocations, improving both execution speed and code readability.
+
+## 2024-05-30 - Off-by-one errors in text parsing bounds
+**Learning:** In code attempting to parse specific formatted strings (e.g., `] URL Source: `) using `.find()` and manual string slicing, off-by-one byte boundary calculation errors are easy to introduce, leading to artifacts like leading whitespace or panics.
+**Action:** Replace manual slicing and `find()` usage with `.split_once()` or similar standard library string parsing functions. These are safer, inherently handle correct byte boundary extraction without explicit math, and prevent double-scanning the string.
