@@ -182,7 +182,28 @@ impl ProviderInstaller {
 
         let cache_file = self.cache_dir.join("registry.json");
         let content = serde_json::to_string_pretty(registry)?;
-        fs::write(&cache_file, content)?;
+
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+
+        let mut file = options.open(&cache_file)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = file.metadata()?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions)?;
+        }
+
+        use std::io::Write;
+        file.write_all(content.as_bytes())?;
 
         Ok(())
     }
@@ -291,7 +312,27 @@ impl ProviderInstaller {
         fs::create_dir_all(&self.providers_dir)?;
 
         // Write the provider config
-        fs::write(&target_file, &config_content)?;
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+
+        let mut file = options.open(&target_file)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = file.metadata()?.permissions();
+            permissions.set_mode(0o600);
+            file.set_permissions(permissions)?;
+        }
+
+        use std::io::Write;
+        file.write_all(config_content.as_bytes())?;
 
         println!(
             "{} Provider '{}' installed successfully (v{})",
