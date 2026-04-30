@@ -398,15 +398,14 @@ impl TemplateProcessor {
                             ContentPart::ImageUrl { image_url } => {
                                 // Extract base64 data and mime type from data URL
                                 if let Some(data_url) = image_url.url.strip_prefix("data:") {
-                                    if let Some(comma_pos) = data_url.find(',') {
-                                        let header = &data_url[..comma_pos];
-                                        let data = &data_url[comma_pos + 1..];
-
-                                        let mime_type = if let Some(semi_pos) = header.find(';') {
-                                            header[..semi_pos].to_string()
-                                        } else {
-                                            header.to_string()
-                                        };
+                                    // ⚡ Bolt: Prefer str::split_once() over .find() with slicing to avoid double scanning and off-by-one errors
+                                    if let Some((header, data)) = data_url.split_once(',') {
+                                        let mime_type =
+                                            if let Some((mime, _)) = header.split_once(';') {
+                                                mime.to_string()
+                                            } else {
+                                                header.to_string()
+                                            };
 
                                         proc_msg.images.push(ProcessedImage {
                                             mime_type,
@@ -629,7 +628,6 @@ impl Filter for BaseMessagesFilter {
                                     // Only include tool_calls if it's not null and not empty
                                     cleaned_obj.insert(key.clone(), value.clone());
                                 }
-
 
                                 "tool_call_id"
                                     if !value.is_null()

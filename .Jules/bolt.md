@@ -13,3 +13,7 @@
 ## 2024-04-26 - Double String Scanning in Text Parsing
 **Learning:** In text parsing tasks (like extracting titles and snippets from search results), developers frequently use consecutive `.find()` operations with slicing instead of `.split_once()`. This results in scanning the string twice and creating intermediate String allocations.
 **Action:** Always prefer `str::split_once()` when splitting a string into exactly two parts, as it eliminates redundant string scans and avoids unnecessary heap allocations, improving both execution speed and code readability.
+
+## 2024-05-25 - Avoid Buffer Destruction in Stream Processing
+**Learning:** In a continuous stream-processing loop reading SSE chunks, replacing `buffer.drain(..=newline_pos)` with `buffer = remaining` (where `remaining` is a newly allocated `String`) drops the original allocated capacity and creates a new one fitted perfectly to its current length. This causes a severe performance regression because the subsequent `buffer.push_str()` on the next chunk will immediately trigger a costly O(N) heap reallocation every single time.
+**Action:** When popping data from the front of an active `String` buffer, always use `.drain(..=idx)` instead of recreating the string to preserve the buffer's capacity and prevent allocation churn in hot paths.

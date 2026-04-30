@@ -561,11 +561,9 @@ fn parse_kagi_response(html: &str) -> Result<String> {
     for line in lines.iter() {
         if line.contains("<div hidden>") && line.contains("{") {
             // Extract content between <div hidden> and </div>
-            if let Some(start) = line.find("<div hidden>") {
-                let content_start = start + 12; // Length of '<div hidden>'
-                if let Some(end) = line[content_start..].find("</div>") {
-                    let json_content = &line[content_start..content_start + end];
-
+            // ⚡ Bolt: Prefer str::split_once() over .find() with slicing to avoid double scanning and off-by-one errors
+            if let Some((_, rest)) = line.split_once("<div hidden>") {
+                if let Some((json_content, _)) = rest.split_once("</div>") {
                     // Decode HTML entities
                     let decoded_json = json_content
                         .replace("&quot;", "\"")
@@ -893,11 +891,9 @@ fn parse_kagi_models_response(html: &str) -> Result<Vec<KagiModelProfile>> {
     for line in lines.iter() {
         if line.contains("<div hidden>") && line.contains("profiles") {
             // Extract content between <div hidden> and </div>
-            if let Some(start) = line.find("<div hidden>") {
-                let content_start = start + 12; // Length of '<div hidden>'
-                if let Some(end) = line[content_start..].find("</div>") {
-                    let json_content = &line[content_start..content_start + end];
-
+            // ⚡ Bolt: Prefer str::split_once() over .find() with slicing to avoid double scanning and off-by-one errors
+            if let Some((_, rest)) = line.split_once("<div hidden>") {
+                if let Some((json_content, _)) = rest.split_once("</div>") {
                     // Decode HTML entities
                     let decoded_json = json_content
                         .replace("&quot;", "\"")
