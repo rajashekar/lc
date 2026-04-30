@@ -18,3 +18,7 @@
 ## 2024-05-24 - Empty State Guidance (Extended)
 **Learning:** Found additional commands (aliases, templates, mcp, search providers, vectors) that lacked clear, actionable empty state guidance. Adding standard "💡" prompts is essential to prevent user dead ends.
 **Action:** Always provide the command to create an item when displaying an empty list state. Use a "💡" icon to make it stand out as a tip, ensuring consistency across all CLI output.
+
+## 2024-06-15 - Preserving Formatting in Embedded Web UIs
+**Learning:** Simple HTML/JS chat interfaces for LLMs often fail to format text correctly because `div` text content naturally collapses whitespace and line breaks. This causes lists and code blocks from the model to become unreadable blobs of text.
+**Action:** When building lightweight web UIs to display LLM output, always add `white-space: pre-wrap;` and `word-wrap: break-word;` to the message container's CSS to respect the model's original formatting while still wrapping long lines.
