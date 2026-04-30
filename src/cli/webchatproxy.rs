@@ -94,8 +94,10 @@ async fn serve_index() -> Html<&'static str> {
     Html(
         r#"
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LC Web Chat</title>
     <style>
         body {
@@ -127,6 +129,8 @@ async fn serve_index() -> Html<&'static str> {
             margin: 10px 0;
             padding: 10px;
             border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
         .user-message {
             background: #007bff;
@@ -228,8 +232,11 @@ async fn serve_index() -> Html<&'static str> {
             
             if (!message) return;
             
+            if (button.disabled) return;
+
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
             
             addMessage('user', message);
             
@@ -257,6 +264,7 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Send';
                 input.focus();
             }
         }
