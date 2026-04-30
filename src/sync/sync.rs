@@ -270,6 +270,20 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
 
         // Save files to config directory
         for file in files_to_save {
+            // Validate file path to prevent path traversal
+            let is_safe = std::path::Path::new(&file.name)
+                .components()
+                .all(|c| matches!(c, std::path::Component::Normal(_)));
+
+            if !is_safe {
+                eprintln!(
+                    "  {} Warning: Skipping file with unsafe path: {}",
+                    "⚠️".yellow(),
+                    file.name
+                );
+                continue;
+            }
+
             let file_path = config_dir.join(&file.name);
 
             // Ensure parent directory exists
