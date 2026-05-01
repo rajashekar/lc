@@ -220,6 +220,14 @@ impl ProviderInstaller {
             .get(provider_id)
             .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in registry", provider_id))?;
 
+        // Validate config_file to prevent path traversal
+        if metadata.config_file.contains("..")
+            || metadata.config_file.starts_with('/')
+            || metadata.config_file.starts_with('\\')
+        {
+            anyhow::bail!("Invalid config filename: {}", metadata.config_file);
+        }
+
         // Check if already installed
         let target_file = self.providers_dir.join(&metadata.config_file);
         if target_file.exists() && !force {
