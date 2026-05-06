@@ -559,13 +559,11 @@ fn parse_kagi_response(html: &str) -> Result<String> {
 
     // Look for any <div hidden> tags that contain JSON with message content
     for line in lines.iter() {
-        if line.contains("<div hidden>") && line.contains("{") {
+        if line.contains("{") {
             // Extract content between <div hidden> and </div>
-            if let Some(start) = line.find("<div hidden>") {
-                let content_start = start + 12; // Length of '<div hidden>'
-                if let Some(end) = line[content_start..].find("</div>") {
-                    let json_content = &line[content_start..content_start + end];
-
+            // Performance optimization: Using split_once avoids double scanning and manual byte-offset slicing
+            if let Some((_, after_start)) = line.split_once("<div hidden>") {
+                if let Some((json_content, _)) = after_start.split_once("</div>") {
                     // Decode HTML entities
                     let decoded_json = json_content
                         .replace("&quot;", "\"")
@@ -891,13 +889,11 @@ fn parse_kagi_models_response(html: &str) -> Result<Vec<KagiModelProfile>> {
 
     // Look for the <div hidden> tag that contains the profiles JSON
     for line in lines.iter() {
-        if line.contains("<div hidden>") && line.contains("profiles") {
+        if line.contains("profiles") {
             // Extract content between <div hidden> and </div>
-            if let Some(start) = line.find("<div hidden>") {
-                let content_start = start + 12; // Length of '<div hidden>'
-                if let Some(end) = line[content_start..].find("</div>") {
-                    let json_content = &line[content_start..content_start + end];
-
+            // Performance optimization: Using split_once avoids double scanning and manual byte-offset slicing
+            if let Some((_, after_start)) = line.split_once("<div hidden>") {
+                if let Some((json_content, _)) = after_start.split_once("</div>") {
                     // Decode HTML entities
                     let decoded_json = json_content
                         .replace("&quot;", "\"")
