@@ -270,6 +270,16 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
 
         // Save files to config directory
         for file in files_to_save {
+            // Security: Prevent path traversal from malicious remote sync providers
+            if file.name.contains("..") || file.name.starts_with('/') || file.name.starts_with('\\')
+            {
+                eprintln!(
+                    "  ⚠️ Warning: Skipping file with invalid path: {}",
+                    file.name
+                );
+                continue;
+            }
+
             let file_path = config_dir.join(&file.name);
 
             // Ensure parent directory exists
