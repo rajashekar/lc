@@ -127,6 +127,8 @@ async fn serve_index() -> Html<&'static str> {
             margin: 10px 0;
             padding: 10px;
             border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
         .user-message {
             background: #007bff;
