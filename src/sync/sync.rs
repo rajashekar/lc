@@ -270,6 +270,17 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
 
         // Save files to config directory
         for file in files_to_save {
+            // Validate file name to prevent path traversal
+            if file.name.contains("..") || file.name.starts_with('/') || file.name.starts_with('\\')
+            {
+                println!(
+                    "  {} Skipped invalid file name: {}",
+                    "⚠️".yellow(),
+                    file.name
+                );
+                continue;
+            }
+
             let file_path = config_dir.join(&file.name);
 
             // Ensure parent directory exists
@@ -277,7 +288,16 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
                 fs::create_dir_all(parent)?;
             }
 
-            fs::write(&file_path, &file.content)?;
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+
+            let mut f = options.open(&file_path)?;
+            f.write_all(&file.content)?;
             println!("  ✓ Saved {}", file.name);
         }
 
