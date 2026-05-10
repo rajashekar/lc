@@ -187,9 +187,9 @@ async fn serve_index() -> Html<&'static str> {
                 <option value="claude-3-5-haiku-latest">claude-3-5-haiku-latest</option>
             </select>
         </div>
-        <div id="chat" class="chat-box"></div>
+        <div id="chat" class="chat-box" role="log" aria-live="polite" aria-label="Chat messages"></div>
         <div class="input-group">
-            <input type="text" id="message" placeholder="Type your message..." autofocus>
+            <input type="text" id="message" placeholder="Type your message..." aria-label="Message input" autofocus>
             <button id="send" onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -232,6 +232,8 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
+            button.setAttribute('aria-busy', 'true');
             
             addMessage('user', message);
             
@@ -259,6 +261,8 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Send';
+                button.removeAttribute('aria-busy');
                 input.focus();
             }
         }
@@ -266,7 +270,9 @@ async fn serve_index() -> Html<&'static str> {
         document.getElementById('message').addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                sendMessage();
+                if (!document.getElementById('send').disabled) {
+                    sendMessage();
+                }
             }
         });
     </script>
