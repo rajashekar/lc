@@ -187,9 +187,9 @@ async fn serve_index() -> Html<&'static str> {
                 <option value="claude-3-5-haiku-latest">claude-3-5-haiku-latest</option>
             </select>
         </div>
-        <div id="chat" class="chat-box"></div>
+        <div id="chat" class="chat-box" aria-live="polite" aria-atomic="false"></div>
         <div class="input-group">
-            <input type="text" id="message" placeholder="Type your message..." autofocus>
+            <input type="text" id="message" placeholder="Type your message..." aria-label="Chat message" autofocus>
             <button id="send" onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -232,6 +232,8 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
+            button.setAttribute('aria-busy', 'true');
             
             addMessage('user', message);
             
@@ -259,6 +261,8 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Send';
+                button.removeAttribute('aria-busy');
                 input.focus();
             }
         }
