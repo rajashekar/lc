@@ -22,3 +22,7 @@
 ## 2024-05-25 - LLM Output Formatting
 **Learning:** LLM outputs frequently include line breaks, code blocks, and other formatting that is lost when displayed as raw text in HTML without specific CSS rules, leading to poor readability.
 **Action:** When building web interfaces for LLM chat, always apply `white-space: pre-wrap;` and `word-wrap: break-word;` to the message containers to prevent layout collapsing and ensure formatting is preserved.
+
+## 2026-05-13 - Chat Accessibility & Async Feedback
+**Learning:** Embedded web chat interfaces often lack ARIA attributes to notify screen readers of dynamically added messages (e.g., `aria-live="polite"` on the message container) and miss explicit visual feedback during network operations (e.g., "Sending..." button states).
+**Action:** When implementing embedded web apps or custom HTML views in tools, ensure that chat or log containers have `role="log"` and `aria-live="polite"` so screen readers track updates properly. Additionally, always handle disabled states with updated text on submit buttons during async calls to reassure users.
