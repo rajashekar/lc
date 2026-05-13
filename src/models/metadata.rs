@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -341,6 +342,30 @@ pub struct ModelMetadataExtractor {
     tag_config: TagConfig,
 }
 
+fn secure_write_config(path: &Path, content: &str) -> Result<()> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+
+    let mut file = options.open(path)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = file.metadata()?.permissions();
+        permissions.set_mode(0o600);
+        file.set_permissions(permissions)?;
+    }
+
+    file.write_all(content.as_bytes())?;
+    Ok(())
+}
+
 impl ModelMetadataExtractor {
     pub fn new() -> Result<Self> {
         // Ensure configuration files exist on first run
@@ -386,7 +411,7 @@ impl ModelMetadataExtractor {
         if !model_paths_file.exists() {
             let default_paths = ModelPaths::default();
             let content = toml::to_string_pretty(&default_paths)?;
-            fs::write(&model_paths_file, content)?;
+            secure_write_config(&model_paths_file, &content)?;
         }
 
         // Check and create tags.toml if it doesn't exist
@@ -394,7 +419,7 @@ impl ModelMetadataExtractor {
         if !tags_file.exists() {
             let default_tags = TagConfig::default();
             let content = toml::to_string_pretty(&default_tags)?;
-            fs::write(&tags_file, content)?;
+            secure_write_config(&tags_file, &content)?;
         }
 
         Ok(())
@@ -434,7 +459,7 @@ impl ModelMetadataExtractor {
             // Create default file
             let default = ModelPaths::default();
             let content = toml::to_string_pretty(&default)?;
-            fs::write(&path, content)?;
+            secure_write_config(&path, &content)?;
             Ok(default)
         }
     }
@@ -453,7 +478,7 @@ impl ModelMetadataExtractor {
             // Create default file
             let default = TagConfig::default();
             let content = toml::to_string_pretty(&default)?;
-            fs::write(&path, content)?;
+            secure_write_config(&path, &content)?;
             Ok(default)
         }
     }
@@ -1106,7 +1131,7 @@ pub fn add_model_path(path: String) -> Result<()> {
     if !paths.paths.contains(&path) {
         paths.paths.push(path);
         let content = toml::to_string_pretty(&paths)?;
-        fs::write(&file_path, content)?;
+        secure_write_config(&file_path, &content)?;
         println!("Added model path");
     } else {
         println!("Path already exists");
@@ -1131,7 +1156,7 @@ pub fn remove_model_path(path: String) -> Result<()> {
     if let Some(pos) = paths.paths.iter().position(|p| p == &path) {
         paths.paths.remove(pos);
         let content = toml::to_string_pretty(&paths)?;
-        fs::write(&file_path, content)?;
+        secure_write_config(&file_path, &content)?;
         println!("Removed model path");
     } else {
         println!("Path not found");
@@ -1185,7 +1210,7 @@ pub fn add_tag(
     );
 
     let content = toml::to_string_pretty(&config)?;
-    fs::write(&file_path, content)?;
+    secure_write_config(&file_path, &content)?;
     println!("Added tag: {}", name);
 
     Ok(())
