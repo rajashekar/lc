@@ -1536,9 +1536,15 @@ impl OpenAIClient {
             buffer.push_str(&chunk_str);
 
             // Process complete lines from buffer
-            while let Some(newline_pos) = buffer.find('\n') {
-                let line = buffer[..newline_pos].to_string();
-                buffer.drain(..=newline_pos);
+            // ⚡ Bolt: Use split_once instead of find + slice to avoid double string scanning
+            #[allow(clippy::while_let_loop)]
+            loop {
+                let (line, drain_len) = if let Some((l, _)) = buffer.split_once('\n') {
+                    (l.to_string(), l.len())
+                } else {
+                    break;
+                };
+                buffer.drain(..=drain_len);
 
                 // Handle Server-Sent Events format
                 if let Some(data) = line.strip_prefix("data: ") {

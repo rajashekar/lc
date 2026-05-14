@@ -16,3 +16,6 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+## 2024-05-14 - The borrow checker vs split_once + drain
+**Learning:** `buffer.split_once('\n')` borrows `buffer` immutably. You cannot call `buffer.drain()` (which requires a mutable borrow) inside the `while let` condition because the immutable borrow is still active for the duration of the match scope. This is a common pitfall when trying to optimize string scanning loops in Rust.
+**Action:** When replacing `find()` + slicing with `split_once()` in a buffer draining loop, use an explicit `loop` with an inner `if let` scope to extract the needed parts (like length and the string slice) and immediately drop the immutable borrow before mutating the buffer.
