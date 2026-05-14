@@ -164,6 +164,20 @@ async fn serve_index() -> Html<&'static str> {
             background: #ccc;
             cursor: not-allowed;
         }
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
         .model-select {
             margin-bottom: 10px;
         }
@@ -190,7 +204,10 @@ async fn serve_index() -> Html<&'static str> {
         <div id="chat" class="chat-box"></div>
         <div class="input-group">
             <input type="text" id="message" placeholder="Type your message..." autofocus>
-            <button id="send" onclick="sendMessage()">Send</button>
+            <button id="send" onclick="sendMessage()">
+                <span id="send-spinner" class="spinner" style="display: none;"></span>
+                <span id="send-text">Send</span>
+            </button>
         </div>
     </div>
     
@@ -232,6 +249,9 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            document.getElementById('send-spinner').style.display = 'inline-block';
+            document.getElementById('send-text').textContent = 'Sending...';
             
             addMessage('user', message);
             
@@ -259,6 +279,9 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.removeAttribute('aria-busy');
+                document.getElementById('send-spinner').style.display = 'none';
+                document.getElementById('send-text').textContent = 'Send';
                 input.focus();
             }
         }
