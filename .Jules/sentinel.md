@@ -11,3 +11,8 @@
 **Vulnerability:** Path traversal vulnerability in `handle_sync_from` due to directly joining untrusted `file.name` from remote sync providers with `config_dir.join()`. Remote attackers could craft malicious config names like `../../../etc/passwd` to overwrite arbitrary system files during sync. Also, files were written using `fs::write()`, which could expose sensitive config data to other local users if default umask is permissive.
 **Learning:** `PathBuf::join` replaces the current path completely if the argument contains a leading slash or can traverse directories if the argument contains `../`. The source of filenames must be validated before being used to construct paths on disk.
 **Prevention:** Always check if `!name.contains("..") && !name.starts_with('/') && !name.starts_with('\\')` before joining paths, and use `OpenOptions` with `mode(0o600)` on Unix to securely create config files containing sensitive information.
+
+## 2024-05-17 - Path Traversal Vulnerability in PathBuf::join
+**Vulnerability:** Found a path traversal vulnerability in `ProviderInstaller::install_provider` where an untrusted filename (`metadata.config_file` from a remote registry) was passed directly to `PathBuf::join`. In Rust, `PathBuf::join` completely replaces the base path if the appended string is an absolute path.
+**Learning:** Path traversal vulnerabilities can occur implicitly in Rust if untrusted strings start with an absolute path character (`/` or `\`), bypassing the intended directory structure entirely, even without `..` elements.
+**Prevention:** Always validate untrusted/external filenames by explicitly checking `!name.contains("..") && !name.starts_with('/') && !name.starts_with('\\')` before joining them to a base directory.
