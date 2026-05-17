@@ -532,16 +532,37 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     let mut norm_a_sq = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance using chunks_exact to elide bounds checks
-    let mut a_chunks = a.chunks_exact(4);
-    let mut b_chunks = b.chunks_exact(4);
+    // Process in chunks of 8 for better performance using chunks_exact to elide bounds checks
+    // Explicitly unrolling arithmetic operations manually without inner iterator loops like zip
+    // allows LLVM to auto-vectorize the code more efficiently, yielding significantly better SIMD performance.
+    let mut a_chunks = a.chunks_exact(8);
+    let mut b_chunks = b.chunks_exact(8);
 
     for (a_chunk, b_chunk) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
-        for (&av, &bv) in a_chunk.iter().zip(b_chunk.iter()) {
-            dot_product += av * bv;
-            norm_a_sq += av * av;
-            norm_b_sq += bv * bv;
-        }
+        dot_product += a_chunk[0] * b_chunk[0]
+            + a_chunk[1] * b_chunk[1]
+            + a_chunk[2] * b_chunk[2]
+            + a_chunk[3] * b_chunk[3]
+            + a_chunk[4] * b_chunk[4]
+            + a_chunk[5] * b_chunk[5]
+            + a_chunk[6] * b_chunk[6]
+            + a_chunk[7] * b_chunk[7];
+        norm_a_sq += a_chunk[0] * a_chunk[0]
+            + a_chunk[1] * a_chunk[1]
+            + a_chunk[2] * a_chunk[2]
+            + a_chunk[3] * a_chunk[3]
+            + a_chunk[4] * a_chunk[4]
+            + a_chunk[5] * a_chunk[5]
+            + a_chunk[6] * a_chunk[6]
+            + a_chunk[7] * a_chunk[7];
+        norm_b_sq += b_chunk[0] * b_chunk[0]
+            + b_chunk[1] * b_chunk[1]
+            + b_chunk[2] * b_chunk[2]
+            + b_chunk[3] * b_chunk[3]
+            + b_chunk[4] * b_chunk[4]
+            + b_chunk[5] * b_chunk[5]
+            + b_chunk[6] * b_chunk[6]
+            + b_chunk[7] * b_chunk[7];
     }
 
     // Process remaining elements
@@ -573,15 +594,29 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
     let mut dot_product = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance using chunks_exact to elide bounds checks
-    let mut a_chunks = a.chunks_exact(4);
-    let mut b_chunks = b.chunks_exact(4);
+    // Process in chunks of 8 for better performance using chunks_exact to elide bounds checks
+    // Explicitly unrolling arithmetic operations manually without inner iterator loops like zip
+    // allows LLVM to auto-vectorize the code more efficiently, yielding significantly better SIMD performance.
+    let mut a_chunks = a.chunks_exact(8);
+    let mut b_chunks = b.chunks_exact(8);
 
     for (a_chunk, b_chunk) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
-        for (&av, &bv) in a_chunk.iter().zip(b_chunk.iter()) {
-            dot_product += av * bv;
-            norm_b_sq += bv * bv;
-        }
+        dot_product += a_chunk[0] * b_chunk[0]
+            + a_chunk[1] * b_chunk[1]
+            + a_chunk[2] * b_chunk[2]
+            + a_chunk[3] * b_chunk[3]
+            + a_chunk[4] * b_chunk[4]
+            + a_chunk[5] * b_chunk[5]
+            + a_chunk[6] * b_chunk[6]
+            + a_chunk[7] * b_chunk[7];
+        norm_b_sq += b_chunk[0] * b_chunk[0]
+            + b_chunk[1] * b_chunk[1]
+            + b_chunk[2] * b_chunk[2]
+            + b_chunk[3] * b_chunk[3]
+            + b_chunk[4] * b_chunk[4]
+            + b_chunk[5] * b_chunk[5]
+            + b_chunk[6] * b_chunk[6]
+            + b_chunk[7] * b_chunk[7];
     }
 
     // Process remaining elements
