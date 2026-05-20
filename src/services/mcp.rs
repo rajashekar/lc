@@ -25,13 +25,24 @@ pub enum McpServerType {
     Streamable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
     pub name: String,
     pub server_type: McpServerType,
     pub command_or_url: String,
     #[serde(default)]
     pub env: HashMap<String, String>,
+}
+
+impl std::fmt::Debug for McpServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpServerConfig")
+            .field("name", &self.name)
+            .field("server_type", &self.server_type)
+            .field("command_or_url", &self.command_or_url)
+            .field("env", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -407,7 +418,7 @@ pub struct SdkMcpServerConfig {
     pub transport: SdkMcpTransport,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum SdkMcpTransport {
     Stdio {
         command: String,
@@ -418,6 +429,26 @@ pub enum SdkMcpTransport {
     Sse {
         url: String,
     },
+}
+
+impl std::fmt::Debug for SdkMcpTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stdio {
+                command,
+                args: _,
+                env: _,
+                cwd,
+            } => f
+                .debug_struct("Stdio")
+                .field("command", command)
+                .field("args", &"[REDACTED]")
+                .field("env", &"[REDACTED]")
+                .field("cwd", cwd)
+                .finish(),
+            Self::Sse { url } => f.debug_struct("Sse").field("url", url).finish(),
+        }
+    }
 }
 
 // Helper functions to create SDK configurations

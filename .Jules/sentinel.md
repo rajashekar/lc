@@ -11,3 +11,8 @@
 **Vulnerability:** Path traversal vulnerability in `handle_sync_from` due to directly joining untrusted `file.name` from remote sync providers with `config_dir.join()`. Remote attackers could craft malicious config names like `../../../etc/passwd` to overwrite arbitrary system files during sync. Also, files were written using `fs::write()`, which could expose sensitive config data to other local users if default umask is permissive.
 **Learning:** `PathBuf::join` replaces the current path completely if the argument contains a leading slash or can traverse directories if the argument contains `../`. The source of filenames must be validated before being used to construct paths on disk.
 **Prevention:** Always check if `!name.contains("..") && !name.starts_with('/') && !name.starts_with('\\')` before joining paths, and use `OpenOptions` with `mode(0o600)` on Unix to securely create config files containing sensitive information.
+
+## 2024-05-20 - Prevent secret leakage via custom Debug implementations
+**Vulnerability:** Structs containing sensitive data like `env` maps, API `args`, or tool `arguments` can inadvertently leak secrets into debug logs when using the default `#[derive(Debug)]`.
+**Learning:** To prevent this, a codebase-specific security pattern was recognized where we avoid `derive(Debug)` for such types.
+**Prevention:** Always use manual `std::fmt::Debug` implementations for data structures that carry sensitive secrets (like `McpServerConfig`, `SdkMcpTransport`, and `DaemonRequest`) and explicitly replace sensitive fields with `"[REDACTED]"`.
