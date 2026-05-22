@@ -16,3 +16,7 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+
+## 2024-05-22 - Avoid split(...).collect() for retrieving a single part
+**Learning:** Using `.split(':').collect::<Vec<&str>>()` to get the first part of a string forces the program to scan the entire string to the end and allocate a `Vec` on the heap to store all parts, only for most of them to be discarded.
+**Action:** Use `str::split_once(':')` instead. This halts string scanning at the first match and destructures the result directly into references without requiring a heap allocation for an intermediate collection.

@@ -849,10 +849,9 @@ async fn handle_session_prompt(
         }
     } else if let Some(first_msg) = history.first() {
         if let Some(full_model) = &first_msg.model {
-            if full_model.contains(':') {
+            if let Some((inferred_provider, _)) = full_model.split_once(':') {
                 // Model is in format "provider:model"
-                let parts: Vec<&str> = full_model.split(':').collect();
-                let inferred_provider = parts[0].to_string();
+                let inferred_provider = inferred_provider.to_string();
                 let inferred_model = full_model.clone(); // Keep full model name
 
                 (
