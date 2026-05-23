@@ -310,8 +310,8 @@ fn determine_provider_and_model(
     // If model contains provider prefix (e.g., "openai:gpt-4"), extract both
     if let Some(ref m) = model {
         if m.contains(':') {
-            let parts: Vec<&str> = m.split(':').collect();
-            let provider_from_model = parts[0].to_string();
+            let (provider_from_model, _) = m.split_once(':').unwrap();
+            let provider_from_model = provider_from_model.to_string();
             let model_name = m.clone();
 
             // If provider is also specified, verify they match
