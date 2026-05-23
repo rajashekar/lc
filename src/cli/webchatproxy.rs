@@ -164,6 +164,10 @@ async fn serve_index() -> Html<&'static str> {
             background: #ccc;
             cursor: not-allowed;
         }
+        input[type="text"]:focus-visible, button:focus-visible, select:focus-visible {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
+        }
         .model-select {
             margin-bottom: 10px;
         }
@@ -189,7 +193,7 @@ async fn serve_index() -> Html<&'static str> {
         </div>
         <div id="chat" class="chat-box"></div>
         <div class="input-group">
-            <input type="text" id="message" placeholder="Type your message..." autofocus>
+            <input type="text" id="message" aria-label="Chat message" placeholder="Type your message..." autofocus>
             <button id="send" onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -232,6 +236,8 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
+            button.setAttribute('aria-busy', 'true');
             
             addMessage('user', message);
             
@@ -259,6 +265,8 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Send';
+                button.removeAttribute('aria-busy');
                 input.focus();
             }
         }
