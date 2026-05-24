@@ -849,10 +849,10 @@ async fn handle_session_prompt(
         }
     } else if let Some(first_msg) = history.first() {
         if let Some(full_model) = &first_msg.model {
-            if full_model.contains(':') {
+            // ⚡ Bolt: Use .split_once() to eliminate intermediate Vec allocation and remove redundant .contains check
+            if let Some((provider_from_model, _)) = full_model.split_once(':') {
                 // Model is in format "provider:model"
-                let parts: Vec<&str> = full_model.split(':').collect();
-                let inferred_provider = parts[0].to_string();
+                let inferred_provider = provider_from_model.to_string();
                 let inferred_model = full_model.clone(); // Keep full model name
 
                 (
