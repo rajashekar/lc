@@ -241,6 +241,17 @@ impl ProviderInstaller {
             .get(provider_id)
             .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in registry", provider_id))?;
 
+        // Validate config_file to prevent path traversal and absolute path overwrite
+        if metadata.config_file.contains("..")
+            || metadata.config_file.starts_with('/')
+            || metadata.config_file.starts_with('\\')
+        {
+            anyhow::bail!(
+                "Invalid provider config file name: {}",
+                metadata.config_file
+            );
+        }
+
         // Check if already installed
         let target_file = self.providers_dir.join(&metadata.config_file);
         if target_file.exists() && !force {
@@ -420,6 +431,13 @@ impl ProviderInstaller {
 
     /// Remove an installed provider
     pub fn uninstall_provider(&self, provider_id: &str) -> Result<()> {
+        if provider_id.contains("..")
+            || provider_id.starts_with('/')
+            || provider_id.starts_with('\\')
+        {
+            anyhow::bail!("Invalid provider ID: {}", provider_id);
+        }
+
         let provider_file = self.providers_dir.join(format!("{}.toml", provider_id));
 
         match fs::remove_file(&provider_file) {
