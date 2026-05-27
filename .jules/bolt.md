@@ -16,3 +16,6 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+## 2024-10-24 - Explicit unrolling for SIMD Auto-vectorization
+**Learning:** Using `zip` inside loops for chunked array processing prevents LLVM from optimally auto-vectorizing the numerical calculations. By manually unrolling operations in larger chunks (e.g., 8 elements), we can achieve significantly better SIMD performance in Rust.
+**Action:** Explicitly unroll arithmetic operations manually instead of using inner iterators like `zip` for performance-critical numerical chunks.
