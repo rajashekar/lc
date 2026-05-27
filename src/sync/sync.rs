@@ -12,7 +12,8 @@ pub struct ConfigFile {
 
 /// Encrypt multiple configuration files
 pub fn encrypt_files(config_files: &[ConfigFile]) -> Result<Vec<ConfigFile>> {
-    use super::encryption::{derive_key_from_password, encrypt_data};
+    use super::encryption::encrypt_data;
+    use rayon::prelude::*;
 
     // Get encryption password from environment or prompt
     let password = std::env::var("LC_SYNC_PASSWORD").unwrap_or_else(|_| {
@@ -20,23 +21,25 @@ pub fn encrypt_files(config_files: &[ConfigFile]) -> Result<Vec<ConfigFile>> {
             .expect("Failed to read password")
     });
 
-    let key = derive_key_from_password(&password)?;
+    // Use rayon to parallelize the CPU-bound encryption process
+    let encrypted_files: Result<Vec<ConfigFile>> = config_files
+        .par_iter()
+        .map(|file| {
+            let encrypted_content = encrypt_data(&file.content, &password)?;
+            Ok(ConfigFile {
+                name: file.name.clone(),
+                content: encrypted_content,
+            })
+        })
+        .collect();
 
-    let mut encrypted_files = Vec::new();
-    for file in config_files {
-        let encrypted_content = encrypt_data(&file.content, &key)?;
-        encrypted_files.push(ConfigFile {
-            name: file.name.clone(),
-            content: encrypted_content,
-        });
-    }
-
-    Ok(encrypted_files)
+    encrypted_files
 }
 
 /// Decrypt multiple configuration files
 pub fn decrypt_files(encrypted_files: &[ConfigFile]) -> Result<Vec<ConfigFile>> {
-    use super::encryption::{decrypt_data, derive_key_from_password};
+    use super::encryption::decrypt_data;
+    use rayon::prelude::*;
 
     // Get encryption password from environment or prompt
     let password = std::env::var("LC_SYNC_PASSWORD").unwrap_or_else(|_| {
@@ -44,18 +47,19 @@ pub fn decrypt_files(encrypted_files: &[ConfigFile]) -> Result<Vec<ConfigFile>> 
             .expect("Failed to read password")
     });
 
-    let key = derive_key_from_password(&password)?;
+    // Use rayon to parallelize the CPU-bound decryption process
+    let decrypted_files: Result<Vec<ConfigFile>> = encrypted_files
+        .par_iter()
+        .map(|file| {
+            let decrypted_content = decrypt_data(&file.content, &password)?;
+            Ok(ConfigFile {
+                name: file.name.clone(),
+                content: decrypted_content,
+            })
+        })
+        .collect();
 
-    let mut decrypted_files = Vec::new();
-    for file in encrypted_files {
-        let decrypted_content = decrypt_data(&file.content, &key)?;
-        decrypted_files.push(ConfigFile {
-            name: file.name.clone(),
-            content: decrypted_content,
-        });
-    }
-
-    Ok(decrypted_files)
+    decrypted_files
 }
 
 /// List available sync providers
