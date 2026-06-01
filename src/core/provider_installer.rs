@@ -223,6 +223,11 @@ impl ProviderInstaller {
         Ok(providers)
     }
 
+    /// Check if a filename is safe to use in a path
+    fn is_safe_filename(name: &str) -> bool {
+        !name.contains("..") && !name.starts_with('/') && !name.starts_with('\\')
+    }
+
     /// Install a provider configuration
     pub async fn install_provider(&self, provider_id: &str, force: bool) -> Result<()> {
         println!("{} Installing provider '{}'...", "📦".blue(), provider_id);
@@ -240,6 +245,13 @@ impl ProviderInstaller {
             .providers
             .get(provider_id)
             .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in registry", provider_id))?;
+
+        if !Self::is_safe_filename(&metadata.config_file) {
+            anyhow::bail!(
+                "Invalid configuration file name in registry: {}",
+                metadata.config_file
+            );
+        }
 
         // Check if already installed
         let target_file = self.providers_dir.join(&metadata.config_file);
@@ -420,6 +432,10 @@ impl ProviderInstaller {
 
     /// Remove an installed provider
     pub fn uninstall_provider(&self, provider_id: &str) -> Result<()> {
+        if !Self::is_safe_filename(provider_id) {
+            anyhow::bail!("Invalid provider ID: {}", provider_id);
+        }
+
         let provider_file = self.providers_dir.join(format!("{}.toml", provider_id));
 
         match fs::remove_file(&provider_file) {
