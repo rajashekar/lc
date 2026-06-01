@@ -180,16 +180,16 @@ async fn serve_index() -> Html<&'static str> {
     <div class="container">
         <div class="model-select">
             <label for="model">Model:</label>
-            <select id="model">
+            <select id="model" aria-label="Select model">
                 <option value="gpt-4o">gpt-4o</option>
                 <option value="gpt-4o-mini">gpt-4o-mini</option>
                 <option value="claude-3-5-sonnet-latest">claude-3-5-sonnet-latest</option>
                 <option value="claude-3-5-haiku-latest">claude-3-5-haiku-latest</option>
             </select>
         </div>
-        <div id="chat" class="chat-box"></div>
+        <div id="chat" class="chat-box" aria-live="polite" aria-atomic="false"></div>
         <div class="input-group">
-            <input type="text" id="message" placeholder="Type your message..." autofocus>
+            <input type="text" id="message" aria-label="Type your message" placeholder="Type your message..." autofocus>
             <button id="send" onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -232,6 +232,7 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
             
             addMessage('user', message);
             
@@ -259,6 +260,7 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Send';
                 input.focus();
             }
         }
