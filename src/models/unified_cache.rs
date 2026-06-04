@@ -122,13 +122,15 @@ impl UnifiedCache {
         // Fall back to file cache
         let cache_path = Self::provider_cache_path(provider)?;
 
-        if !cache_path.exists() {
-            debug_log!("Cache file does not exist for provider '{}'", provider);
-            return Ok(false);
-        }
-
         // Use async file I/O to avoid blocking
-        let content = fs::read_to_string(&cache_path).await?;
+        let content = match fs::read_to_string(&cache_path).await {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                debug_log!("Cache file does not exist for provider '{}'", provider);
+                return Ok(false);
+            }
+            Err(e) => return Err(e.into()),
+        };
         let cached_data: CachedProviderData = serde_json::from_str(&content)?;
 
         let now = SystemTime::now()
@@ -198,11 +200,13 @@ impl UnifiedCache {
         // Fall back to file cache
         let cache_path = Self::provider_cache_path(provider)?;
 
-        if !cache_path.exists() {
-            return Ok("No cache".to_string());
-        }
-
-        let content = fs::read_to_string(&cache_path).await?;
+        let content = match fs::read_to_string(&cache_path).await {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok("No cache".to_string());
+            }
+            Err(e) => return Err(e.into()),
+        };
         let cached_data: CachedProviderData = serde_json::from_str(&content)?;
 
         let now = SystemTime::now()
@@ -253,12 +257,14 @@ impl UnifiedCache {
         // Fall back to file cache
         let cache_path = Self::provider_cache_path(provider)?;
 
-        if !cache_path.exists() {
-            debug_log!("No cache file found for provider '{}'", provider);
-            return Ok(Vec::new());
-        }
-
-        let content = fs::read_to_string(&cache_path).await?;
+        let content = match fs::read_to_string(&cache_path).await {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                debug_log!("No cache file found for provider '{}'", provider);
+                return Ok(Vec::new());
+            }
+            Err(e) => return Err(e.into()),
+        };
         let cached_data: CachedProviderData = serde_json::from_str(&content)?;
 
         debug_log!(
