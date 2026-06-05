@@ -525,13 +525,10 @@ impl ModelMetadataExtractor {
     }
 
     fn extract_with_jq_filter(&self, data: &Value, path: &str) -> Result<Value> {
-        let parts: Vec<&str> = path.split(" | ").collect();
-        if parts.len() != 2 {
-            anyhow::bail!("Complex JQ filters not supported: {}", path);
-        }
-
-        let array_path = parts[0].trim();
-        let filter = parts[1].trim();
+        let (array_path, filter) = path
+            .split_once(" | ")
+            .map(|(a, f)| (a.trim(), f.trim()))
+            .ok_or_else(|| anyhow::anyhow!("Complex JQ filters not supported: {}", path))?;
 
         // Extract the array first
         let array_value = self.extract_with_jq_path(data, array_path)?;

@@ -290,7 +290,7 @@ async fn handle_models_command(
                                 if tag.starts_with("ctx") {
                                     if let Some(ctx) = model.context_length {
                                         if tag.contains('>') {
-                                            if let Some(min_str) = tag.split('>').nth(1) {
+                                            if let Some((_, min_str)) = tag.split_once('>') {
                                                 if let Ok(min_ctx) = parse_token_count(min_str) {
                                                     if ctx < min_ctx {
                                                         return false;
