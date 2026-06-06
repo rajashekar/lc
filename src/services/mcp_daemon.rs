@@ -19,7 +19,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::net::{UnixListener, UnixStream};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum DaemonRequest {
     ListTools {
         server_name: String,
@@ -37,6 +37,37 @@ pub enum DaemonRequest {
     },
     ListConnectedServers,
     Shutdown,
+}
+
+impl std::fmt::Debug for DaemonRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ListTools { server_name } => f
+                .debug_struct("ListTools")
+                .field("server_name", server_name)
+                .finish(),
+            Self::CallTool {
+                server_name,
+                tool_name,
+                arguments: _,
+            } => f
+                .debug_struct("CallTool")
+                .field("server_name", server_name)
+                .field("tool_name", tool_name)
+                .field("arguments", &"[REDACTED]")
+                .finish(),
+            Self::EnsureServerConnected { server_name } => f
+                .debug_struct("EnsureServerConnected")
+                .field("server_name", server_name)
+                .finish(),
+            Self::CloseServer { server_name } => f
+                .debug_struct("CloseServer")
+                .field("server_name", server_name)
+                .finish(),
+            Self::ListConnectedServers => write!(f, "ListConnectedServers"),
+            Self::Shutdown => write!(f, "Shutdown"),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
