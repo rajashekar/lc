@@ -395,10 +395,6 @@ async fn get_model_metadata(
     // Not in cache, load from file
     let filename = format!("models/{}.json", provider_name);
 
-    if !std::path::Path::new(&filename).exists() {
-        return None;
-    }
-
     match tokio::fs::read_to_string(&filename).await {
         Ok(json_content) => {
             match MetadataExtractor::extract_from_provider(provider_name, &json_content) {
