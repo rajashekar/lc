@@ -555,10 +555,9 @@ async fn handle_kagi_request(
 
 // Parse Kagi's HTML response to extract the assistant's message
 fn parse_kagi_response(html: &str) -> Result<String> {
-    let lines: Vec<&str> = html.lines().collect();
-
+    // ⚡ Bolt: Iterate over lines directly to avoid O(N) heap allocation of Vec
     // Look for any <div hidden> tags that contain JSON with message content
-    for line in lines.iter() {
+    for line in html.lines() {
         if line.contains("<div hidden>") && line.contains("{") {
             // Extract content between <div hidden> and </div>
             // PERFORMANCE: Use split_once instead of find + slice to avoid double string scanning
@@ -885,10 +884,9 @@ pub async fn fetch_kagi_models() -> Result<Vec<KagiModelProfile>> {
 
 // Parse Kagi's HTML response to extract model profiles
 fn parse_kagi_models_response(html: &str) -> Result<Vec<KagiModelProfile>> {
-    let lines: Vec<&str> = html.lines().collect();
-
+    // ⚡ Bolt: Iterate over lines directly to avoid O(N) heap allocation of Vec
     // Look for the <div hidden> tag that contains the profiles JSON
-    for line in lines.iter() {
+    for line in html.lines() {
         if line.contains("<div hidden>") && line.contains("profiles") {
             // Extract content between <div hidden> and </div>
             // PERFORMANCE: Use split_once instead of find + slice to avoid double string scanning

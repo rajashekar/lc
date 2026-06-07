@@ -16,3 +16,7 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+
+## 2025-06-07 - Eliminate O(N) intermediate Vec allocations during string processing
+**Learning:** Found `.lines().collect::<Vec<&str>>()` patterns in parsing where the text is only needed to be iterated over. In Rust, collecting iterators into an intermediate `Vec` when the only purpose is to iterate over the results causes unnecessary O(N) heap allocations and redundant full-string iterations, particularly impactful on large payloads (like HTML bodies in `webchatproxy.rs`).
+**Action:** Always consume string iterators (like `.lines()`) directly using `for line in string.lines()` instead of collecting them first, thereby preventing unnecessary allocations and improving overall throughput.
