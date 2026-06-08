@@ -187,9 +187,9 @@ async fn serve_index() -> Html<&'static str> {
                 <option value="claude-3-5-haiku-latest">claude-3-5-haiku-latest</option>
             </select>
         </div>
-        <div id="chat" class="chat-box"></div>
+        <div id="chat" class="chat-box" aria-live="polite" aria-atomic="false"></div>
         <div class="input-group">
-            <input type="text" id="message" placeholder="Type your message..." autofocus>
+            <input type="text" id="message" aria-label="Message" placeholder="Type your message..." autofocus>
             <button id="send" onclick="sendMessage()">Send</button>
         </div>
     </div>
