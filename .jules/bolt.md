@@ -16,3 +16,6 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+## 2024-05-24 - Avoid Vec allocation on string splits
+**Learning:** Using `.split(delimiter).collect::<Vec<&str>>()` or iterating over a collected array of split elements incurs unnecessary O(N) heap allocations for the vectors. In Rust, string slices can be parsed or matched with `.split_once(delimiter)` to extract specific parts directly or consumed in place without allocation.
+**Action:** Replace `split(...).collect()` with `.split_once(...)` when bounded elements are needed, and consume iterators directly instead of collecting them if only iteration is intended.

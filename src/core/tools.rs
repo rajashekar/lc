@@ -10,7 +10,6 @@ pub async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<Tool>>, Vec<
     use crate::services::mcp::McpConfig;
     use crate::services::mcp_daemon::DaemonClient;
 
-    let server_names: Vec<&str> = tools_str.split(',').map(|s| s.trim()).collect();
     let mut all_tools = Vec::new();
     let mut valid_server_names = Vec::new();
 
@@ -20,7 +19,8 @@ pub async fn fetch_mcp_tools(tools_str: &str) -> Result<(Option<Vec<Tool>>, Vec<
     // Use daemon client for persistent connections
     let daemon_client = DaemonClient::new()?;
 
-    for server_name in server_names {
+    for server_name in tools_str.split(',') {
+        let server_name = server_name.trim();
         if server_name.is_empty() {
             continue;
         }
