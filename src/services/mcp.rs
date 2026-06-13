@@ -296,7 +296,7 @@ impl SdkMcpManager {
                 if let Some(env) = env {
                     let env_count = env.len();
                     for (key, value) in env {
-                        crate::debug_log!("SdkMcpManager: Setting env var {}={}", key, value);
+                        crate::debug_log!("SdkMcpManager: Setting env var {}=[REDACTED]", key);
                         cmd.env(key, value);
                     }
                     crate::debug_log!("SdkMcpManager: Added {} env vars", env_count);
@@ -401,13 +401,22 @@ impl SdkMcpManager {
 }
 
 // SDK configuration structures
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SdkMcpServerConfig {
     pub name: String,
     pub transport: SdkMcpTransport,
 }
 
-#[derive(Debug, Clone)]
+impl std::fmt::Debug for SdkMcpServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SdkMcpServerConfig")
+            .field("name", &self.name)
+            .field("transport", &self.transport)
+            .finish()
+    }
+}
+
+#[derive(Clone)]
 pub enum SdkMcpTransport {
     Stdio {
         command: String,
@@ -418,6 +427,42 @@ pub enum SdkMcpTransport {
     Sse {
         url: String,
     },
+}
+
+struct RedactedEnv<'a>(&'a HashMap<String, String>);
+impl<'a> std::fmt::Debug for RedactedEnv<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut m = f.debug_map();
+        for k in self.0.keys() {
+            m.entry(k, &"[REDACTED]");
+        }
+        m.finish()
+    }
+}
+
+impl std::fmt::Debug for SdkMcpTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stdio {
+                command,
+                args,
+                env,
+                cwd,
+            } => {
+                let mut ds = f.debug_struct("Stdio");
+                ds.field("command", command);
+                ds.field("args", args);
+                if let Some(e) = env {
+                    ds.field("env", &RedactedEnv(e));
+                } else {
+                    ds.field("env", &None::<()>);
+                }
+                ds.field("cwd", cwd);
+                ds.finish()
+            }
+            Self::Sse { url } => f.debug_struct("Sse").field("url", url).finish(),
+        }
+    }
 }
 
 // Helper functions to create SDK configurations
