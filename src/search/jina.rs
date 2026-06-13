@@ -166,10 +166,10 @@ impl JinaProvider {
         } else {
             // Parse text response format
             crate::debug_log!("Jina: Parsing text response");
-            let lines: Vec<&str> = response_text.lines().collect();
+            // PERFORMANCE: Avoid collecting lines into a Vec to prevent O(N) heap allocations
             let mut current_result: Option<(String, String, String)> = None; // (title, url, description)
 
-            for line in lines {
+            for line in response_text.lines() {
                 let line = line.trim();
                 if line.is_empty() {
                     continue;
