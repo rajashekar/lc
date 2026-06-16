@@ -16,3 +16,7 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+
+## 2024-05-24 - Zero-Allocation String Splitting
+**Learning:** Using `split().collect::<Vec<&str>>()` for extracting string parts forces unnecessary heap allocations and redundant full-string iterations, particularly detrimental in frequent parsing tasks.
+**Action:** Replace `split().collect()` with `split_once()` or `splitn()` where applicable to avoid vectors, enabling zero-allocation tuple extraction in hot paths.
