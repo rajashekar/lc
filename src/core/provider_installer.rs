@@ -242,6 +242,14 @@ impl ProviderInstaller {
             .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in registry", provider_id))?;
 
         // Check if already installed
+        if metadata.config_file.contains('/')
+            || metadata.config_file.contains('\\')
+            || metadata.config_file.contains("..")
+        {
+            anyhow::bail!(
+                "Invalid config file name in registry: contains path traversal characters"
+            );
+        }
         let target_file = self.providers_dir.join(&metadata.config_file);
         if target_file.exists() && !force {
             // Check version
@@ -420,6 +428,9 @@ impl ProviderInstaller {
 
     /// Remove an installed provider
     pub fn uninstall_provider(&self, provider_id: &str) -> Result<()> {
+        if provider_id.contains('/') || provider_id.contains('\\') || provider_id.contains("..") {
+            anyhow::bail!("Invalid provider ID: contains path traversal characters");
+        }
         let provider_file = self.providers_dir.join(format!("{}.toml", provider_id));
 
         match fs::remove_file(&provider_file) {
