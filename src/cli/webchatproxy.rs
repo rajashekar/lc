@@ -232,6 +232,7 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
             
             addMessage('user', message);
             
@@ -259,6 +260,7 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Send';
                 input.focus();
             }
         }
