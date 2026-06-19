@@ -39,9 +39,7 @@ fn test_config_resolver_with_temp_dir() -> Result<()> {
 
 #[cfg(test)]
 mod encryption_tests {
-    use lc::sync::{
-        decode_base64, decrypt_data, encode_base64, encrypt_data,
-    };
+    use lc::sync::{decode_base64, decrypt_data, encode_base64, encrypt_data};
 
     #[test]
     fn test_encryption_roundtrip() {
