@@ -40,49 +40,32 @@ fn test_config_resolver_with_temp_dir() -> Result<()> {
 #[cfg(test)]
 mod encryption_tests {
     use lc::sync::{
-        decode_base64, decrypt_data, derive_key_from_password, encode_base64, encrypt_data,
+        decode_base64, decrypt_data, encode_base64, encrypt_data,
     };
-
-    #[test]
-    fn test_key_derivation_consistency() {
-        let password = "test_password_123";
-        let key1 = derive_key_from_password(password).unwrap();
-        let key2 = derive_key_from_password(password).unwrap();
-
-        // Same password should produce same key
-        assert_eq!(key1, key2);
-
-        // Different password should produce different key
-        let key3 = derive_key_from_password("different_password").unwrap();
-        assert_ne!(key1, key3);
-    }
 
     #[test]
     fn test_encryption_roundtrip() {
         let data = b"Hello, World! This is test configuration data.";
         let password = "test_password_123";
-        let key = derive_key_from_password(password).unwrap();
 
         // Encrypt
-        let encrypted = encrypt_data(data, &key).unwrap();
+        let encrypted = encrypt_data(data, password).unwrap();
         assert_ne!(encrypted.as_slice(), data);
-        assert!(encrypted.len() > data.len()); // Should be larger due to nonce + auth tag
+        assert!(encrypted.len() > data.len()); // Should be larger due to salt + nonce + auth tag
 
         // Decrypt
-        let decrypted = decrypt_data(&encrypted, &key).unwrap();
+        let decrypted = decrypt_data(&encrypted, password).unwrap();
         assert_eq!(decrypted.as_slice(), data);
     }
 
     #[test]
-    fn test_encryption_with_wrong_key_fails() {
+    fn test_encryption_with_wrong_password_fails() {
         let data = b"Hello, World!";
-        let key1 = derive_key_from_password("password1").unwrap();
-        let key2 = derive_key_from_password("password2").unwrap();
 
-        let encrypted = encrypt_data(data, &key1).unwrap();
+        let encrypted = encrypt_data(data, "password1").unwrap();
 
-        // Decryption with wrong key should fail
-        assert!(decrypt_data(&encrypted, &key2).is_err());
+        // Decryption with wrong password should fail
+        assert!(decrypt_data(&encrypted, "password2").is_err());
     }
 
     #[test]
@@ -101,14 +84,12 @@ mod encryption_tests {
 
     #[test]
     fn test_decrypt_invalid_data_fails() {
-        let key = derive_key_from_password("test").unwrap();
-
         // Too short data should fail
-        assert!(decrypt_data(b"short", &key).is_err());
+        assert!(decrypt_data(b"short", "test").is_err());
 
         // Invalid data should fail
         let invalid_data = vec![0u8; 20];
-        assert!(decrypt_data(&invalid_data, &key).is_err());
+        assert!(decrypt_data(&invalid_data, "test").is_err());
     }
 }
 

@@ -20,6 +20,4 @@ pub use sync::{
 pub use config::handle_sync_configure;
 
 // Re-export encryption utilities from encryption module
-pub use encryption::{
-    decode_base64, decrypt_data, derive_key_from_password, encode_base64, encrypt_data,
-};
+pub use encryption::{decode_base64, decrypt_data, encode_base64, encrypt_data};
