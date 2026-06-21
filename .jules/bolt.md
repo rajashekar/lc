@@ -16,3 +16,7 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+
+## 2024-06-21 - Avoid intermediate allocations when iterating string lines
+**Learning:** Collecting iterators (like `str::lines()`) into an intermediate `Vec` (e.g., `string.lines().collect::<Vec<_>>()`) if the only purpose is to iterate over the results causes unnecessary O(N) heap allocations and redundant iterations.
+**Action:** Consume iterators directly (e.g., `for line in string.lines()`) to prevent these unnecessary allocations.
