@@ -16,3 +16,7 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+
+## 2024-06-23 - Optimize SIMD inner loops
+**Learning:** For numerical calculations like cosine similarity, LLVM can struggle to auto-vectorize effectively when using inner iterator loops like `.zip()`. Explicitly unrolling arithmetic operations manually (e.g. in 8-element chunks) allows LLVM to auto-vectorize more efficiently, yielding significantly better SIMD performance.
+**Action:** Unroll arithmetic operations manually inside `chunks_exact()` instead of iterating over chunks with `.zip()`.
