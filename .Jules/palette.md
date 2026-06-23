@@ -22,3 +22,6 @@
 ## 2024-05-25 - LLM Output Formatting
 **Learning:** LLM outputs frequently include line breaks, code blocks, and other formatting that is lost when displayed as raw text in HTML without specific CSS rules, leading to poor readability.
 **Action:** When building web interfaces for LLM chat, always apply `white-space: pre-wrap;` and `word-wrap: break-word;` to the message containers to prevent layout collapsing and ensure formatting is preserved.
+## 2024-06-23 - Improve Web Chat Accessiblity
+**Learning:** Adding `role="log"` and `aria-live="polite"` to dynamic chat containers ensures screen readers announce new messages automatically without losing focus.
+**Action:** Always verify dynamic content updates are accessible via aria-live regions and ensure inputs have accessible names.
