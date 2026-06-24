@@ -190,7 +190,7 @@ async fn serve_index() -> Html<&'static str> {
         <div id="chat" class="chat-box"></div>
         <div class="input-group">
             <input type="text" id="message" placeholder="Type your message..." autofocus>
-            <button id="send" onclick="sendMessage()">Send</button>
+            <button id="send" onclick="sendMessage()" aria-label="Send message">Send</button>
         </div>
     </div>
     
@@ -232,6 +232,7 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
             
             addMessage('user', message);
             
@@ -258,6 +259,7 @@ async fn serve_index() -> Html<&'static str> {
             } catch (error) {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
+                button.textContent = 'Send';
                 button.disabled = false;
                 input.focus();
             }
