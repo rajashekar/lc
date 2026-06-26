@@ -17,6 +17,18 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::process::Command;
 
+struct RedactedEnv<'a>(&'a HashMap<String, String>);
+
+impl<'a> std::fmt::Debug for RedactedEnv<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut map = f.debug_map();
+        for k in self.0.keys() {
+            map.entry(k, &"[REDACTED]");
+        }
+        map.finish()
+    }
+}
+
 // Legacy configuration structures for backward compatibility
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum McpServerType {
@@ -25,13 +37,24 @@ pub enum McpServerType {
     Streamable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
     pub name: String,
     pub server_type: McpServerType,
     pub command_or_url: String,
     #[serde(default)]
     pub env: HashMap<String, String>,
+}
+
+impl std::fmt::Debug for McpServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpServerConfig")
+            .field("name", &self.name)
+            .field("server_type", &self.server_type)
+            .field("command_or_url", &self.command_or_url)
+            .field("env", &RedactedEnv(&self.env))
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -407,7 +430,7 @@ pub struct SdkMcpServerConfig {
     pub transport: SdkMcpTransport,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum SdkMcpTransport {
     Stdio {
         command: String,
@@ -418,6 +441,27 @@ pub enum SdkMcpTransport {
     Sse {
         url: String,
     },
+}
+
+impl std::fmt::Debug for SdkMcpTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SdkMcpTransport::Stdio {
+                command,
+                args,
+                env,
+                cwd,
+            } => {
+                let mut dbg = f.debug_struct("Stdio");
+                dbg.field("command", command);
+                dbg.field("args", args);
+                dbg.field("env", &env.as_ref().map(RedactedEnv));
+                dbg.field("cwd", cwd);
+                dbg.finish()
+            }
+            SdkMcpTransport::Sse { url } => f.debug_struct("Sse").field("url", url).finish(),
+        }
+    }
 }
 
 // Helper functions to create SDK configurations
