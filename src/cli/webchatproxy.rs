@@ -164,6 +164,15 @@ async fn serve_index() -> Html<&'static str> {
             background: #ccc;
             cursor: not-allowed;
         }
+        button:focus-visible {
+            outline: 2px solid #0056b3;
+            outline-offset: 2px;
+        }
+        input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+        }
         .model-select {
             margin-bottom: 10px;
         }
@@ -232,6 +241,8 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
+            button.setAttribute('aria-busy', 'true');
             
             addMessage('user', message);
             
@@ -259,6 +270,8 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Send';
+                button.removeAttribute('aria-busy');
                 input.focus();
             }
         }
