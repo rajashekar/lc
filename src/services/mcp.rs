@@ -25,13 +25,34 @@ pub enum McpServerType {
     Streamable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
     pub name: String,
     pub server_type: McpServerType,
     pub command_or_url: String,
     #[serde(default)]
     pub env: HashMap<String, String>,
+}
+
+impl std::fmt::Debug for McpServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct RedactedEnv<'a>(&'a HashMap<String, String>);
+        impl<'a> std::fmt::Debug for RedactedEnv<'a> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let mut map = f.debug_map();
+                for key in self.0.keys() {
+                    map.entry(key, &"[REDACTED]");
+                }
+                map.finish()
+            }
+        }
+        f.debug_struct("McpServerConfig")
+            .field("name", &self.name)
+            .field("server_type", &self.server_type)
+            .field("command_or_url", &self.command_or_url)
+            .field("env", &RedactedEnv(&self.env))
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -296,7 +317,7 @@ impl SdkMcpManager {
                 if let Some(env) = env {
                     let env_count = env.len();
                     for (key, value) in env {
-                        crate::debug_log!("SdkMcpManager: Setting env var {}={}", key, value);
+                        crate::debug_log!("SdkMcpManager: Setting env var {}=[REDACTED]", key);
                         cmd.env(key, value);
                     }
                     crate::debug_log!("SdkMcpManager: Added {} env vars", env_count);
@@ -407,7 +428,7 @@ pub struct SdkMcpServerConfig {
     pub transport: SdkMcpTransport,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum SdkMcpTransport {
     Stdio {
         command: String,
@@ -418,6 +439,42 @@ pub enum SdkMcpTransport {
     Sse {
         url: String,
     },
+}
+
+impl std::fmt::Debug for SdkMcpTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stdio {
+                command,
+                args,
+                env,
+                cwd,
+            } => {
+                struct RedactedOptEnv<'a>(&'a Option<HashMap<String, String>>);
+                impl<'a> std::fmt::Debug for RedactedOptEnv<'a> {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self.0 {
+                            Some(env_map) => {
+                                let mut map = f.debug_map();
+                                for key in env_map.keys() {
+                                    map.entry(key, &"[REDACTED]");
+                                }
+                                map.finish()
+                            }
+                            None => write!(f, "None"),
+                        }
+                    }
+                }
+                f.debug_struct("Stdio")
+                    .field("command", command)
+                    .field("args", args)
+                    .field("env", &RedactedOptEnv(env))
+                    .field("cwd", cwd)
+                    .finish()
+            }
+            Self::Sse { url } => f.debug_struct("Sse").field("url", url).finish(),
+        }
+    }
 }
 
 // Helper functions to create SDK configurations
