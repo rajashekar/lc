@@ -532,16 +532,32 @@ pub fn cosine_similarity_simd(a: &[f64], b: &[f64]) -> f64 {
     let mut norm_a_sq = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance using chunks_exact to elide bounds checks
-    let mut a_chunks = a.chunks_exact(4);
-    let mut b_chunks = b.chunks_exact(4);
+    // Process in chunks of 8 and unroll loop to allow LLVM to auto-vectorize efficiently
+    let mut a_chunks = a.chunks_exact(8);
+    let mut b_chunks = b.chunks_exact(8);
 
     for (a_chunk, b_chunk) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
-        for (&av, &bv) in a_chunk.iter().zip(b_chunk.iter()) {
-            dot_product += av * bv;
-            norm_a_sq += av * av;
-            norm_b_sq += bv * bv;
-        }
+        let a0 = a_chunk[0];
+        let b0 = b_chunk[0];
+        let a1 = a_chunk[1];
+        let b1 = b_chunk[1];
+        let a2 = a_chunk[2];
+        let b2 = b_chunk[2];
+        let a3 = a_chunk[3];
+        let b3 = b_chunk[3];
+        let a4 = a_chunk[4];
+        let b4 = b_chunk[4];
+        let a5 = a_chunk[5];
+        let b5 = b_chunk[5];
+        let a6 = a_chunk[6];
+        let b6 = b_chunk[6];
+        let a7 = a_chunk[7];
+        let b7 = b_chunk[7];
+
+        dot_product +=
+            a0 * b0 + a1 * b1 + a2 * b2 + a3 * b3 + a4 * b4 + a5 * b5 + a6 * b6 + a7 * b7;
+        norm_a_sq += a0 * a0 + a1 * a1 + a2 * a2 + a3 * a3 + a4 * a4 + a5 * a5 + a6 * a6 + a7 * a7;
+        norm_b_sq += b0 * b0 + b1 * b1 + b2 * b2 + b3 * b3 + b4 * b4 + b5 * b5 + b6 * b6 + b7 * b7;
     }
 
     // Process remaining elements
@@ -573,15 +589,31 @@ pub fn cosine_similarity_precomputed(a: &[f64], b: &[f64], norm_a: f64) -> f64 {
     let mut dot_product = 0.0f64;
     let mut norm_b_sq = 0.0f64;
 
-    // Process in chunks of 4 for better performance using chunks_exact to elide bounds checks
-    let mut a_chunks = a.chunks_exact(4);
-    let mut b_chunks = b.chunks_exact(4);
+    // Process in chunks of 8 and unroll loop to allow LLVM to auto-vectorize efficiently
+    let mut a_chunks = a.chunks_exact(8);
+    let mut b_chunks = b.chunks_exact(8);
 
     for (a_chunk, b_chunk) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
-        for (&av, &bv) in a_chunk.iter().zip(b_chunk.iter()) {
-            dot_product += av * bv;
-            norm_b_sq += bv * bv;
-        }
+        let a0 = a_chunk[0];
+        let b0 = b_chunk[0];
+        let a1 = a_chunk[1];
+        let b1 = b_chunk[1];
+        let a2 = a_chunk[2];
+        let b2 = b_chunk[2];
+        let a3 = a_chunk[3];
+        let b3 = b_chunk[3];
+        let a4 = a_chunk[4];
+        let b4 = b_chunk[4];
+        let a5 = a_chunk[5];
+        let b5 = b_chunk[5];
+        let a6 = a_chunk[6];
+        let b6 = b_chunk[6];
+        let a7 = a_chunk[7];
+        let b7 = b_chunk[7];
+
+        dot_product +=
+            a0 * b0 + a1 * b1 + a2 * b2 + a3 * b3 + a4 * b4 + a5 * b5 + a6 * b6 + a7 * b7;
+        norm_b_sq += b0 * b0 + b1 * b1 + b2 * b2 + b3 * b3 + b4 * b4 + b5 * b5 + b6 * b6 + b7 * b7;
     }
 
     // Process remaining elements
