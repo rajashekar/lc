@@ -22,3 +22,6 @@
 ## 2024-05-25 - LLM Output Formatting
 **Learning:** LLM outputs frequently include line breaks, code blocks, and other formatting that is lost when displayed as raw text in HTML without specific CSS rules, leading to poor readability.
 **Action:** When building web interfaces for LLM chat, always apply `white-space: pre-wrap;` and `word-wrap: break-word;` to the message containers to prevent layout collapsing and ensure formatting is preserved.
+## 2024-10-27 - Chat Interface UX
+**Learning:** Chat interfaces with async fetching often lack visual feedback during loading, leading to user confusion, and dynamic chat boxes often lack `aria-live` attributes, preventing screen readers from announcing new messages.
+**Action:** Always provide explicit loading states (e.g., changing button text to "Sending..." and disabling it) during API calls, and always apply `aria-live="polite"` to message containers for screen reader accessibility.
