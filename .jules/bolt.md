@@ -16,3 +16,7 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+
+## 2024-05-18 - Replacing In-Memory Filtering With LIMIT Queries
+**Learning:** For large SQLite databases, returning all records into memory and then processing them (e.g., getting the first N logs or truncating vectors) takes up a massive amount of unneeded compute and memory overhead.
+**Action:** Replace `get_all_logs` and subsequent array truncations with proper SQL `LIMIT` queries (e.g., `get_recent_logs(Some(N))`) where we only deserialize the exact data needed from the database, minimizing the size of allocations.

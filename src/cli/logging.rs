@@ -26,7 +26,7 @@ pub async fn handle(command: LogCommands) -> Result<()> {
 }
 
 async fn show_logs(db: &database::Database, minimal: bool) -> Result<()> {
-    let entries = db.get_all_logs()?;
+    let entries = db.get_recent_logs(None)?;
 
     if entries.is_empty() {
         println!("No chat logs found.");
@@ -113,7 +113,7 @@ async fn handle_recent(
 ) -> Result<()> {
     match command {
         Some(RecentCommands::Answer { command }) => {
-            let entries = db.get_all_logs()?;
+            let entries = db.get_recent_logs(Some(1))?;
             if let Some(entry) = entries.first() {
                 match command {
                     Some(AnswerCommands::Code) => {
@@ -135,7 +135,7 @@ async fn handle_recent(
             }
         }
         Some(RecentCommands::Question) => {
-            let entries = db.get_all_logs()?;
+            let entries = db.get_recent_logs(Some(1))?;
             if let Some(entry) = entries.first() {
                 println!("{}", entry.question);
             } else {
@@ -143,7 +143,7 @@ async fn handle_recent(
             }
         }
         Some(RecentCommands::Model) => {
-            let entries = db.get_all_logs()?;
+            let entries = db.get_recent_logs(Some(1))?;
             if let Some(entry) = entries.first() {
                 println!("{}", entry.model);
             } else {
@@ -151,7 +151,7 @@ async fn handle_recent(
             }
         }
         Some(RecentCommands::Session) => {
-            let entries = db.get_all_logs()?;
+            let entries = db.get_recent_logs(Some(1))?;
             if let Some(entry) = entries.first() {
                 println!("{}", entry.chat_id);
             } else {
@@ -160,8 +160,7 @@ async fn handle_recent(
         }
         None => {
             // Default behavior - show recent logs
-            let mut entries = db.get_all_logs()?;
-            entries.truncate(count);
+            let entries = db.get_recent_logs(Some(count))?;
 
             if entries.is_empty() {
                 println!("No recent logs found.");

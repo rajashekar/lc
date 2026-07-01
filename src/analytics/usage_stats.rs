@@ -43,7 +43,7 @@ impl UsageAnalyzer {
             let cutoff_date = Utc::now() - Duration::days(days as i64);
             self.get_entries_since(cutoff_date)?
         } else {
-            self.db.get_all_logs()?
+            self.db.get_recent_logs(None)?
         };
 
         if entries.is_empty() {
@@ -170,7 +170,7 @@ impl UsageAnalyzer {
     fn get_entries_since(&self, cutoff_date: DateTime<Utc>) -> Result<Vec<ChatEntry>> {
         // This would need a custom query in the database
         // For now, we'll filter after getting all entries
-        let all_entries = self.db.get_all_logs()?;
+        let all_entries = self.db.get_recent_logs(None)?;
         Ok(all_entries
             .into_iter()
             .filter(|entry| entry.timestamp >= cutoff_date)

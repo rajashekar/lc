@@ -254,11 +254,6 @@ impl Database {
         Ok(entries)
     }
 
-    // Optimized version with LIMIT for better performance on large datasets
-    pub fn get_all_logs(&self) -> Result<Vec<ChatEntry>> {
-        self.get_recent_logs(None)
-    }
-
     pub fn get_recent_logs(&self, limit: Option<usize>) -> Result<Vec<ChatEntry>> {
         let conn = self.pool.get_connection()?;
 
