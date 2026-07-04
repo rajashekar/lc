@@ -1038,10 +1038,9 @@ impl ModelMetadataExtractor {
 
     /// Check if model name matches a specific pattern using regex (case-insensitive)
     fn check_name_matches(&self, model: &Value, pattern: &str) -> Option<bool> {
-        use regex::RegexBuilder;
-
-        // Create case-insensitive regex
-        let regex = match RegexBuilder::new(pattern).case_insensitive(true).build() {
+        // Create case-insensitive regex using cache
+        let pattern_with_flag = format!("(?i){}", pattern);
+        let regex = match crate::utils::regex_cache::get_regex(&pattern_with_flag) {
             Ok(r) => r,
             Err(_) => return Some(false), // Invalid regex pattern
         };

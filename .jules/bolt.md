@@ -16,3 +16,7 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+
+## 2024-07-04 - Caching precompiled regex in regex_cache instead of rebuilding on every loop
+**Learning:** Recompiling regex patterns every time inside hot loops (like model name matching with case insensitivity via `RegexBuilder::new(pattern).case_insensitive(true).build()`) is a huge performance hit. While `lc` implements a `REGEX_CACHE`, it was bypassed in `src/models/metadata.rs` for `check_name_matches` because it required case-insensitivity using `RegexBuilder`.
+**Action:** Instead of dynamically building case-insensitive regex patterns in hot paths, we can use the `(?i)` flag directly in the regex string and utilize the existing thread-safe `get_regex` cache. Precompiling regex and reusing it offers significant performance gains.
