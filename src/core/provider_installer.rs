@@ -420,6 +420,10 @@ impl ProviderInstaller {
 
     /// Remove an installed provider
     pub fn uninstall_provider(&self, provider_id: &str) -> Result<()> {
+        if provider_id.contains("..") || provider_id.contains('/') || provider_id.contains('\\') {
+            anyhow::bail!("Invalid provider ID: {}", provider_id);
+        }
+
         let provider_file = self.providers_dir.join(format!("{}.toml", provider_id));
 
         match fs::remove_file(&provider_file) {
