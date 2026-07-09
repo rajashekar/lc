@@ -94,8 +94,10 @@ async fn serve_index() -> Html<&'static str> {
     Html(
         r#"
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LC Web Chat</title>
     <style>
         body {
@@ -189,7 +191,7 @@ async fn serve_index() -> Html<&'static str> {
         </div>
         <div id="chat" class="chat-box"></div>
         <div class="input-group">
-            <input type="text" id="message" placeholder="Type your message..." autofocus>
+            <input type="text" id="message" placeholder="Type your message..." aria-label="Chat message" autofocus>
             <button id="send" onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -232,6 +234,7 @@ async fn serve_index() -> Html<&'static str> {
             
             input.value = '';
             button.disabled = true;
+            button.textContent = 'Sending...';
             
             addMessage('user', message);
             
@@ -259,6 +262,7 @@ async fn serve_index() -> Html<&'static str> {
                 addMessage('assistant', `Error: ${error.message}`);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Send';
                 input.focus();
             }
         }
