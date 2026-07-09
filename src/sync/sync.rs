@@ -271,8 +271,7 @@ pub async fn handle_sync_from(provider: &str, _encrypted: bool, yes: bool) -> Re
         // Save files to config directory
         for file in files_to_save {
             // Validate file name to prevent path traversal
-            if file.name.contains("..") || file.name.starts_with('/') || file.name.starts_with('\\')
-            {
+            if file.name.contains("..") || file.name.contains('/') || file.name.contains('\\') {
                 println!(
                     "  {} Skipped invalid file name: {}",
                     "⚠️".yellow(),
