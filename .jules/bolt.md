@@ -16,3 +16,6 @@
 ## 2024-05-18 - Avoid O(N) allocations during linear cache scans
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
+## 2024-07-10 - LLVM Auto-vectorization of Cosine Similarity
+**Learning:** In Rust, for numerical calculations (like cosine similarity), LLVM struggles to auto-vectorize effectively when using inner iterator loops like `.zip()`. Because floating-point operations are not strictly associative, explicitly unroll arithmetic operations manually into a single statement to break dependency chains, allowing LLVM to dispatch multiplications concurrently for significantly better SIMD auto-vectorization performance.
+**Action:** When optimizing tight numerical loops, consider manual unrolling of 4 or 8 elements instead of relying entirely on standard iterators.
