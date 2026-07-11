@@ -254,6 +254,41 @@ impl Database {
         Ok(entries)
     }
 
+    pub fn get_entries_since(&self, cutoff_date: DateTime<Utc>) -> Result<Vec<ChatEntry>> {
+        let conn = self.pool.get_connection()?;
+        let conn_ref = conn
+            .conn
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Database connection not available"))?;
+
+        let sql =
+            "SELECT id, chat_id, model, question, response, timestamp, input_tokens, output_tokens
+                   FROM chat_logs
+                   WHERE timestamp >= ?1
+                   ORDER BY timestamp ASC";
+
+        let mut stmt = conn_ref.prepare(sql)?;
+
+        let rows = stmt.query_map([cutoff_date], |row| {
+            Ok(ChatEntry {
+                chat_id: row.get(1)?,
+                model: row.get(2)?,
+                question: row.get(3)?,
+                response: row.get(4)?,
+                timestamp: row.get(5)?,
+                input_tokens: row.get(6).ok(),
+                output_tokens: row.get(7).ok(),
+            })
+        })?;
+
+        let mut entries = Vec::new();
+        for row in rows {
+            entries.push(row?);
+        }
+
+        Ok(entries)
+    }
+
     // Optimized version with LIMIT for better performance on large datasets
     pub fn get_all_logs(&self) -> Result<Vec<ChatEntry>> {
         self.get_recent_logs(None)
