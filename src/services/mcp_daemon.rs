@@ -19,7 +19,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(all(unix, feature = "unix-sockets"))]
 use tokio::net::{UnixListener, UnixStream};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum DaemonRequest {
     ListTools {
         server_name: String,
@@ -37,6 +37,44 @@ pub enum DaemonRequest {
     },
     ListConnectedServers,
     Shutdown,
+}
+
+impl std::fmt::Debug for DaemonRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ListTools { server_name } => f
+                .debug_struct("ListTools")
+                .field("server_name", server_name)
+                .finish(),
+            Self::CallTool {
+                server_name,
+                tool_name,
+                arguments: _,
+            } => {
+                struct RedactedArgs;
+                impl std::fmt::Debug for RedactedArgs {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "\"[REDACTED]\"")
+                    }
+                }
+                f.debug_struct("CallTool")
+                    .field("server_name", server_name)
+                    .field("tool_name", tool_name)
+                    .field("arguments", &RedactedArgs)
+                    .finish()
+            }
+            Self::EnsureServerConnected { server_name } => f
+                .debug_struct("EnsureServerConnected")
+                .field("server_name", server_name)
+                .finish(),
+            Self::CloseServer { server_name } => f
+                .debug_struct("CloseServer")
+                .field("server_name", server_name)
+                .finish(),
+            Self::ListConnectedServers => write!(f, "ListConnectedServers"),
+            Self::Shutdown => write!(f, "Shutdown"),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -322,8 +360,8 @@ impl McpDaemon {
                             "DAEMON: Adding {} environment variables",
                             server_config.env.len()
                         );
-                        for (key, value) in &server_config.env {
-                            crate::debug_log!("DAEMON: Env var: {}={}", key, value);
+                        for key in server_config.env.keys() {
+                            crate::debug_log!("DAEMON: Env var: {}=[REDACTED]", key);
                         }
                         Some(server_config.env.clone())
                     };
@@ -719,5 +757,26 @@ impl DaemonClient {
             DaemonResponse::Error(e) => Err(anyhow!(e)),
             _ => Err(anyhow!("Unexpected response from daemon")),
         }
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[test]
+    fn security_request_debug_redacts_tool_arguments_but_wire_data_preserves_them() {
+        let secret = "review-tool-secret-DO-NOT-LOG";
+        let request = DaemonRequest::CallTool {
+            server_name: "test-server".to_owned(),
+            tool_name: "test-tool".to_owned(),
+            arguments: serde_json::json!({"token": secret}),
+        };
+        let debug = format!("{request:?}");
+        assert!(!debug.contains(secret));
+        assert!(debug.contains("test-server"));
+        assert!(debug.contains("test-tool"));
+        assert!(debug.contains("[REDACTED]"));
+        assert!(serde_json::to_string(&request).unwrap().contains(secret));
     }
 }
