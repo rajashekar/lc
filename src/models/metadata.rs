@@ -1040,10 +1040,9 @@ impl ModelMetadataExtractor {
 
     /// Check if model name matches a specific pattern using regex (case-insensitive)
     fn check_name_matches(&self, model: &Value, pattern: &str) -> Option<bool> {
-        use regex::RegexBuilder;
-
-        // Create case-insensitive regex
-        let regex = match RegexBuilder::new(pattern).case_insensitive(true).build() {
+        // Create case-insensitive regex using cache
+        let pattern_with_flag = format!("(?i){}", pattern);
+        let regex = match crate::utils::regex_cache::get_regex(&pattern_with_flag) {
             Ok(r) => r,
             Err(_) => return Some(false), // Invalid regex pattern
         };
@@ -1243,5 +1242,104 @@ impl MetadataExtractor {
         };
 
         extract_models_from_provider(&provider_obj, raw_json).map_err(|e| e.into())
+    }
+}
+
+#[cfg(test)]
+mod perf_review_tests {
+    use super::*;
+
+    fn extractor() -> ModelMetadataExtractor {
+        ModelMetadataExtractor {
+            model_paths: ModelPaths::default(),
+            tag_config: TagConfig::default(),
+        }
+    }
+
+    #[test]
+    fn jq_single_pipe_and_nested_path_keep_existing_semantics() {
+        let extractor = extractor();
+        let data = serde_json::json!({"nested": {"items": ["tool-calling", "vision"]}});
+        assert_eq!(
+            extractor
+                .extract_with_jq_path(&data, ".nested..items[]")
+                .unwrap(),
+            data["nested"]["items"]
+        );
+        assert_eq!(
+            extractor
+                .extract_with_jq_path(&data, ".nested.items[] | select(. == \"vision\")")
+                .unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            extractor
+                .extract_with_jq_path(&data, ".nested.items[] | select(. == \"audio\")")
+                .unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(extractor.extract_with_jq_path(&data, ".").unwrap(), data);
+    }
+
+    #[test]
+    fn jq_multiple_pipes_are_rejected_even_inside_quoted_values() {
+        let extractor = extractor();
+        let data = serde_json::json!({"items": ["a | b", "a"]});
+        for path in [
+            ".items[] | select(. == \"a\") | select(. == \"b\")",
+            ".items[] | select(. == \"a | b\")",
+            ".items[] | ",
+        ] {
+            assert!(
+                extractor.extract_with_jq_path(&data, path).is_err(),
+                "unexpectedly accepted {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn cached_case_insensitive_matching_preserves_builder_semantics() {
+        let extractor = extractor();
+        // Inline disabling/enabling flags override the builder default in the same way as (?i).
+        let patterns = [
+            "gpt",
+            "^GPT-[0-9]+$",
+            "(?-i)^GPT$",
+            "(?i:gpt)",
+            "(?-i:gpt)",
+            "Δ",
+            "(?x) g p t # ignored",
+            "",
+            "[",
+            "(",
+            "a{999999999}",
+        ];
+        for pattern in patterns {
+            for name in ["gpt", "GPT", "GPT-4", "gPt-4", "δ", "unrelated", ""] {
+                let expected = regex::RegexBuilder::new(pattern)
+                    .case_insensitive(true)
+                    .build()
+                    .map(|r| r.is_match(name))
+                    .unwrap_or(false);
+                let model = serde_json::json!({"id": name});
+                assert_eq!(
+                    extractor.check_name_matches(&model, pattern),
+                    Some(expected),
+                    "pattern={pattern:?}, name={name:?}"
+                );
+                assert_eq!(
+                    extractor.check_name_matches(&model, pattern),
+                    Some(expected)
+                );
+            }
+        }
+        assert_eq!(
+            extractor.check_name_matches(&serde_json::json!({"display_name": "GpT"}), "gpt"),
+            Some(true)
+        );
+        assert_eq!(
+            extractor.check_name_matches(&serde_json::json!({"id": 42}), "gpt"),
+            Some(false)
+        );
     }
 }
