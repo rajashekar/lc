@@ -17,3 +17,8 @@
 **Vulnerability:** Debug logs (`debug_log!`) and `Debug` trait implementations were implicitly printing environment variables and tool call arguments in plain text, risking exposure of secrets like API keys.
 **Learning:** Automatically derived `Debug` implementations on structures that hold sensitive information leak those secrets into telemetry and logs. `crate::debug_log!` calls explicitly interpolating secret fields perform similarly. A custom wrapper object implementing `Debug` combined with `debug_map` prevents `E0499` (mutable borrow conflicts) and enables `[REDACTED]` filtering without cloning `HashMap`s.
 **Prevention:** Always implement `Debug` manually for structs/enums that handle API keys, environment variables, or sensitive payloads, explicitly masking these fields. Do not implicitly assume logger safety for raw strings.
+
+## 2025-03-03 - Fixed Hardcoded Salt in Encryption Key Derivation
+**Vulnerability:** Found a hardcoded application-specific salt (`b"lc_sync_encryption_salt_v1"`) used for PBKDF2-HMAC-SHA256 key derivation in `src/sync/encryption.rs`.
+**Learning:** A hardcoded salt defeats the purpose of salting by allowing attackers to pre-compute rainbow tables or parallelize dictionary attacks across multiple files.
+**Prevention:** Use a randomly generated salt for each encryption operation and prepend it to the ciphertext (`[SALT(16)][NONCE(12)][CIPHERTEXT]`) to ensure cryptographic strength and uniqueness.
