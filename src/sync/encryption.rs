@@ -172,6 +172,38 @@ mod tests {
     }
 
     #[test]
+    fn security_salt_is_random_and_ciphertext_is_authenticated() {
+        let password = "review-test-password";
+        let first = encrypt_data(b"same plaintext", password).unwrap();
+        let second = encrypt_data(b"same plaintext", password).unwrap();
+        assert_ne!(&first[..16], &second[..16]);
+        assert_eq!(decrypt_data(&first, password).unwrap(), b"same plaintext");
+        for index in [0, 16, first.len() - 1] {
+            let mut tampered = first.clone();
+            tampered[index] ^= 1;
+            assert!(decrypt_data(&tampered, password).is_err());
+        }
+    }
+
+    #[test]
+    fn security_legacy_empty_and_short_payloads_remain_readable() {
+        let password = "review-test-password";
+        let key = derive_key_from_password(password, b"lc_sync_encryption_salt_v1").unwrap();
+        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+        for data in [
+            b"".as_slice(),
+            b"x".as_slice(),
+            b"longer legacy configuration data".as_slice(),
+        ] {
+            let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+            let mut legacy = nonce.to_vec();
+            legacy.extend_from_slice(&cipher.encrypt(&nonce, data).unwrap());
+            assert_eq!(decrypt_data(&legacy, password).unwrap(), data);
+            assert!(decrypt_data(&legacy, "wrong-password").is_err());
+        }
+    }
+
+    #[test]
     fn test_base64_encoding() {
         let data = b"Hello, World!";
         let encoded = encode_base64(data);
