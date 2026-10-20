@@ -759,3 +759,24 @@ impl DaemonClient {
         }
     }
 }
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[test]
+    fn security_request_debug_redacts_tool_arguments_but_wire_data_preserves_them() {
+        let secret = "review-tool-secret-DO-NOT-LOG";
+        let request = DaemonRequest::CallTool {
+            server_name: "test-server".to_owned(),
+            tool_name: "test-tool".to_owned(),
+            arguments: serde_json::json!({"token": secret}),
+        };
+        let debug = format!("{request:?}");
+        assert!(!debug.contains(secret));
+        assert!(debug.contains("test-server"));
+        assert!(debug.contains("test-tool"));
+        assert!(debug.contains("[REDACTED]"));
+        assert!(serde_json::to_string(&request).unwrap().contains(secret));
+    }
+}

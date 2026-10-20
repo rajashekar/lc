@@ -517,6 +517,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn security_debug_redacts_environment_values_without_changing_serialization() {
+        let secret = "review-env-secret-DO-NOT-LOG";
+        let env = HashMap::from([("API_KEY".to_owned(), secret.to_owned())]);
+        let config = McpServerConfig {
+            name: "test".to_owned(),
+            server_type: McpServerType::Stdio,
+            command_or_url: "echo".to_owned(),
+            env: env.clone(),
+        };
+        let transport =
+            create_stdio_server_config("test".to_owned(), vec!["echo".to_owned()], Some(env), None);
+        for debug in [format!("{config:?}"), format!("{transport:?}")] {
+            assert!(!debug.contains(secret));
+            assert!(debug.contains("[REDACTED]"));
+        }
+        assert!(serde_json::to_string(&config).unwrap().contains(secret));
+    }
+
+    #[test]
     fn test_mcp_config_creation() {
         let config = McpConfig::new();
         assert!(config.servers.is_empty());
