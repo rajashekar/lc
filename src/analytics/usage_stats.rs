@@ -168,13 +168,7 @@ impl UsageAnalyzer {
     }
 
     fn get_entries_since(&self, cutoff_date: DateTime<Utc>) -> Result<Vec<ChatEntry>> {
-        // This would need a custom query in the database
-        // For now, we'll filter after getting all entries
-        let all_entries = self.db.get_all_logs()?;
-        Ok(all_entries
-            .into_iter()
-            .filter(|entry| entry.timestamp >= cutoff_date)
-            .collect())
+        self.db.get_entries_since(cutoff_date)
     }
 }
 

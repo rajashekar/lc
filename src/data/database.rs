@@ -254,6 +254,41 @@ impl Database {
         Ok(entries)
     }
 
+    pub fn get_entries_since(&self, cutoff_date: DateTime<Utc>) -> Result<Vec<ChatEntry>> {
+        let conn = self.pool.get_connection()?;
+        let conn_ref = conn
+            .conn
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Database connection not available"))?;
+
+        let sql =
+            "SELECT id, chat_id, model, question, response, timestamp, input_tokens, output_tokens
+                   FROM chat_logs
+                   WHERE timestamp >= ?1
+                   ORDER BY timestamp ASC";
+
+        let mut stmt = conn_ref.prepare(sql)?;
+
+        let rows = stmt.query_map([cutoff_date], |row| {
+            Ok(ChatEntry {
+                chat_id: row.get(1)?,
+                model: row.get(2)?,
+                question: row.get(3)?,
+                response: row.get(4)?,
+                timestamp: row.get(5)?,
+                input_tokens: row.get(6).ok(),
+                output_tokens: row.get(7).ok(),
+            })
+        })?;
+
+        let mut entries = Vec::new();
+        for row in rows {
+            entries.push(row?);
+        }
+
+        Ok(entries)
+    }
+
     // Optimized version with LIMIT for better performance on large datasets
     pub fn get_all_logs(&self) -> Result<Vec<ChatEntry>> {
         self.get_recent_logs(None)
@@ -534,6 +569,114 @@ impl Database {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    fn review_database() -> (tempfile::TempDir, Database) {
+        let dir = tempdir().unwrap();
+        let db = Database {
+            pool: ConnectionPool::new(dir.path().join("logs.db"), 3).unwrap(),
+        };
+        let conn = db.pool.get_connection().unwrap();
+        Database::initialize_schema(&conn).unwrap();
+        drop(conn);
+        (dir, db)
+    }
+
+    fn review_insert(db: &Database, id: &str, timestamp: DateTime<Utc>) {
+        db.pool.get_connection().unwrap().execute(
+            "INSERT INTO chat_logs (chat_id, model, question, response, timestamp, input_tokens, output_tokens)
+             VALUES (?1, 'model', 'question', 'answer', ?2, 2, 3)",
+            params![id, timestamp],
+        ).unwrap();
+    }
+
+    #[test]
+    fn test_recent_logs_limit_matches_all_logs_prefix() {
+        let (_dir, db) = review_database();
+        let base = DateTime::parse_from_rfc3339("2026-07-01T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        // Insertion order differs from timestamp order; no sleeps or real clock dependencies.
+        for seconds in [3, 1, 5, 2, 4] {
+            review_insert(
+                &db,
+                &seconds.to_string(),
+                base + chrono::Duration::seconds(seconds),
+            );
+        }
+        let all = db.get_all_logs().unwrap();
+        assert_eq!(
+            all.iter().map(|e| e.chat_id.as_str()).collect::<Vec<_>>(),
+            vec!["5", "4", "3", "2", "1"]
+        );
+        for limit in [0, 1, 3, 5, 10] {
+            let recent = db.get_recent_logs(Some(limit)).unwrap();
+            assert_eq!(
+                recent.iter().map(|e| &e.chat_id).collect::<Vec<_>>(),
+                all.iter()
+                    .take(limit)
+                    .map(|e| &e.chat_id)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn test_entries_since_matches_chrono_filter_inclusive_with_fractional_seconds() {
+        let (_dir, db) = review_database();
+        let base = DateTime::parse_from_rfc3339("2026-07-01T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        for nanos in [1_000_000_000, -1, 0, 1, 1_000, 1_000_000, 999_999_999] {
+            review_insert(
+                &db,
+                &nanos.to_string(),
+                base + chrono::Duration::nanoseconds(nanos),
+            );
+        }
+        // Includes exact timestamps, sub-second boundaries, a cutoff before all rows and after all rows.
+        for nanos in [
+            -2,
+            0,
+            1,
+            999,
+            1_000,
+            1_000_000,
+            999_999_999,
+            1_000_000_000,
+            2_000_000_000,
+        ] {
+            let cutoff = base + chrono::Duration::nanoseconds(nanos);
+            let mut expected = db
+                .get_all_logs()
+                .unwrap()
+                .into_iter()
+                .filter(|e| e.timestamp >= cutoff)
+                .collect::<Vec<_>>();
+            expected.sort_by_key(|e| e.timestamp);
+            let actual = db.get_entries_since(cutoff).unwrap();
+            assert_eq!(
+                actual
+                    .iter()
+                    .map(|e| (&e.chat_id, e.timestamp))
+                    .collect::<Vec<_>>(),
+                expected
+                    .iter()
+                    .map(|e| (&e.chat_id, e.timestamp))
+                    .collect::<Vec<_>>()
+            );
+            assert!(actual
+                .iter()
+                .all(|e| e.input_tokens == Some(2) && e.output_tokens == Some(3)));
+        }
+    }
+
+    #[test]
+    fn test_recent_and_since_empty_database() {
+        let (_dir, db) = review_database();
+        assert!(db.get_recent_logs(Some(0)).unwrap().is_empty());
+        assert!(db.get_recent_logs(Some(1)).unwrap().is_empty());
+        assert!(db.get_entries_since(Utc::now()).unwrap().is_empty());
+    }
 
     #[test]
     fn test_connection_pool() {
