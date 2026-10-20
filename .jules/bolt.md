@@ -17,6 +17,10 @@
 **Learning:** In `src/data/vector_db.rs`, full cache iterations on `DashMap` instances were cloning entire values (containing large strings and vectors) simply to calculate a single metric before throwing most of them away, leading to excessive allocations and GC pressure.
 **Action:** Iterate over references to extract an identifier and compute the score first. Perform sorting/culling on a lightweight `Vec<(ID, Score)>`, and map back to full clones only for the `top-k` result set.
 
+## 2024-05-18 - Optimize split and allocations
+**Learning:** In Rust, avoiding `.split().collect::<Vec<_>>()` when only a prefix or single iteration is needed prevents double scanning and heap allocation. Using `split_once()` or directly consuming the iterator is much more efficient.
+**Action:** Always prefer `split_once()` over `.split().collect()` when extracting exact parts, and iterate directly over `.split()` results instead of collecting into a `Vec` when random access is not needed.
+
 ## 2024-07-04 - Caching precompiled regex in regex_cache instead of rebuilding on every loop
 **Learning:** Recompiling regex patterns every time inside hot loops (like model name matching with case insensitivity via `RegexBuilder::new(pattern).case_insensitive(true).build()`) is a huge performance hit. While `lc` implements a `REGEX_CACHE`, it was bypassed in `src/models/metadata.rs` for `check_name_matches` because it required case-insensitivity using `RegexBuilder`.
 **Action:** Instead of dynamically building case-insensitive regex patterns in hot paths, we can use the `(?i)` flag directly in the regex string and utilize the existing thread-safe `get_regex` cache. Precompiling regex and reusing it offers significant performance gains.
