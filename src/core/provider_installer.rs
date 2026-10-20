@@ -241,6 +241,16 @@ impl ProviderInstaller {
             .get(provider_id)
             .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in registry", provider_id))?;
 
+        // Colons also reject Windows drive-relative paths and alternate data streams.
+        if metadata.config_file.contains('/')
+            || metadata.config_file.contains('\\')
+            || metadata.config_file.contains("..")
+            || metadata.config_file.contains(':')
+        {
+            anyhow::bail!(
+                "Invalid config file name in registry: contains path traversal characters"
+            );
+        }
         // Check if already installed
         let target_file = self.providers_dir.join(&metadata.config_file);
         if target_file.exists() && !force {
@@ -420,6 +430,14 @@ impl ProviderInstaller {
 
     /// Remove an installed provider
     pub fn uninstall_provider(&self, provider_id: &str) -> Result<()> {
+        // Apply the same cross-platform path policy as registry filenames.
+        if provider_id.contains('/')
+            || provider_id.contains('\\')
+            || provider_id.contains("..")
+            || provider_id.contains(':')
+        {
+            anyhow::bail!("Invalid provider ID: contains path traversal characters");
+        }
         let provider_file = self.providers_dir.join(format!("{}.toml", provider_id));
 
         match fs::remove_file(&provider_file) {
@@ -585,6 +603,115 @@ pub fn create_sample_registry() -> ProviderRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn security_test_installer(root: &std::path::Path) -> ProviderInstaller {
+        ProviderInstaller {
+            registry_source: format!("file://{}", root.join("registry").display()),
+            cache_dir: root.join("cache"),
+            providers_dir: root.join("installed"),
+        }
+    }
+
+    fn security_test_registry(root: &std::path::Path, filename: &str) {
+        let registry_dir = root.join("registry");
+        fs::create_dir_all(registry_dir.join("providers")).unwrap();
+        let mut registry = create_sample_registry();
+        registry.base_url = format!("file://{}", registry_dir.display());
+        let metadata = registry.providers.get_mut("openai").unwrap();
+        metadata.config_file = filename.to_owned();
+        metadata.auth_type = AuthType::None;
+        fs::write(
+            registry_dir.join("registry.json"),
+            serde_json::to_vec(&registry).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn security_install_rejects_untrusted_registry_paths_before_download() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = root.path().join("outside.toml");
+        fs::write(&outside, "unchanged").unwrap();
+        let absolute = outside.to_str().unwrap();
+        for filename in [
+            "../outside.toml",
+            "sub/provider.toml",
+            "sub\\provider.toml",
+            "C:outside.toml",
+            "C:\\outside.toml",
+            "\\\\server\\share\\outside.toml",
+            absolute,
+        ] {
+            // A fresh cache ensures every iteration reads this registry.
+            let case = tempfile::tempdir().unwrap();
+            security_test_registry(case.path(), filename);
+            let installer = security_test_installer(case.path());
+            let error = installer
+                .install_provider("openai", true)
+                .await
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("Invalid config file name"),
+                "{filename:?} must fail validation, not download or filesystem I/O: {error}"
+            );
+            assert!(!installer.providers_dir.exists());
+        }
+        assert_eq!(fs::read_to_string(outside).unwrap(), "unchanged");
+    }
+
+    #[tokio::test]
+    async fn security_install_accepts_normal_registry_filenames() {
+        for filename in ["openai.toml", "provider.v1-test_2.toml"] {
+            let root = tempfile::tempdir().unwrap();
+            security_test_registry(root.path(), filename);
+            let content = "endpoint = 'https://example.invalid'\nmodels_path = '/models'\nchat_path = '/chat'\n";
+            fs::write(
+                root.path().join("registry/providers").join(filename),
+                content,
+            )
+            .unwrap();
+            let installer = security_test_installer(root.path());
+            installer.install_provider("openai", true).await.unwrap();
+            assert_eq!(
+                fs::read_to_string(installer.providers_dir.join(filename)).unwrap(),
+                content
+            );
+        }
+    }
+
+    #[test]
+    fn security_uninstall_rejects_paths_and_preserves_outside_files() {
+        let root = tempfile::tempdir().unwrap();
+        let installer = security_test_installer(root.path());
+        fs::create_dir_all(&installer.providers_dir).unwrap();
+        let outside = root.path().join("outside.toml");
+        fs::write(&outside, "unchanged").unwrap();
+        let absolute_id = root.path().join("outside");
+        for provider_id in [
+            "../outside",
+            "sub/provider",
+            "sub\\provider",
+            "C:outside",
+            "C:\\outside",
+            "\\\\server\\share\\outside",
+            absolute_id.to_str().unwrap(),
+        ] {
+            let error = installer.uninstall_provider(provider_id).unwrap_err();
+            assert!(
+                error.to_string().contains("Invalid provider ID"),
+                "{provider_id:?} must fail validation: {error}"
+            );
+            assert_eq!(fs::read_to_string(&outside).unwrap(), "unchanged");
+        }
+        for valid_id in ["openai", "provider.v1-test_2"] {
+            let error = installer.uninstall_provider(valid_id).unwrap_err();
+            assert!(error.to_string().contains("is not installed"));
+            let installed = installer.providers_dir.join(format!("{valid_id}.toml"));
+            fs::write(&installed, "installed provider").unwrap();
+            installer.uninstall_provider(valid_id).unwrap();
+            assert!(!installed.exists());
+        }
+    }
 
     #[test]
     fn test_provider_metadata_serialization() {
