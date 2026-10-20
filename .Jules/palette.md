@@ -22,3 +22,6 @@
 ## 2024-05-25 - LLM Output Formatting
 **Learning:** LLM outputs frequently include line breaks, code blocks, and other formatting that is lost when displayed as raw text in HTML without specific CSS rules, leading to poor readability.
 **Action:** When building web interfaces for LLM chat, always apply `white-space: pre-wrap;` and `word-wrap: break-word;` to the message containers to prevent layout collapsing and ensure formatting is preserved.
+## 2024-05-10 - [Loading state attributes for screen readers]
+**Learning:** Adding `aria-busy="true"` on a button during fetching helps screen reader users understand the async process is ongoing. Setting `role="log"` and `aria-live="polite"` on the message container ensures new messages are announced.
+**Action:** Apply `aria-busy` along with text changes for loading buttons and use `role="log"` on dynamic chat regions.
