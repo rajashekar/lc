@@ -209,6 +209,15 @@ impl MetadataDumper {
 
         // Save raw response to file
         let filename = format!("{}.json", provider_name);
+
+        // Validate provider_name to prevent path traversal
+        if filename.contains("..") || filename.starts_with('/') || filename.starts_with('\\') {
+            anyhow::bail!(
+                "Invalid provider name resulting in invalid filename: {}",
+                filename
+            );
+        }
+
         let filepath = models_raw_dir.join(&filename);
 
         fs::write(&filepath, &raw_response).await?;
