@@ -25,3 +25,6 @@
 ## 2024-05-10 - [Loading state attributes for screen readers]
 **Learning:** Adding `aria-busy="true"` on a button during fetching helps screen reader users understand the async process is ongoing. Setting `role="log"` and `aria-live="polite"` on the message container ensures new messages are announced.
 **Action:** Apply `aria-busy` along with text changes for loading buttons and use `role="log"` on dynamic chat regions.
+## 2024-05-18 - [Empty State Pattern]
+**Learning:** For embedded single-page tools (like local web chat proxies), users often face a blank container with no context. An empty state with a friendly greeting and clear next steps (e.g., "Select a model and type a message") immediately sets expectations and reduces cognitive load upon initial launch.
+**Action:** Always include a helpful empty state with a call-to-action in empty containers (like chat boxes or data tables) when building embedded web interfaces, ensuring it is removed upon the first user interaction.
