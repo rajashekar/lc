@@ -149,6 +149,10 @@ async fn serve_index() -> Html<&'static str> {
             border: 1px solid #ddd;
             border-radius: 4px;
         }
+        input[type="text"]:focus-visible {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
+        }
         button {
             padding: 10px 20px;
             background: #007bff;
@@ -159,6 +163,10 @@ async fn serve_index() -> Html<&'static str> {
         }
         button:hover {
             background: #0056b3;
+        }
+        button:focus-visible {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
         }
         button:disabled {
             background: #ccc;
@@ -172,6 +180,10 @@ async fn serve_index() -> Html<&'static str> {
             border: 1px solid #ddd;
             border-radius: 4px;
             width: 100%;
+        }
+        select:focus-visible {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
         }
     </style>
 </head>
