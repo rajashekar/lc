@@ -148,6 +148,7 @@ async fn serve_index() -> Html<&'static str> {
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            transition: border-color 0.2s;
         }
         button {
             padding: 10px 20px;
@@ -156,13 +157,28 @@ async fn serve_index() -> Html<&'static str> {
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            transition: all 0.2s ease;
         }
-        button:hover {
+        button:hover:not(:disabled) {
             background: #0056b3;
+        }
+        button:active:not(:disabled) {
+            transform: scale(0.98);
         }
         button:disabled {
             background: #ccc;
             cursor: not-allowed;
+            opacity: 0.8;
+        }
+        button:focus {
+            outline: none;
+        }
+        input[type="text"]:focus,
+        select:focus,
+        button:focus-visible {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
+            border-color: #007bff;
         }
         .model-select {
             margin-bottom: 10px;
@@ -172,6 +188,7 @@ async fn serve_index() -> Html<&'static str> {
             border: 1px solid #ddd;
             border-radius: 4px;
             width: 100%;
+            transition: border-color 0.2s;
         }
     </style>
 </head>
