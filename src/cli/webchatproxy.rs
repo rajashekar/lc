@@ -173,6 +173,22 @@ async fn serve_index() -> Html<&'static str> {
             border-radius: 4px;
             width: 100%;
         }
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            text-align: center;
+        }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .empty-state p {
+            margin: 5px 0;
+        }
     </style>
 </head>
 <body>
@@ -187,7 +203,13 @@ async fn serve_index() -> Html<&'static str> {
                 <option value="claude-3-5-haiku-latest">claude-3-5-haiku-latest</option>
             </select>
         </div>
-        <div id="chat" class="chat-box" role="log" aria-live="polite" aria-label="Chat messages"></div>
+        <div id="chat" class="chat-box" role="log" aria-live="polite" aria-label="Chat messages">
+            <div id="empty-state" class="empty-state">
+                <div class="empty-state-icon" aria-hidden="true">👋</div>
+                <p><strong>Welcome to LC Web Chat</strong></p>
+                <p>Select a model and type a message to start.</p>
+            </div>
+        </div>
         <div class="input-group">
             <input type="text" id="message" placeholder="Type your message..." aria-label="Message input" autofocus>
             <button id="send" onclick="sendMessage()">Send</button>
@@ -213,6 +235,11 @@ async fn serve_index() -> Html<&'static str> {
         const messages = [];
         
         function addMessage(role, content) {
+            const emptyState = document.getElementById('empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
             messages.push({ role, content });
             const chat = document.getElementById('chat');
             const div = document.createElement('div');
