@@ -24,3 +24,6 @@
 ## 2024-07-04 - Caching precompiled regex in regex_cache instead of rebuilding on every loop
 **Learning:** Recompiling regex patterns every time inside hot loops (like model name matching with case insensitivity via `RegexBuilder::new(pattern).case_insensitive(true).build()`) is a huge performance hit. While `lc` implements a `REGEX_CACHE`, it was bypassed in `src/models/metadata.rs` for `check_name_matches` because it required case-insensitivity using `RegexBuilder`.
 **Action:** Instead of dynamically building case-insensitive regex patterns in hot paths, we can use the `(?i)` flag directly in the regex string and utilize the existing thread-safe `get_regex` cache. Precompiling regex and reusing it offers significant performance gains.
+## 2023-10-25 - LLVM SIMD Vectorization in Floating Point Inner Loops
+**Learning:** LLVM struggles to auto-vectorize floating point operations within inner iterator loops (like `.zip()`) because floating point operations are not strictly associative. This creates dependency chains that prevent concurrency.
+**Action:** Manually unroll arithmetic operations into single statements (e.g., in 8-element chunks like `dot += a[0]*b[0] + ... + a[7]*b[7]`) to break dependency chains, allowing LLVM to dispatch multiplications concurrently.
