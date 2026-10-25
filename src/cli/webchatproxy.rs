@@ -173,6 +173,26 @@ async fn serve_index() -> Html<&'static str> {
             border-radius: 4px;
             width: 100%;
         }
+        input[type="text"]:focus-visible,
+        select:focus-visible,
+        button:focus-visible {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
+        }
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -187,7 +207,13 @@ async fn serve_index() -> Html<&'static str> {
                 <option value="claude-3-5-haiku-latest">claude-3-5-haiku-latest</option>
             </select>
         </div>
-        <div id="chat" class="chat-box" role="log" aria-live="polite" aria-label="Chat messages"></div>
+        <div id="chat" class="chat-box" role="log" aria-live="polite" aria-label="Chat messages">
+            <div id="empty-state" class="empty-state">
+                <div class="empty-state-icon">👋</div>
+                <h2>Welcome to LC Web Chat</h2>
+                <p>Select a model above and type a message to start chatting.</p>
+            </div>
+        </div>
         <div class="input-group">
             <input type="text" id="message" placeholder="Type your message..." aria-label="Message input" autofocus>
             <button id="send" onclick="sendMessage()">Send</button>
@@ -215,6 +241,10 @@ async fn serve_index() -> Html<&'static str> {
         function addMessage(role, content) {
             messages.push({ role, content });
             const chat = document.getElementById('chat');
+            const emptyState = document.getElementById('empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
             const div = document.createElement('div');
             div.className = `message ${role}-message`;
             div.textContent = content;
